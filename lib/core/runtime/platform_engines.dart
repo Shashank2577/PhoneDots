@@ -116,8 +116,7 @@ class PlatformLlmEngine implements LlmEngine {
   }
 
   @override
-  Future<void> resetSession(String sessionId) =>
-      Channels.llm.invokeMethod('resetSession', {'sessionId': sessionId});
+  Future<void> resetSession(String sessionId) => Channels.llm.invokeMethod('resetSession', {'sessionId': sessionId});
 
   @override
   Future<DeviceProfile> deviceProfile() async =>
@@ -168,14 +167,20 @@ class PlatformSpecialistEngine implements SpecialistEngine {
       final e = _map(raw);
       if (e['modelId'] == modelId) controller.add((e['progress'] as num).toDouble());
     });
-    Channels.specialist.invokeMethod('download', {'modelId': modelId}).then((_) {
-      controller.add(1);
-    }, onError: (Object e) {
-      controller.addError(e);
-    }).whenComplete(() {
-      sub.cancel();
-      controller.close();
-    });
+    Channels.specialist
+        .invokeMethod('download', {'modelId': modelId})
+        .then(
+          (_) {
+            controller.add(1);
+          },
+          onError: (Object e) {
+            controller.addError(e);
+          },
+        )
+        .whenComplete(() {
+          sub.cancel();
+          controller.close();
+        });
     return controller.stream;
   }
 

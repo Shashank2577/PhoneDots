@@ -12,21 +12,24 @@ class LabScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Lab'),
-            bottom: TabBar(
-              indicatorColor: context.pal.ink,
-              labelColor: context.pal.ink,
-              unselectedLabelColor: context.pal.muted,
-              dividerColor: context.pal.hairline,
-              tabs: const [Tab(text: 'Prompt Lab'), Tab(text: 'Benchmark')],
-            ),
-          ),
-          body: const TabBarView(children: [_PromptLab(), _Benchmark()]),
+    length: 2,
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Lab'),
+        bottom: TabBar(
+          indicatorColor: context.pal.ink,
+          labelColor: context.pal.ink,
+          unselectedLabelColor: context.pal.muted,
+          dividerColor: context.pal.hairline,
+          tabs: const [
+            Tab(text: 'Prompt Lab'),
+            Tab(text: 'Benchmark'),
+          ],
         ),
-      );
+      ),
+      body: const TabBarView(children: [_PromptLab(), _Benchmark()]),
+    ),
+  );
 }
 
 const _templates = {
@@ -79,13 +82,15 @@ class _PromptLabState extends State<_PromptLab> {
       return;
     }
     final session = 'lab-${DateTime.now().microsecondsSinceEpoch}';
-    await for (final e in s.llm.generate(GenerationRequest(
-      modelId: s.settings.plannerId,
-      sessionId: session,
-      systemPrompt: _system.text,
-      history: [EngineTurn(role: TurnRole.user, text: _prompt.text)],
-      sampler: SamplerSettings(temperature: _temperature, topK: _topK, maxTokens: 1024),
-    ))) {
+    await for (final e in s.llm.generate(
+      GenerationRequest(
+        modelId: s.settings.plannerId,
+        sessionId: session,
+        systemPrompt: _system.text,
+        history: [EngineTurn(role: TurnRole.user, text: _prompt.text)],
+        sampler: SamplerSettings(temperature: _temperature, topK: _topK, maxTokens: 1024),
+      ),
+    )) {
       if (!mounted) return;
       setState(() {
         switch (e) {
@@ -106,49 +111,91 @@ class _PromptLabState extends State<_PromptLab> {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 40), children: [
-      Wrap(spacing: 6, runSpacing: 6, children: [
-        for (final t in _templates.keys)
-          ChoiceChip(
-            label: Text(t),
-            selected: _template == t,
-            showCheckmark: false,
-            selectedColor: p.ink,
-            labelStyle: TextStyle(color: _template == t ? p.bg : p.ink),
-            onSelected: (_) => setState(() {
-              _template = t;
-              _system.text = _templates[t]!;
-            }),
-          ),
-      ]),
-      const SizedBox(height: 12),
-      TextField(controller: _system, maxLines: null, decoration: const InputDecoration(labelText: 'System instruction')),
-      const SizedBox(height: 10),
-      TextField(controller: _prompt, minLines: 3, maxLines: 10, decoration: const InputDecoration(labelText: 'Prompt')),
-      const SizedBox(height: 8),
-      Row(children: [
-        SizedBox(width: 110, child: Text('Temperature ${_temperature.toStringAsFixed(1)}', style: context.text.bodySmall)),
-        Expanded(child: Slider(value: _temperature, max: 1.5, divisions: 15, onChanged: (v) => setState(() => _temperature = v))),
-      ]),
-      Row(children: [
-        SizedBox(width: 110, child: Text('Top-K $_topK', style: context.text.bodySmall)),
-        Expanded(child: Slider(value: _topK.toDouble(), min: 1, max: 100, divisions: 99, onChanged: (v) => setState(() => _topK = v.round()))),
-      ]),
-      FilledButton(onPressed: _running ? null : _run, child: Text(_running ? 'Running…' : 'Run')),
-      if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: TextStyle(color: p.danger))),
-      if (_output.isNotEmpty || _stats != null) ...[
-        const SectionLabel('Output', padding: EdgeInsets.only(top: 20, bottom: 8)),
-        Panel(child: SelectableText(_output, style: context.text.bodyMedium)),
-        if (_stats != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'First token ${formatMs(_stats!.timeToFirstTokenMs)} · ${_stats!.effectiveTokensPerSec.toStringAsFixed(1)} tok/s · ${_stats!.outputTokens} tokens',
-              style: context.text.bodySmall,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final t in _templates.keys)
+              ChoiceChip(
+                label: Text(t),
+                selected: _template == t,
+                showCheckmark: false,
+                selectedColor: p.ink,
+                labelStyle: TextStyle(color: _template == t ? p.bg : p.ink),
+                onSelected: (_) => setState(() {
+                  _template = t;
+                  _system.text = _templates[t]!;
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _system,
+          maxLines: null,
+          decoration: const InputDecoration(labelText: 'System instruction'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _prompt,
+          minLines: 3,
+          maxLines: 10,
+          decoration: const InputDecoration(labelText: 'Prompt'),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            SizedBox(
+              width: 110,
+              child: Text('Temperature ${_temperature.toStringAsFixed(1)}', style: context.text.bodySmall),
             ),
+            Expanded(
+              child: Slider(
+                value: _temperature,
+                max: 1.5,
+                divisions: 15,
+                onChanged: (v) => setState(() => _temperature = v),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            SizedBox(width: 110, child: Text('Top-K $_topK', style: context.text.bodySmall)),
+            Expanded(
+              child: Slider(
+                value: _topK.toDouble(),
+                min: 1,
+                max: 100,
+                divisions: 99,
+                onChanged: (v) => setState(() => _topK = v.round()),
+              ),
+            ),
+          ],
+        ),
+        FilledButton(onPressed: _running ? null : _run, child: Text(_running ? 'Running…' : 'Run')),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(_error!, style: TextStyle(color: p.danger)),
           ),
+        if (_output.isNotEmpty || _stats != null) ...[
+          const SectionLabel('Output', padding: EdgeInsets.only(top: 20, bottom: 8)),
+          Panel(child: SelectableText(_output, style: context.text.bodyMedium)),
+          if (_stats != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'First token ${formatMs(_stats!.timeToFirstTokenMs)} · ${_stats!.effectiveTokensPerSec.toStringAsFixed(1)} tok/s · ${_stats!.outputTokens} tokens',
+                style: context.text.bodySmall,
+              ),
+            ),
+        ],
       ],
-    ]);
+    );
   }
 }
 
@@ -196,12 +243,14 @@ class _BenchmarkState extends State<_Benchmark> {
     final stats = <GenerationStats>[];
     for (final prompt in _prompts) {
       final session = 'bench-${DateTime.now().microsecondsSinceEpoch}';
-      await for (final e in s.llm.generate(GenerationRequest(
-        modelId: s.settings.plannerId,
-        sessionId: session,
-        history: [EngineTurn(role: TurnRole.user, text: prompt)],
-        sampler: const SamplerSettings(temperature: 0, topK: 1, maxTokens: 256),
-      ))) {
+      await for (final e in s.llm.generate(
+        GenerationRequest(
+          modelId: s.settings.plannerId,
+          sessionId: session,
+          history: [EngineTurn(role: TurnRole.user, text: prompt)],
+          sampler: const SamplerSettings(temperature: 0, topK: 1, maxTokens: 256),
+        ),
+      )) {
         if (e is DoneEvent) stats.add(e.stats);
         if (e is ErrorEvent) _error = e.message;
       }
@@ -213,7 +262,10 @@ class _BenchmarkState extends State<_Benchmark> {
       final ttft = stats.map((x) => x.timeToFirstTokenMs).reduce((a, b) => a + b) ~/ stats.length;
       final tps = stats.map((x) => x.effectiveTokensPerSec).reduce((a, b) => a + b) / stats.length;
       final tokens = stats.map((x) => x.outputTokens).reduce((a, b) => a + b);
-      _results.insert(0, _BenchResult(modelById(s.settings.plannerId)?.name ?? s.settings.plannerId, ttft, tps, tokens, DateTime.now()));
+      _results.insert(
+        0,
+        _BenchResult(modelById(s.settings.plannerId)?.name ?? s.settings.plannerId, ttft, tps, tokens, DateTime.now()),
+      );
       await s.ledger.record('benchmark', '${_results.first.model}: ${tps.toStringAsFixed(1)} tok/s');
     }
     if (mounted) setState(() => _running = false);
@@ -224,40 +276,60 @@ class _BenchmarkState extends State<_Benchmark> {
     final s = AppScope.services(context);
     final p = context.pal;
     final best = _results.isEmpty ? null : _results.first;
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 40), children: [
-      Panel(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(s.isDemo ? 'Demo engine' : (modelById(s.settings.plannerId)?.name ?? '—'), style: context.text.titleMedium),
-          Text('${s.models.device.model.isEmpty ? s.platform : s.models.device.model} · ${s.settings.useGpu ? 'GPU' : 'CPU'}', style: context.text.bodySmall),
-          const SizedBox(height: 16),
-          Row(children: [
-            _Metric('tok/s', best == null ? '—' : best.tps.toStringAsFixed(1)),
-            _Metric('first token', best == null ? '—' : formatMs(best.ttft)),
-            _Metric('tokens', best == null ? '—' : '${best.tokens}'),
-          ]),
-          const SizedBox(height: 16),
-          if (_running)
-            Column(children: [
-              LinearProgressIndicator(value: _done / _prompts.length),
-              const SizedBox(height: 8),
-              Text('Prompt ${_done + 1} of ${_prompts.length}', style: context.text.bodySmall),
-            ])
-          else
-            FilledButton(onPressed: _run, child: const Text('Run benchmark')),
-          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: p.danger))),
-        ]),
-      ),
-      if (_results.length > 1) ...[
-        const SectionLabel('History', padding: EdgeInsets.only(top: 20, bottom: 8)),
-        for (final r in _results.skip(1))
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(r.model),
-            subtitle: Text(timeAgo(r.time)),
-            trailing: Text('${r.tps.toStringAsFixed(1)} tok/s', style: context.text.bodyMedium),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      children: [
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                s.isDemo ? 'Demo engine' : (modelById(s.settings.plannerId)?.name ?? '—'),
+                style: context.text.titleMedium,
+              ),
+              Text(
+                '${s.models.device.model.isEmpty ? s.platform : s.models.device.model} · ${s.settings.useGpu ? 'GPU' : 'CPU'}',
+                style: context.text.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _Metric('tok/s', best == null ? '—' : best.tps.toStringAsFixed(1)),
+                  _Metric('first token', best == null ? '—' : formatMs(best.ttft)),
+                  _Metric('tokens', best == null ? '—' : '${best.tokens}'),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_running)
+                Column(
+                  children: [
+                    LinearProgressIndicator(value: _done / _prompts.length),
+                    const SizedBox(height: 8),
+                    Text('Prompt ${_done + 1} of ${_prompts.length}', style: context.text.bodySmall),
+                  ],
+                )
+              else
+                FilledButton(onPressed: _run, child: const Text('Run benchmark')),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_error!, style: TextStyle(color: p.danger)),
+                ),
+            ],
           ),
+        ),
+        if (_results.length > 1) ...[
+          const SectionLabel('History', padding: EdgeInsets.only(top: 20, bottom: 8)),
+          for (final r in _results.skip(1))
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(r.model),
+              subtitle: Text(timeAgo(r.time)),
+              trailing: Text('${r.tps.toStringAsFixed(1)} tok/s', style: context.text.bodyMedium),
+            ),
+        ],
       ],
-    ]);
+    );
   }
 }
 
@@ -268,9 +340,12 @@ class _Metric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value, style: context.text.headlineMedium),
-          Text(label, style: context.text.bodySmall),
-        ]),
-      );
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(value, style: context.text.headlineMedium),
+        Text(label, style: context.text.bodySmall),
+      ],
+    ),
+  );
 }

@@ -7,21 +7,13 @@ enum TurnRole { system, user, model, tool }
 
 /// A tool the model may call. [parameters] is an OpenAPI/JSON-schema object.
 class ToolSpec {
-  const ToolSpec({
-    required this.name,
-    required this.description,
-    required this.parameters,
-  });
+  const ToolSpec({required this.name, required this.description, required this.parameters});
 
   final String name;
   final String description;
   final Map<String, dynamic> parameters;
 
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'description': description,
-        'parameters': parameters,
-      };
+  Map<String, dynamic> toJson() => {'name': name, 'description': description, 'parameters': parameters};
 }
 
 class ToolCallRequest {
@@ -34,10 +26,10 @@ class ToolCallRequest {
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'arguments': arguments};
 
   factory ToolCallRequest.fromJson(Map<String, dynamic> j) => ToolCallRequest(
-        id: (j['id'] ?? '') as String,
-        name: j['name'] as String,
-        arguments: Map<String, dynamic>.from((j['arguments'] ?? const {}) as Map),
-      );
+    id: (j['id'] ?? '') as String,
+    name: j['name'] as String,
+    arguments: Map<String, dynamic>.from((j['arguments'] ?? const {}) as Map),
+  );
 }
 
 class ToolResponse {
@@ -50,10 +42,10 @@ class ToolResponse {
   Map<String, dynamic> toJson() => {'id': callId, 'name': name, 'response': response};
 
   factory ToolResponse.fromJson(Map<String, dynamic> j) => ToolResponse(
-        callId: (j['id'] ?? '') as String,
-        name: j['name'] as String,
-        response: Map<String, dynamic>.from(j['response'] as Map),
-      );
+    callId: (j['id'] ?? '') as String,
+    name: j['name'] as String,
+    response: Map<String, dynamic>.from(j['response'] as Map),
+  );
 }
 
 /// One message in the engine-facing history. Paths point at local files.
@@ -75,26 +67,26 @@ class EngineTurn {
   final List<ToolResponse> toolResponses;
 
   Map<String, dynamic> toJson() => {
-        'role': role.name,
-        'text': text,
-        'images': imagePaths,
-        'audio': audioPaths,
-        'toolCalls': toolCalls.map((c) => c.toJson()).toList(),
-        'toolResponses': toolResponses.map((r) => r.toJson()).toList(),
-      };
+    'role': role.name,
+    'text': text,
+    'images': imagePaths,
+    'audio': audioPaths,
+    'toolCalls': toolCalls.map((c) => c.toJson()).toList(),
+    'toolResponses': toolResponses.map((r) => r.toJson()).toList(),
+  };
 
   factory EngineTurn.fromJson(Map<String, dynamic> j) => EngineTurn(
-        role: TurnRole.values.byName(j['role'] as String),
-        text: j['text'] as String? ?? '',
-        imagePaths: (j['images'] as List? ?? const []).cast<String>(),
-        audioPaths: (j['audio'] as List? ?? const []).cast<String>(),
-        toolCalls: (j['toolCalls'] as List? ?? const [])
-            .map((c) => ToolCallRequest.fromJson(Map<String, dynamic>.from(c as Map)))
-            .toList(),
-        toolResponses: (j['toolResponses'] as List? ?? const [])
-            .map((r) => ToolResponse.fromJson(Map<String, dynamic>.from(r as Map)))
-            .toList(),
-      );
+    role: TurnRole.values.byName(j['role'] as String),
+    text: j['text'] as String? ?? '',
+    imagePaths: (j['images'] as List? ?? const []).cast<String>(),
+    audioPaths: (j['audio'] as List? ?? const []).cast<String>(),
+    toolCalls: (j['toolCalls'] as List? ?? const [])
+        .map((c) => ToolCallRequest.fromJson(Map<String, dynamic>.from(c as Map)))
+        .toList(),
+    toolResponses: (j['toolResponses'] as List? ?? const [])
+        .map((r) => ToolResponse.fromJson(Map<String, dynamic>.from(r as Map)))
+        .toList(),
+  );
 }
 
 class SamplerSettings {
@@ -105,8 +97,7 @@ class SamplerSettings {
   final double topP;
   final int maxTokens;
 
-  Map<String, dynamic> toJson() =>
-      {'temperature': temperature, 'topK': topK, 'topP': topP, 'maxTokens': maxTokens};
+  Map<String, dynamic> toJson() => {'temperature': temperature, 'topK': topK, 'topP': topP, 'maxTokens': maxTokens};
 }
 
 class GenerationRequest {
@@ -132,14 +123,14 @@ class GenerationRequest {
   final SamplerSettings sampler;
 
   Map<String, dynamic> toJson() => {
-        'modelId': modelId,
-        'sessionId': sessionId,
-        'history': history.map((t) => t.toJson()).toList(),
-        'systemPrompt': systemPrompt,
-        'tools': tools.map((t) => t.toJson()).toList(),
-        'thinking': thinking,
-        'sampler': sampler.toJson(),
-      };
+    'modelId': modelId,
+    'sessionId': sessionId,
+    'history': history.map((t) => t.toJson()).toList(),
+    'systemPrompt': systemPrompt,
+    'tools': tools.map((t) => t.toJson()).toList(),
+    'thinking': thinking,
+    'sampler': sampler.toJson(),
+  };
 }
 
 class GenerationStats {
@@ -165,12 +156,12 @@ class GenerationStats {
   }
 
   factory GenerationStats.fromJson(Map<String, dynamic> j) => GenerationStats(
-        timeToFirstTokenMs: (j['ttftMs'] as num?)?.toInt() ?? 0,
-        totalMs: (j['totalMs'] as num?)?.toInt() ?? 0,
-        outputTokens: (j['outputTokens'] as num?)?.toInt() ?? 0,
-        prefillTokensPerSec: (j['prefillTps'] as num?)?.toDouble(),
-        decodeTokensPerSec: (j['decodeTps'] as num?)?.toDouble(),
-      );
+    timeToFirstTokenMs: (j['ttftMs'] as num?)?.toInt() ?? 0,
+    totalMs: (j['totalMs'] as num?)?.toInt() ?? 0,
+    outputTokens: (j['outputTokens'] as num?)?.toInt() ?? 0,
+    prefillTokensPerSec: (j['prefillTps'] as num?)?.toDouble(),
+    decodeTokensPerSec: (j['decodeTps'] as num?)?.toDouble(),
+  );
 }
 
 sealed class GenEvent {
@@ -224,11 +215,11 @@ class DeviceProfile {
   final bool isNative;
 
   factory DeviceProfile.fromJson(Map<String, dynamic> j) => DeviceProfile(
-        platform: j['platform'] as String? ?? 'unknown',
-        totalRamMb: (j['totalRamMb'] as num?)?.toInt() ?? 0,
-        model: j['model'] as String? ?? '',
-        socName: j['soc'] as String? ?? '',
-        supportsGpu: j['gpu'] as bool? ?? true,
-        supportsNpu: j['npu'] as bool? ?? false,
-      );
+    platform: j['platform'] as String? ?? 'unknown',
+    totalRamMb: (j['totalRamMb'] as num?)?.toInt() ?? 0,
+    model: j['model'] as String? ?? '',
+    socName: j['soc'] as String? ?? '',
+    supportsGpu: j['gpu'] as bool? ?? true,
+    supportsNpu: j['npu'] as bool? ?? false,
+  );
 }

@@ -32,8 +32,7 @@ Stream<DownloadProgress> downloadFile({
   String? sha256,
   Map<String, String> headers = const {},
   required CancelToken token,
-}) =>
-    impl.downloadFile(url: url, destPath: destPath, sha256: sha256, headers: headers, token: token);
+}) => impl.downloadFile(url: url, destPath: destPath, sha256: sha256, headers: headers, token: token);
 
 bool fileExists(String path) => impl.fileExists(path);
 

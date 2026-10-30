@@ -52,26 +52,24 @@ class CommunitySkill extends Skill {
 
   @override
   List<SkillParam> get params => [
-        for (final p in (manifest['params'] as List? ?? const []).cast<Map>())
-          SkillParam(
-            p['name'] as String,
-            switch (p['type']) {
-              'number' => ParamType.number,
-              'integer' => ParamType.integer,
-              'boolean' => ParamType.boolean,
-              'list' => ParamType.stringList,
-              'image' || 'audio' || 'attachment' => ParamType.attachment,
-              _ => ParamType.string,
-            },
-            p['description'] as String? ?? '',
-            required: p['required'] as bool? ?? true,
-          ),
-      ];
+    for (final p in (manifest['params'] as List? ?? const []).cast<Map>())
+      SkillParam(
+        p['name'] as String,
+        switch (p['type']) {
+          'number' => ParamType.number,
+          'integer' => ParamType.integer,
+          'boolean' => ParamType.boolean,
+          'list' => ParamType.stringList,
+          'image' || 'audio' || 'attachment' => ParamType.attachment,
+          _ => ParamType.string,
+        },
+        p['description'] as String? ?? '',
+        required: p['required'] as bool? ?? true,
+      ),
+  ];
 
   /// Skills a chain may call, shown at install time.
-  List<String> get calls => [
-        for (final s in (manifest['steps'] as List? ?? const []).cast<Map>()) '${s['skill']}',
-      ];
+  List<String> get calls => [for (final s in (manifest['steps'] as List? ?? const []).cast<Map>()) '${s['skill']}'];
 
   @override
   Future<SkillResult> run(Map<String, dynamic> args, SkillContext ctx) async {
@@ -106,14 +104,31 @@ class CommunitySkill extends Skill {
     switch (manifest['output']) {
       case 'json':
         final j = extractJson(out) ?? {'raw': out};
-        return SkillResult(j, cards: [
-          UiCard('kv', title: name, data: {for (final e in j.entries) e.key: '${e.value}'}),
-        ]);
+        return SkillResult(
+          j,
+          cards: [
+            UiCard('kv', title: name, data: {for (final e in j.entries) e.key: '${e.value}'}),
+          ],
+        );
       case 'checklist':
-        final items = out.split('\n').map((l) => l.replaceFirst(RegExp(r'^\s*([-*•]|\d+[.)])\s*'), '').trim()).where((l) => l.isNotEmpty).toList();
-        return SkillResult({'items': items}, cards: [UiCard('checklist', title: name, data: {'items': items})]);
+        final items = out
+            .split('\n')
+            .map((l) => l.replaceFirst(RegExp(r'^\s*([-*•]|\d+[.)])\s*'), '').trim())
+            .where((l) => l.isNotEmpty)
+            .toList();
+        return SkillResult(
+          {'items': items},
+          cards: [
+            UiCard('checklist', title: name, data: {'items': items}),
+          ],
+        );
       default:
-        return SkillResult({'result': out}, cards: [UiCard('text', title: name, data: {'text': out, 'copy': true})]);
+        return SkillResult(
+          {'result': out},
+          cards: [
+            UiCard('text', title: name, data: {'text': out, 'copy': true}),
+          ],
+        );
     }
   }
 }
@@ -131,7 +146,8 @@ const sampleCommunitySkills = <Map<String, dynamic>>[
       {'name': 'ingredients', 'type': 'string', 'description': 'Ingredients on hand.', 'required': false},
     ],
     'prompt': {
-      'system': 'You are a practical home cook. Suggest one recipe using mostly what is available. '
+      'system':
+          'You are a practical home cook. Suggest one recipe using mostly what is available. '
           'Give a title, a time estimate, ingredients and numbered steps.',
       'user': 'Ingredients: {{ingredients}}',
     },

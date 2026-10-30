@@ -31,9 +31,6 @@ class _PrefsStore implements JsonStore {
   Future<void> delete(String key) => _prefs.remove('$_ns$key');
 
   @override
-  Future<List<String>> keys(String prefix) async => _prefs
-      .getKeys()
-      .where((k) => k.startsWith('$_ns$prefix'))
-      .map((k) => k.substring(_ns.length))
-      .toList();
+  Future<List<String>> keys(String prefix) async =>
+      _prefs.getKeys().where((k) => k.startsWith('$_ns$prefix')).map((k) => k.substring(_ns.length)).toList();
 }

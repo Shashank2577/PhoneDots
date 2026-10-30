@@ -12,15 +12,14 @@ class LedgerEntry {
   final String detail;
   final bool network;
 
-  Map<String, dynamic> toJson() =>
-      {'t': time.toIso8601String(), 'k': kind, 'd': detail, 'n': network};
+  Map<String, dynamic> toJson() => {'t': time.toIso8601String(), 'k': kind, 'd': detail, 'n': network};
 
   factory LedgerEntry.fromJson(Map<String, dynamic> j) => LedgerEntry(
-        time: DateTime.parse(j['t'] as String),
-        kind: j['k'] as String,
-        detail: j['d'] as String,
-        network: j['n'] as bool? ?? false,
-      );
+    time: DateTime.parse(j['t'] as String),
+    kind: j['k'] as String,
+    detail: j['d'] as String,
+    network: j['n'] as bool? ?? false,
+  );
 }
 
 class Ledger extends ChangeNotifier {

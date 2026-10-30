@@ -49,11 +49,7 @@ class SkillRegistry extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Skill> get all => [
-        ...builtIns,
-        ...recipes.map(RecipeSkill.new),
-        ...community,
-      ];
+  List<Skill> get all => [...builtIns, ...recipes.map(RecipeSkill.new), ...community];
 
   bool availableHere(Skill s) => s.platforms.isEmpty || s.platforms.contains(platform) || platform == 'demo';
 

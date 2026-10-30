@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_state.dart';
+import '../../widgets/sketch.dart';
 import '../chat/chat_screen.dart';
 import '../models/models_screen.dart';
 import '../settings/settings_screen.dart';
@@ -18,27 +19,66 @@ class Shell extends StatelessWidget {
       builder: (context, _) {
         if (!state.services.settings.onboarded) return const Onboarding();
         return Scaffold(
-          body: IndexedStack(index: state.tab, children: const [
-            ChatScreen(),
-            SkillsScreen(),
-            ModelsScreen(),
-            YouScreen(),
-          ]),
-          bottomNavigationBar: DecoratedBox(
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: Theme.of(context).dividerTheme.color!))),
-            child: NavigationBar(
-              selectedIndex: state.tab,
-              onDestinationSelected: state.goTo,
-              destinations: const [
-                NavigationDestination(icon: Icon(Icons.chat_bubble_outline_rounded), selectedIcon: Icon(Icons.chat_bubble_rounded), label: 'Chat'),
-                NavigationDestination(icon: Icon(Icons.widgets_outlined), selectedIcon: Icon(Icons.widgets_rounded), label: 'Skills'),
-                NavigationDestination(icon: Icon(Icons.memory_outlined), selectedIcon: Icon(Icons.memory_rounded), label: 'Models'),
-                NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'You'),
-              ],
+          // Tabs keep their state; switching slides the new page up a little.
+          body: _TabSwitch(
+            index: state.tab,
+            child: IndexedStack(
+              index: state.tab,
+              children: const [ChatScreen(), SkillsScreen(), ModelsScreen(), YouScreen()],
             ),
+          ),
+          bottomNavigationBar: SketchNavBar(
+            index: state.tab,
+            onTap: state.goTo,
+            items: const [
+              (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
+              (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Skills'),
+              (Icons.memory_outlined, Icons.memory_rounded, 'Models'),
+              (Icons.sentiment_satisfied_outlined, Icons.sentiment_satisfied_rounded, 'You'),
+            ],
           ),
         );
       },
     );
   }
+}
+
+/// Replays a short rise-and-fade whenever [index] changes, without
+/// rebuilding the tabs (so scroll positions and drafts survive).
+class _TabSwitch extends StatefulWidget {
+  const _TabSwitch({required this.index, required this.child});
+  final int index;
+  final Widget child;
+
+  @override
+  State<_TabSwitch> createState() => _TabSwitchState();
+}
+
+class _TabSwitchState extends State<_TabSwitch> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 320), value: 1);
+
+  @override
+  void didUpdateWidget(_TabSwitch old) {
+    super.didUpdateWidget(old);
+    if (old.index != widget.index) _c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _c,
+    child: widget.child,
+    builder: (_, child) {
+      final t = Curves.easeOutCubic.transform(_c.value);
+      return Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 14 * (1 - t)), child: child),
+      );
+    },
+  );
 }

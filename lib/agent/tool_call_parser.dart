@@ -97,8 +97,9 @@ class ToolCallParser {
     final re = RegExp(r'''(\w+)\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,]+)''');
     for (final m in re.allMatches(body)) {
       final v = m.group(2)!.trim();
-      args[m.group(1)!] =
-          (v.startsWith('"') || v.startsWith("'")) ? v.substring(1, v.length - 1).replaceAll(r'\"', '"') : _scalar(v);
+      args[m.group(1)!] = (v.startsWith('"') || v.startsWith("'"))
+          ? v.substring(1, v.length - 1).replaceAll(r'\"', '"')
+          : _scalar(v);
     }
     return args;
   }

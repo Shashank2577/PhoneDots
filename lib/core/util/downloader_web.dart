@@ -6,8 +6,7 @@ Stream<DownloadProgress> downloadFile({
   String? sha256,
   Map<String, String> headers = const {},
   required CancelToken token,
-}) =>
-    Stream.error(UnsupportedError('Model files are only stored on phones.'));
+}) => Stream.error(UnsupportedError('Model files are only stored on phones.'));
 
 bool fileExists(String path) => false;
 

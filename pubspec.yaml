@@ -1,5 +1,5 @@
 name: phonedots
-description: "A new Flutter project."
+description: "PhoneDots: an AI assistant that runs entirely on your phone."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -26,3 +26,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Bundled so the hand-drawn look works offline (SIL Open Font License).
+  fonts:
+    - family: PatrickHand
+      fonts:
+        - asset: assets/fonts/PatrickHand-Regular.ttf
+    - family: Caveat
+      fonts:
+        - asset: assets/fonts/Caveat.ttf

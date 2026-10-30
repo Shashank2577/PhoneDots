@@ -19,19 +19,19 @@ class SkillParam {
   final List<String>? options;
 
   Map<String, dynamic> toSchema() => {
-        ...switch (type) {
-          ParamType.string || ParamType.attachment => {'type': 'string'},
-          ParamType.integer => {'type': 'integer'},
-          ParamType.number => {'type': 'number'},
-          ParamType.boolean => {'type': 'boolean'},
-          ParamType.stringList => {
-              'type': 'array',
-              'items': {'type': 'string'},
-            },
-        },
-        'description': type == ParamType.attachment ? '$description Use an attachment id such as "a1".' : description,
-        if (options != null) 'enum': options,
-      };
+    ...switch (type) {
+      ParamType.string || ParamType.attachment => {'type': 'string'},
+      ParamType.integer => {'type': 'integer'},
+      ParamType.number => {'type': 'number'},
+      ParamType.boolean => {'type': 'boolean'},
+      ParamType.stringList => {
+        'type': 'array',
+        'items': {'type': 'string'},
+      },
+    },
+    'description': type == ParamType.attachment ? '$description Use an attachment id such as "a1".' : description,
+    if (options != null) 'enum': options,
+  };
 }
 
 /// A rich block rendered under the assistant's reply. JSON so it persists
@@ -74,11 +74,11 @@ class Attachment {
   Map<String, dynamic> toJson() => {'id': id, 'kind': kind, 'path': path, 'name': name};
 
   factory Attachment.fromJson(Map<String, dynamic> j) => Attachment(
-        id: j['id'] as String,
-        kind: j['kind'] as String,
-        path: j['path'] as String,
-        name: j['name'] as String,
-      );
+    id: j['id'] as String,
+    kind: j['kind'] as String,
+    path: j['path'] as String,
+    name: j['name'] as String,
+  );
 }
 
 abstract class Skill {
@@ -102,14 +102,17 @@ abstract class Skill {
   Future<SkillResult> run(Map<String, dynamic> args, SkillContext ctx);
 
   ToolSpec toToolSpec() => ToolSpec(
-        name: id,
-        description: description,
-        parameters: {
-          'type': 'object',
-          'properties': {for (final p in params) p.name: p.toSchema()},
-          'required': [for (final p in params) if (p.required) p.name],
-        },
-      );
+    name: id,
+    description: description,
+    parameters: {
+      'type': 'object',
+      'properties': {for (final p in params) p.name: p.toSchema()},
+      'required': [
+        for (final p in params)
+          if (p.required) p.name,
+      ],
+    },
+  );
 }
 
 /// Everything a skill may touch. Implemented by the app services so skills
@@ -124,7 +127,12 @@ abstract class SkillContext {
   Attachment? attachment(Object? ref);
 
   /// One-shot generation with the planner model (no tools), for text skills.
-  Future<String> ask({required String system, required String prompt, List<String> imagePaths = const [], List<String> audioPaths = const []});
+  Future<String> ask({
+    required String system,
+    required String prompt,
+    List<String> imagePaths = const [],
+    List<String> audioPaths = const [],
+  });
 
   Future<Map<String, dynamic>> specialist(String modelId, String task, Map<String, dynamic> input);
 

@@ -48,17 +48,20 @@ class Attach {
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder: (c) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          for (final (key, icon, label) in [
-            ('camera', Icons.photo_camera_outlined, 'Camera'),
-            ('photo', Icons.image_outlined, 'Photo'),
-            ('record', Icons.mic_none_rounded, 'Record audio'),
-            ('audio', Icons.graphic_eq_rounded, 'Audio file'),
-            ('document', Icons.description_outlined, 'Text document'),
-          ])
-            ListTile(leading: Icon(icon), title: Text(label), onTap: () => Navigator.pop(c, key)),
-          const SizedBox(height: 8),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (key, icon, label) in [
+              ('camera', Icons.photo_camera_outlined, 'Camera'),
+              ('photo', Icons.image_outlined, 'Photo'),
+              ('record', Icons.mic_none_rounded, 'Record audio'),
+              ('audio', Icons.graphic_eq_rounded, 'Audio file'),
+              ('document', Icons.description_outlined, 'Text document'),
+            ])
+              ListTile(leading: Icon(icon), title: Text(label), onTap: () => Navigator.pop(c, key)),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
     if (choice == null || !context.mounted) return null;
@@ -133,25 +136,40 @@ class _RecorderSheetState extends State<RecorderSheet> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (_error != null)
-            Text(_error!, style: context.text.bodyMedium, textAlign: TextAlign.center)
-          else ...[
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Dot(color: _recording ? p.danger : p.faint, size: 10),
-              const SizedBox(width: 10),
-              Text(formatDuration(_seconds.toDouble()), style: context.text.displaySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-            ]),
-            const SizedBox(height: 6),
-            Text('Recording on device. Nothing is uploaded.', style: context.text.bodySmall),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_error != null)
+              Text(_error!, style: context.text.bodyMedium, textAlign: TextAlign.center)
+            else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Dot(color: _recording ? p.danger : p.faint, size: 10),
+                  const SizedBox(width: 10),
+                  Text(
+                    formatDuration(_seconds.toDouble()),
+                    style: context.text.displaySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text('Recording on device. Nothing is uploaded.', style: context.text.bodySmall),
+            ],
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(onPressed: () => _finish(false), child: const Text('Cancel')),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(onPressed: _recording ? () => _finish(true) : null, child: const Text('Done')),
+                ),
+              ],
+            ),
           ],
-          const SizedBox(height: 24),
-          Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => _finish(false), child: const Text('Cancel'))),
-            const SizedBox(width: 12),
-            Expanded(child: FilledButton(onPressed: _recording ? () => _finish(true) : null, child: const Text('Done'))),
-          ]),
-        ]),
+        ),
       ),
     );
   }

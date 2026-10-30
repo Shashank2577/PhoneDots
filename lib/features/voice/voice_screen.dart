@@ -138,60 +138,78 @@ class _VoiceScreenState extends State<VoiceScreen> with SingleTickerProviderStat
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(children: [
-            Expanded(
-              child: ListView(children: [
-                if (_heard.isNotEmpty) ...[
-                  Text('YOU', style: context.text.labelSmall),
-                  const SizedBox(height: 6),
-                  Text(_heard, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 24),
-                ],
-                if (_reply.isNotEmpty) ...[
-                  Text('PHONEDOTS', style: context.text.labelSmall),
-                  const SizedBox(height: 6),
-                  Text(_reply, style: context.text.bodyLarge),
-                ],
-                if (_error != null) Text(_error!, style: context.text.bodyMedium?.copyWith(color: p.danger)),
-              ]),
-            ),
-            GestureDetector(
-              onTap: _tap,
-              child: AnimatedBuilder(
-                animation: _pulse,
-                builder: (_, _) {
-                  final active = _phase == _Phase.listening;
-                  final busy = _phase == _Phase.transcribing || _phase == _Phase.thinking;
-                  final scale = active ? 1 + _level * 0.35 : busy ? 1 + 0.05 * sin(_pulse.value * 2 * pi) : 1.0;
-                  return Stack(alignment: Alignment.center, children: [
-                    if (active || busy)
-                      Container(
-                        width: 150 * scale,
-                        height: 150 * scale,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: p.ink.withValues(alpha: 0.06)),
-                      ),
-                    Container(
-                      width: 104,
-                      height: 104,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: active ? p.danger : p.ink),
-                      child: Icon(
-                        active ? Icons.stop_rounded : _phase == _Phase.speaking ? Icons.volume_up_rounded : Icons.mic_rounded,
-                        color: p.bg,
-                        size: 36,
-                      ),
-                    ),
-                  ]);
-                },
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  children: [
+                    if (_heard.isNotEmpty) ...[
+                      Text('YOU', style: context.text.labelSmall),
+                      const SizedBox(height: 6),
+                      Text(_heard, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 24),
+                    ],
+                    if (_reply.isNotEmpty) ...[
+                      Text('PHONEDOTS', style: context.text.labelSmall),
+                      const SizedBox(height: 6),
+                      Text(_reply, style: context.text.bodyLarge),
+                    ],
+                    if (_error != null) Text(_error!, style: context.text.bodyMedium?.copyWith(color: p.danger)),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Dot(color: _phase == _Phase.listening ? p.danger : p.dot, size: 6),
-              const SizedBox(width: 8),
-              Text(label, style: context.text.bodyMedium?.copyWith(color: p.muted)),
-            ]),
-            const SizedBox(height: 12),
-          ]),
+              GestureDetector(
+                onTap: _tap,
+                child: AnimatedBuilder(
+                  animation: _pulse,
+                  builder: (_, _) {
+                    final active = _phase == _Phase.listening;
+                    final busy = _phase == _Phase.transcribing || _phase == _Phase.thinking;
+                    final scale = active
+                        ? 1 + _level * 0.35
+                        : busy
+                        ? 1 + 0.05 * sin(_pulse.value * 2 * pi)
+                        : 1.0;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (active || busy)
+                          Container(
+                            width: 150 * scale,
+                            height: 150 * scale,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: p.ink.withValues(alpha: 0.06)),
+                          ),
+                        Container(
+                          width: 104,
+                          height: 104,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: active ? p.danger : p.ink),
+                          child: Icon(
+                            active
+                                ? Icons.stop_rounded
+                                : _phase == _Phase.speaking
+                                ? Icons.volume_up_rounded
+                                : Icons.mic_rounded,
+                            color: p.bg,
+                            size: 36,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Dot(color: _phase == _Phase.listening ? p.danger : p.dot, size: 6),
+                  const SizedBox(width: 8),
+                  Text(label, style: context.text.bodyMedium?.copyWith(color: p.muted)),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );

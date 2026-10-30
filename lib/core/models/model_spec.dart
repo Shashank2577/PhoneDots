@@ -57,10 +57,10 @@ class ModelSpec {
       hfRepo == null ? null : 'https://huggingface.co/$hfRepo/resolve/main/$fileName?download=true';
 
   bool supports(String platform) => switch (platform) {
-        'android' => android == PlatformSupport.native,
-        'ios' => ios == PlatformSupport.native,
-        _ => true,
-      };
+    'android' => android == PlatformSupport.native,
+    'ios' => ios == PlatformSupport.native,
+    _ => true,
+  };
 
   bool has(ModelCapability c) => capabilities.contains(c);
 }

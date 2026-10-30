@@ -53,8 +53,12 @@ class DemoLlmEngine implements LlmEngine {
     final last = request.history.last;
 
     if (last.role == TurnRole.user && request.tools.isNotEmpty) {
-      final call = DemoIntents.match(last.text, request.tools.map((t) => t.name).toSet(),
-          hasImage: last.imagePaths.isNotEmpty, hasAudio: last.audioPaths.isNotEmpty);
+      final call = DemoIntents.match(
+        last.text,
+        request.tools.map((t) => t.name).toSet(),
+        hasImage: last.imagePaths.isNotEmpty,
+        hasAudio: last.audioPaths.isNotEmpty,
+      );
       if (call != null) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
         yield ToolCallsEvent([call]);
@@ -83,7 +87,13 @@ class DemoLlmEngine implements LlmEngine {
     final parts = <String>[];
     for (final r in responses) {
       final summary = r.response['summary'] ?? r.response['message'] ?? r.response['error'];
-      parts.add(summary != null ? '$summary' : r.response['shown'] == true ? 'Here you go.' : 'Done.');
+      parts.add(
+        summary != null
+            ? '$summary'
+            : r.response['shown'] == true
+            ? 'Here you go.'
+            : 'Done.',
+      );
     }
     return parts.join('\n\n');
   }
@@ -136,7 +146,11 @@ class DemoIntents {
     if (timer != null && has('set_timer') && t.contains('timer')) {
       final n = int.parse(timer.group(1)!);
       final unit = timer.group(2)!;
-      final seconds = unit.startsWith('h') ? n * 3600 : unit.startsWith('m') ? n * 60 : n;
+      final seconds = unit.startsWith('h')
+          ? n * 3600
+          : unit.startsWith('m')
+          ? n * 60
+          : n;
       return call('set_timer', {'seconds': seconds, 'label': 'Timer'});
     }
     if ((t.contains('flashlight') || t.contains('torch')) && has('toggle_flashlight')) {
@@ -153,14 +167,19 @@ class DemoIntents {
     if (expr != null && has('calculate')) return call('calculate', {'expression': expr.group(2)!.trim()});
     final conv = RegExp(r'([\d.]+)\s*([a-z°]+)\s+(?:to|in)\s+([a-z°]+)').firstMatch(t);
     if (conv != null && has('convert_units') && (t.startsWith('convert') || t.contains(' to '))) {
-      return call('convert_units',
-          {'value': double.parse(conv.group(1)!), 'from': conv.group(2)!, 'to': conv.group(3)!});
+      return call('convert_units', {
+        'value': double.parse(conv.group(1)!),
+        'from': conv.group(2)!,
+        'to': conv.group(3)!,
+      });
     }
     if ((t.contains('what time') || t.contains("today's date") || t.contains('what day')) && has('get_datetime')) {
       return call('get_datetime');
     }
     if (t.startsWith('remember') && has('remember_fact')) {
-      return call('remember_fact', {'fact': text.replaceFirst(RegExp(r'^remember( that)?\s*', caseSensitive: false), '')});
+      return call('remember_fact', {
+        'fact': text.replaceFirst(RegExp(r'^remember( that)?\s*', caseSensitive: false), ''),
+      });
     }
     if ((t.contains('what do you know about me') || t.contains('my memories')) && has('recall_memory')) {
       return call('recall_memory', {'query': text});
@@ -244,7 +263,8 @@ class DemoSpecialistEngine implements SpecialistEngine {
     switch (modelId) {
       case 'desertant.voz':
         return {
-          'text': 'Okay, let us start. The launch moves to Thursday. Priya will update the deck '
+          'text':
+              'Okay, let us start. The launch moves to Thursday. Priya will update the deck '
               'and Sam books the venue by Monday. Any questions? No, great.',
           'duration': 14.2,
           'words': [

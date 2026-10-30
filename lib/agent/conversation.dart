@@ -33,26 +33,26 @@ class AgentStep {
   int ms;
 
   Map<String, dynamic> toJson() => {
-        'skillId': skillId,
-        'skillName': skillName,
-        'args': args,
-        'via': via,
-        'status': status.name,
-        'result': result,
-        'cards': cards.map((c) => c.toJson()).toList(),
-        'ms': ms,
-      };
+    'skillId': skillId,
+    'skillName': skillName,
+    'args': args,
+    'via': via,
+    'status': status.name,
+    'result': result,
+    'cards': cards.map((c) => c.toJson()).toList(),
+    'ms': ms,
+  };
 
   factory AgentStep.fromJson(Map<String, dynamic> j) => AgentStep(
-        skillId: j['skillId'] as String,
-        skillName: j['skillName'] as String,
-        args: Map<String, dynamic>.from(j['args'] as Map),
-        via: j['via'] as String? ?? 'planner',
-        status: StepStatus.values.byName(j['status'] as String),
-        result: Map<String, dynamic>.from(j['result'] as Map? ?? const {}),
-        cards: (j['cards'] as List? ?? const []).map((c) => UiCard.fromJson(Map<String, dynamic>.from(c as Map))).toList(),
-        ms: j['ms'] as int? ?? 0,
-      );
+    skillId: j['skillId'] as String,
+    skillName: j['skillName'] as String,
+    args: Map<String, dynamic>.from(j['args'] as Map),
+    via: j['via'] as String? ?? 'planner',
+    status: StepStatus.values.byName(j['status'] as String),
+    result: Map<String, dynamic>.from(j['result'] as Map? ?? const {}),
+    cards: (j['cards'] as List? ?? const []).map((c) => UiCard.fromJson(Map<String, dynamic>.from(c as Map))).toList(),
+    ms: j['ms'] as int? ?? 0,
+  );
 }
 
 class ChatMessage {
@@ -69,9 +69,9 @@ class ChatMessage {
     this.stats,
     this.error,
     this.streaming = false,
-  })  : steps = steps ?? [],
-        turns = turns ?? [],
-        created = created ?? DateTime.now();
+  }) : steps = steps ?? [],
+       turns = turns ?? [],
+       created = created ?? DateTime.now();
 
   final String id;
   final bool isUser;
@@ -92,45 +92,50 @@ class ChatMessage {
   List<UiCard> get cards => [for (final s in steps) ...s.cards];
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'user': isUser,
-        'text': text,
-        'thinking': thinking,
-        'attachments': attachments.map((a) => a.toJson()).toList(),
-        'steps': steps.map((s) => s.toJson()).toList(),
-        'turns': turns.map((t) => t.toJson()).toList(),
-        'created': created.toIso8601String(),
-        'modelId': modelId,
-        if (stats != null)
-          'stats': {
-            'ttftMs': stats!.timeToFirstTokenMs,
-            'totalMs': stats!.totalMs,
-            'outputTokens': stats!.outputTokens,
-            'decodeTps': stats!.decodeTokensPerSec,
-          },
-        'error': error,
-      };
+    'id': id,
+    'user': isUser,
+    'text': text,
+    'thinking': thinking,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
+    'steps': steps.map((s) => s.toJson()).toList(),
+    'turns': turns.map((t) => t.toJson()).toList(),
+    'created': created.toIso8601String(),
+    'modelId': modelId,
+    if (stats != null)
+      'stats': {
+        'ttftMs': stats!.timeToFirstTokenMs,
+        'totalMs': stats!.totalMs,
+        'outputTokens': stats!.outputTokens,
+        'decodeTps': stats!.decodeTokensPerSec,
+      },
+    'error': error,
+  };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
-        id: j['id'] as String,
-        isUser: j['user'] as bool,
-        text: j['text'] as String? ?? '',
-        thinking: j['thinking'] as String? ?? '',
-        attachments:
-            (j['attachments'] as List? ?? const []).map((a) => Attachment.fromJson(Map<String, dynamic>.from(a as Map))).toList(),
-        steps: (j['steps'] as List? ?? const []).map((s) => AgentStep.fromJson(Map<String, dynamic>.from(s as Map))).toList(),
-        turns: (j['turns'] as List? ?? const []).map((t) => EngineTurn.fromJson(Map<String, dynamic>.from(t as Map))).toList(),
-        created: DateTime.parse(j['created'] as String),
-        modelId: j['modelId'] as String?,
-        stats: j['stats'] == null ? null : GenerationStats.fromJson(Map<String, dynamic>.from(j['stats'] as Map)),
-        error: j['error'] as String?,
-      );
+    id: j['id'] as String,
+    isUser: j['user'] as bool,
+    text: j['text'] as String? ?? '',
+    thinking: j['thinking'] as String? ?? '',
+    attachments: (j['attachments'] as List? ?? const [])
+        .map((a) => Attachment.fromJson(Map<String, dynamic>.from(a as Map)))
+        .toList(),
+    steps: (j['steps'] as List? ?? const [])
+        .map((s) => AgentStep.fromJson(Map<String, dynamic>.from(s as Map)))
+        .toList(),
+    turns: (j['turns'] as List? ?? const [])
+        .map((t) => EngineTurn.fromJson(Map<String, dynamic>.from(t as Map)))
+        .toList(),
+    created: DateTime.parse(j['created'] as String),
+    modelId: j['modelId'] as String?,
+    stats: j['stats'] == null ? null : GenerationStats.fromJson(Map<String, dynamic>.from(j['stats'] as Map)),
+    error: j['error'] as String?,
+  );
 }
 
 class Conversation {
   Conversation({required this.id, this.title = 'New chat', DateTime? updated, List<ChatMessage>? messages})
-      : updated = updated ?? DateTime.now(),
-        messages = messages ?? [];
+    : updated = updated ?? DateTime.now(),
+      messages = messages ?? [];
 
   final String id;
   String title;
@@ -138,18 +143,18 @@ class Conversation {
   final List<ChatMessage> messages;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'updated': updated.toIso8601String(),
-        'messages': messages.map((m) => m.toJson()).toList(),
-      };
+    'id': id,
+    'title': title,
+    'updated': updated.toIso8601String(),
+    'messages': messages.map((m) => m.toJson()).toList(),
+  };
 
   factory Conversation.fromJson(Map<String, dynamic> j) => Conversation(
-        id: j['id'] as String,
-        title: j['title'] as String,
-        updated: DateTime.parse(j['updated'] as String),
-        messages: (j['messages'] as List).map((m) => ChatMessage.fromJson(Map<String, dynamic>.from(m as Map))).toList(),
-      );
+    id: j['id'] as String,
+    title: j['title'] as String,
+    updated: DateTime.parse(j['updated'] as String),
+    messages: (j['messages'] as List).map((m) => ChatMessage.fromJson(Map<String, dynamic>.from(m as Map))).toList(),
+  );
 }
 
 class ConversationSummary {
@@ -170,10 +175,12 @@ class ConversationStore extends ChangeNotifier {
     final raw = (await _store.read(_index) as List?) ?? const [];
     summaries
       ..clear()
-      ..addAll(raw.map((e) {
-        final m = Map<String, dynamic>.from(e as Map);
-        return ConversationSummary(m['id'] as String, m['title'] as String, DateTime.parse(m['updated'] as String));
-      }));
+      ..addAll(
+        raw.map((e) {
+          final m = Map<String, dynamic>.from(e as Map);
+          return ConversationSummary(m['id'] as String, m['title'] as String, DateTime.parse(m['updated'] as String));
+        }),
+      );
     notifyListeners();
   }
 

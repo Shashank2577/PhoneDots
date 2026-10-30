@@ -5,14 +5,30 @@
 Flutter app for Android and iOS, with native bridges to [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) and [desert-ant-core](https://github.com/Desert-Ant-Labs/desert-ant-core). Inspired by [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery).
 
 <p>
+<img src="docs/screenshots/demo.gif" width="230">
 <img src="docs/screenshots/home.png" width="190">
 <img src="docs/screenshots/chat.png" width="190">
 <img src="docs/screenshots/skills.png" width="190">
+</p>
+<p>
 <img src="docs/screenshots/models.png" width="190">
+<img src="docs/screenshots/you.png" width="190">
+<img src="docs/screenshots/onboarding.png" width="190">
+<img src="docs/screenshots/home-dark.png" width="190">
 <img src="docs/screenshots/chat-dark.png" width="190">
 </p>
 
 *Screenshots from the web preview, which runs the demo engine.*
+
+## Look and feel
+
+A hand-drawn notebook: wobbly pen outlines on dotted paper (chalkboard in dark mode), tilted sticky notes, a highlighter, and two bundled handwriting fonts (Patrick Hand and Caveat, under the SIL Open Font License) so it works offline.
+
+- **Micro-interactions:** buttons and cards squish and spring back with a light haptic tick; the send button tilts when there is something to send; an empty send wiggles the composer; switches bounce.
+- **Drawn feedback:** skill steps scribble while running and draw a check when done; checklist items get a drawn tick and a pen strike-through; bars grow in with hatching; the active tab is circled in highlighter.
+- **Motion:** messages fly in from their side; panels and rows rise into place as they scroll into view; page headers collapse on scroll; scrolling is bouncy; pages turn in with a slight tilt.
+
+The drawing code is in `lib/theme/rough.dart` (hand-drawn Material borders, so every themed button, card, input and dialog gets the look) and `lib/widgets/sketch.dart` (animations and doodles).
 
 ## What it does
 

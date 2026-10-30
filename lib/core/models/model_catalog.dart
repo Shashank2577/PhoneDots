@@ -114,19 +114,18 @@ ModelSpec _da(
   int mb, {
   bool android = true,
   bool beta = false,
-}) =>
-    ModelSpec(
-      id: 'desertant.$key',
-      name: name,
-      provider: ModelProvider.desertAnt,
-      role: ModelRole.specialist,
-      summary: summary,
-      capabilities: caps,
-      approxBytes: mb * 1000 * 1000,
-      license: _daLicense,
-      android: android ? PlatformSupport.native : PlatformSupport.unsupported,
-      beta: beta,
-    );
+}) => ModelSpec(
+  id: 'desertant.$key',
+  name: name,
+  provider: ModelProvider.desertAnt,
+  role: ModelRole.specialist,
+  summary: summary,
+  capabilities: caps,
+  approxBytes: mb * 1000 * 1000,
+  license: _daLicense,
+  android: android ? PlatformSupport.native : PlatformSupport.unsupported,
+  beta: beta,
+);
 
 /// Platforms per desert-ant-core 4.2.1. Sizes are approximate per-device
 /// downloads, fetched by the Desert Ant SDK on first use.

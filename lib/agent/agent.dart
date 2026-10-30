@@ -23,7 +23,7 @@ typedef ConfirmCallback = Future<bool> Function(Skill skill, Map<String, dynamic
 /// everything into the message list.
 class ChatController extends ChangeNotifier {
   ChatController(this.services, {Conversation? conversation})
-      : conversation = conversation ?? Conversation(id: _uuid.v4());
+    : conversation = conversation ?? Conversation(id: _uuid.v4());
 
   final AppServices services;
   final Conversation conversation;
@@ -74,7 +74,12 @@ class ChatController extends ChangeNotifier {
 
   /// Runs one skill directly (skill "Try it", recipe runs) without asking a
   /// model to pick it.
-  Future<void> runSkill(Skill skill, Map<String, dynamic> args, {String? label, List<Attachment> attachments = const []}) async {
+  Future<void> runSkill(
+    Skill skill,
+    Map<String, dynamic> args, {
+    String? label,
+    List<Attachment> attachments = const [],
+  }) async {
     if (busy) return;
     busy = true;
     final user = ChatMessage(id: _uuid.v4(), isUser: true, text: label ?? skill.name, attachments: attachments);
@@ -93,7 +98,10 @@ class ChatController extends ChangeNotifier {
       if (step.status != StepStatus.done) reply.error = '${step.result['error'] ?? 'Failed'}';
       reply.turns.addAll([
         EngineTurn(role: TurnRole.model, toolCalls: [call]),
-        EngineTurn(role: TurnRole.tool, toolResponses: [ToolResponse(callId: call.id, name: call.name, response: _compact(step.result))]),
+        EngineTurn(
+          role: TurnRole.tool,
+          toolResponses: [ToolResponse(callId: call.id, name: call.name, response: _compact(step.result))],
+        ),
         if (reply.text.isNotEmpty) EngineTurn(role: TurnRole.model, text: reply.text),
       ]);
     } finally {
@@ -120,8 +128,18 @@ class ChatController extends ChangeNotifier {
   // Fast path ---------------------------------------------------------------
 
   static const _routerSkills = {
-    'set_timer', 'set_alarm', 'toggle_flashlight', 'open_settings', 'set_volume', 'battery_status',
-    'get_datetime', 'navigate_to', 'open_app', 'create_event', 'calculate', 'convert_units',
+    'set_timer',
+    'set_alarm',
+    'toggle_flashlight',
+    'open_settings',
+    'set_volume',
+    'battery_status',
+    'get_datetime',
+    'navigate_to',
+    'open_app',
+    'create_event',
+    'calculate',
+    'convert_units',
   };
 
   Future<bool> _tryRouter(ChatMessage user, ChatMessage reply) async {
@@ -155,7 +173,10 @@ class ChatController extends ChangeNotifier {
         ..text = '${step.result['summary'] ?? step.result['message'] ?? 'Done.'}';
       reply.turns.addAll([
         EngineTurn(role: TurnRole.model, toolCalls: calls),
-        EngineTurn(role: TurnRole.tool, toolResponses: [ToolResponse(callId: calls.single.id, name: calls.single.name, response: step.result)]),
+        EngineTurn(
+          role: TurnRole.tool,
+          toolResponses: [ToolResponse(callId: calls.single.id, name: calls.single.name, response: step.result)],
+        ),
         EngineTurn(role: TurnRole.model, text: reply.text),
       ]);
       return true;
@@ -174,15 +195,25 @@ class ChatController extends ChangeNotifier {
     final hearsAudio = planner?.has(ModelCapability.audio) ?? false;
     for (final m in messages) {
       if (m.isUser) {
-        out.add(EngineTurn(
-          role: TurnRole.user,
-          text: m.text.isEmpty ? 'See attachment.' : m.text,
-          imagePaths: seesImages ? [for (final a in m.attachments) if (a.kind == 'image') a.path] : const [],
-          // Long recordings go to Voz instead; short clips Gemma can hear directly.
-          audioPaths: hearsAudio
-              ? [for (final a in m.attachments) if (a.kind == 'audio' && fileLength(a.path) < 1500000) a.path]
-              : const [],
-        ));
+        out.add(
+          EngineTurn(
+            role: TurnRole.user,
+            text: m.text.isEmpty ? 'See attachment.' : m.text,
+            imagePaths: seesImages
+                ? [
+                    for (final a in m.attachments)
+                      if (a.kind == 'image') a.path,
+                  ]
+                : const [],
+            // Long recordings go to Voz instead; short clips Gemma can hear directly.
+            audioPaths: hearsAudio
+                ? [
+                    for (final a in m.attachments)
+                      if (a.kind == 'audio' && fileLength(a.path) < 1500000) a.path,
+                  ]
+                : const [],
+          ),
+        );
       } else if (m.turns.isNotEmpty) {
         out.addAll(m.turns);
       } else if (m.text.isNotEmpty) {
@@ -381,20 +412,27 @@ class _RunContext implements SkillContext {
   }
 
   @override
-  Future<String> ask({required String system, required String prompt, List<String> imagePaths = const [], List<String> audioPaths = const []}) async {
+  Future<String> ask({
+    required String system,
+    required String prompt,
+    List<String> imagePaths = const [],
+    List<String> audioPaths = const [],
+  }) async {
     if (!s.isDemo && !await s.models.ensurePlanner()) {
       throw StateError('Download ${modelById(s.settings.plannerId)?.name ?? 'Gemma'} in Models first.');
     }
     final session = 'sub-${_uuid.v4()}';
     final out = StringBuffer();
     String? error;
-    await for (final e in s.llm.generate(GenerationRequest(
-      modelId: s.settings.plannerId,
-      sessionId: session,
-      systemPrompt: system,
-      history: [EngineTurn(role: TurnRole.user, text: prompt, imagePaths: imagePaths, audioPaths: audioPaths)],
-      sampler: const SamplerSettings(temperature: 0.3, maxTokens: 1024),
-    ))) {
+    await for (final e in s.llm.generate(
+      GenerationRequest(
+        modelId: s.settings.plannerId,
+        sessionId: session,
+        systemPrompt: system,
+        history: [EngineTurn(role: TurnRole.user, text: prompt, imagePaths: imagePaths, audioPaths: audioPaths)],
+        sampler: const SamplerSettings(temperature: 0.3, maxTokens: 1024),
+      ),
+    )) {
       if (e is TokenEvent) out.write(e.text);
       if (e is ErrorEvent) error = e.message;
     }

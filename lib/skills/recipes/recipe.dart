@@ -35,29 +35,29 @@ class Recipe {
   final bool builtIn;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'input': input,
-        'steps': steps.map((s) => s.toJson()).toList(),
-      };
+    'id': id,
+    'name': name,
+    'description': description,
+    'input': input,
+    'steps': steps.map((s) => s.toJson()).toList(),
+  };
 
   factory Recipe.fromJson(Map<String, dynamic> j, {bool builtIn = false}) => Recipe(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        description: j['description'] as String? ?? '',
-        input: j['input'] as String? ?? 'text',
-        steps: (j['steps'] as List).map((s) => RecipeStep.fromJson(Map<String, dynamic>.from(s as Map))).toList(),
-        builtIn: builtIn,
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    description: j['description'] as String? ?? '',
+    input: j['input'] as String? ?? 'text',
+    steps: (j['steps'] as List).map((s) => RecipeStep.fromJson(Map<String, dynamic>.from(s as Map))).toList(),
+    builtIn: builtIn,
+  );
 
   Recipe copyWith({String? name, String? description, String? input, List<RecipeStep>? steps}) => Recipe(
-        id: id,
-        name: name ?? this.name,
-        description: description ?? this.description,
-        input: input ?? this.input,
-        steps: steps ?? this.steps,
-      );
+    id: id,
+    name: name ?? this.name,
+    description: description ?? this.description,
+    input: input ?? this.input,
+    steps: steps ?? this.steps,
+  );
 }
 
 /// Fills {{...}} placeholders from the run state.
@@ -102,11 +102,11 @@ class RecipeSkill extends Skill {
 
   @override
   List<SkillParam> get params => switch (recipe.input) {
-        'audio' => const [SkillParam('input', ParamType.attachment, 'The audio recording.')],
-        'image' => const [SkillParam('input', ParamType.attachment, 'The image.')],
-        'none' => const [],
-        _ => const [SkillParam('input', ParamType.string, 'The text to start from.')],
-      };
+    'audio' => const [SkillParam('input', ParamType.attachment, 'The audio recording.')],
+    'image' => const [SkillParam('input', ParamType.attachment, 'The image.')],
+    'none' => const [],
+    _ => const [SkillParam('input', ParamType.string, 'The text to start from.')],
+  };
 
   @override
   Future<SkillResult> run(Map<String, dynamic> args, SkillContext ctx) async {
@@ -123,10 +123,10 @@ class RecipeSkill extends Skill {
       cards.addAll(r.cards);
     }
     final last = results.isEmpty ? <String, dynamic>{} : results.last;
-    return SkillResult(
-      {'summary': 'Ran "${recipe.name}" (${recipe.steps.length} steps).', 'result': last},
-      cards: cards,
-    );
+    return SkillResult({
+      'summary': 'Ran "${recipe.name}" (${recipe.steps.length} steps).',
+      'result': last,
+    }, cards: cards);
   }
 }
 

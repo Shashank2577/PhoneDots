@@ -84,10 +84,10 @@ class ModelManager extends ChangeNotifier {
   }
 
   int get storageUsed => allModels.where((m) => isReady(m.id)).fold(0, (sum, m) {
-        final p = pathFor(m);
-        final onDisk = p == null ? 0 : fileSize(p);
-        return sum + (onDisk > 0 ? onDisk : m.approxBytes);
-      });
+    final p = pathFor(m);
+    final onDisk = p == null ? 0 : fileSize(p);
+    return sum + (onDisk > 0 ? onDisk : m.approxBytes);
+  });
 
   /// Models this phone can comfortably run.
   bool fits(ModelSpec m) => device.totalRamMb == 0 || m.minRamMb <= device.totalRamMb;
@@ -206,7 +206,9 @@ class ModelManager extends ChangeNotifier {
       } else {
         loadedPlanner = id;
       }
-      unawaited(ledger.record('model', 'Loaded ${m.name} in ${formatMs(DateTime.now().difference(started).inMilliseconds)}'));
+      unawaited(
+        ledger.record('model', 'Loaded ${m.name} in ${formatMs(DateTime.now().difference(started).inMilliseconds)}'),
+      );
       return true;
     } catch (e) {
       loadError = 'Could not load ${m.name}: $e';

@@ -6,7 +6,13 @@ import '../core/runtime/engines.dart';
 import '../core/storage/json_store.dart';
 
 class KnowledgeDoc {
-  KnowledgeDoc({required this.id, required this.title, required this.source, required this.created, required this.chunks});
+  KnowledgeDoc({
+    required this.id,
+    required this.title,
+    required this.source,
+    required this.created,
+    required this.chunks,
+  });
 
   final String id;
   final String title;
@@ -14,16 +20,21 @@ class KnowledgeDoc {
   final DateTime created;
   final int chunks;
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'title': title, 'source': source, 'created': created.toIso8601String(), 'chunks': chunks};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'source': source,
+    'created': created.toIso8601String(),
+    'chunks': chunks,
+  };
 
   factory KnowledgeDoc.fromJson(Map<String, dynamic> j) => KnowledgeDoc(
-        id: j['id'] as String,
-        title: j['title'] as String,
-        source: j['source'] as String,
-        created: DateTime.parse(j['created'] as String),
-        chunks: j['chunks'] as int,
-      );
+    id: j['id'] as String,
+    title: j['title'] as String,
+    source: j['source'] as String,
+    created: DateTime.parse(j['created'] as String),
+    chunks: j['chunks'] as int,
+  );
 }
 
 class _Chunk {
@@ -34,14 +45,19 @@ class _Chunk {
   final String text;
   List<double> vector;
 
-  Map<String, dynamic> toJson() => {'d': docId, 't': title, 'x': text, 'v': vector.map((e) => double.parse(e.toStringAsFixed(4))).toList()};
+  Map<String, dynamic> toJson() => {
+    'd': docId,
+    't': title,
+    'x': text,
+    'v': vector.map((e) => double.parse(e.toStringAsFixed(4))).toList(),
+  };
 
   factory _Chunk.fromJson(Map<String, dynamic> j) => _Chunk(
-        j['d'] as String,
-        j['t'] as String,
-        j['x'] as String,
-        (j['v'] as List).map((e) => (e as num).toDouble()).toList(),
-      );
+    j['d'] as String,
+    j['t'] as String,
+    j['x'] as String,
+    (j['v'] as List).map((e) => (e as num).toDouble()).toList(),
+  );
 }
 
 /// On-device retrieval index. Vectors come from EmbeddingGemma when it is
@@ -69,10 +85,10 @@ class KnowledgeBase extends ChangeNotifier {
   }
 
   Future<void> _save() => store.write(_key, {
-        'embedder': _indexedWith,
-        'docs': docs.map((d) => d.toJson()).toList(),
-        'chunks': _chunks.map((c) => c.toJson()).toList(),
-      });
+    'embedder': _indexedWith,
+    'docs': docs.map((d) => d.toJson()).toList(),
+    'chunks': _chunks.map((c) => c.toJson()).toList(),
+  });
 
   String _embedderKey(Embedder e) => '${e.runtimeType}:${e.dimensions}';
 
@@ -145,12 +161,16 @@ class KnowledgeBase extends ChangeNotifier {
     await _reindexIfNeeded(e);
     final q = await e.embed(query);
     final terms = query.toLowerCase().split(RegExp(r'[^a-z0-9]+')).where((t) => t.length > 3).toSet();
-    final scored = _chunks.map((c) {
-      final lower = c.text.toLowerCase();
-      final bonus = terms.isEmpty ? 0 : terms.where(lower.contains).length / terms.length * 0.15;
-      return (c, cosine(q, c.vector) + bonus);
-    }).where((x) => x.$2 > 0.12).toList()
-      ..sort((a, b) => b.$2.compareTo(a.$2));
+    final scored =
+        _chunks
+            .map((c) {
+              final lower = c.text.toLowerCase();
+              final bonus = terms.isEmpty ? 0 : terms.where(lower.contains).length / terms.length * 0.15;
+              return (c, cosine(q, c.vector) + bonus);
+            })
+            .where((x) => x.$2 > 0.12)
+            .toList()
+          ..sort((a, b) => b.$2.compareTo(a.$2));
     return [
       for (final s in scored.take(limit)) {'title': s.$1.title, 'text': s.$1.text, 'score': min(1.0, s.$2)},
     ];

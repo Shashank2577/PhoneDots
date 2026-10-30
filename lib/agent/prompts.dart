@@ -14,13 +14,19 @@ class Prompts {
     required bool nativeTools,
   }) {
     final b = StringBuffer()
-      ..writeln('You are PhoneDots, a private assistant that runs entirely on the user\'s phone. '
-          'You have no internet access. Everything you do stays on this device.')
-      ..writeln('Now: ${_weekdays[now.weekday - 1]} ${now.toIso8601String().substring(0, 16).replaceFirst('T', ' ')} '
-          '(UTC${now.timeZoneOffset.isNegative ? '-' : '+'}${now.timeZoneOffset.inHours.abs()}).')
-      ..writeln('Use a tool whenever one can do the job better than you (maths, the phone, the user\'s files, audio, photos). '
-          'Never invent tool results. If a tool fails, say so plainly. '
-          'Keep answers short and direct; use bullet points for lists.');
+      ..writeln(
+        'You are PhoneDots, a private assistant that runs entirely on the user\'s phone. '
+        'You have no internet access. Everything you do stays on this device.',
+      )
+      ..writeln(
+        'Now: ${_weekdays[now.weekday - 1]} ${now.toIso8601String().substring(0, 16).replaceFirst('T', ' ')} '
+        '(UTC${now.timeZoneOffset.isNegative ? '-' : '+'}${now.timeZoneOffset.inHours.abs()}).',
+      )
+      ..writeln(
+        'Use a tool whenever one can do the job better than you (maths, the phone, the user\'s files, audio, photos). '
+        'Never invent tool results. If a tool fails, say so plainly. '
+        'Keep answers short and direct; use bullet points for lists.',
+      );
     if (attachments.isNotEmpty) {
       b.writeln('\nAttachments in this conversation (pass the id to tools):');
       for (final a in attachments) {

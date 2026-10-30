@@ -106,8 +106,7 @@ class AppServices {
     return services;
   }
 
-  Future<Embedder> bestEmbedder() async =>
-      !isDemo && await models.ensureEmbedder() ? nativeEmbedder : lexicalEmbedder;
+  Future<Embedder> bestEmbedder() async => !isDemo && await models.ensureEmbedder() ? nativeEmbedder : lexicalEmbedder;
 
   void _listenForShares() {
     Channels.intake.setMethodCallHandler((call) async {
@@ -134,6 +133,6 @@ class AppServices {
   static String _kindFor(String mime) => mime.startsWith('image/')
       ? 'image'
       : mime.startsWith('audio/') || mime.startsWith('video/')
-          ? 'audio'
-          : 'document';
+      ? 'audio'
+      : 'document';
 }

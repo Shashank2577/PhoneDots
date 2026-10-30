@@ -11,6 +11,7 @@ import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/sketch.dart';
 import '../voice/voice_screen.dart';
 import 'attach.dart';
 import 'message_view.dart';
@@ -131,7 +132,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final state = AppScope.of(context);
     final chat = state.chat;
     final s = state.services;
-    final p = context.pal;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 12,
@@ -151,19 +151,33 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           if (s.isDemo) const DemoBanner(),
           Expanded(
-            child: chat.messages.isEmpty
-                ? _Welcome(onSuggestion: _suggest)
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: chat.messages.length,
-                    itemBuilder: (_, i) => MessageView(
-                      message: chat.messages[i],
-                      isLast: i == chat.messages.length - 1,
-                      onRetry: chat.busy ? null : chat.retry,
-                      onOpenModels: () => state.goTo(2),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: chat.messages.isEmpty
+                  ? _Welcome(key: const ValueKey('welcome'), onSuggestion: _suggest)
+                  : ListView.builder(
+                      key: const ValueKey('messages'),
+                      controller: _scroll,
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                      padding: const EdgeInsets.only(bottom: 16),
+                      itemCount: chat.messages.length,
+                      itemBuilder: (_, i) {
+                        final m = chat.messages[i];
+                        // New messages fly in from their side: yours from the right, replies from the left.
+                        return Enter(
+                          key: ValueKey(m.id),
+                          from: Offset(m.isUser ? 40 : -24, 12),
+                          tilt: m.isUser ? -0.04 : 0.03,
+                          child: MessageView(
+                            message: m,
+                            isLast: i == chat.messages.length - 1,
+                            onRetry: chat.busy ? null : chat.retry,
+                            onOpenModels: () => state.goTo(2),
+                          ),
+                        );
+                      },
                     ),
-                  ),
+            ),
           ),
           _Composer(
             controller: _input,
@@ -173,7 +187,6 @@ class _ChatScreenState extends State<ChatScreen> {
             onStop: chat.stop,
             onAttach: _attach,
             onRemove: (a) => setState(() => _pending.remove(a)),
-            hairline: p.hairline,
           ),
         ],
       ),
@@ -245,16 +258,18 @@ class _ModelChip extends StatelessWidget {
         final loaded = m.loadedPlanner == services.settings.plannerId;
         final ready = m.isReady(services.settings.plannerId);
         final loading = m.loadingModel != null;
-        return InkWell(
-          borderRadius: BorderRadius.circular(999),
+        return Pressable(
           onTap: () => _pick(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: SketchBox(
+            seed: 301,
+            radius: 18,
+            fill: p.note(3),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (loading)
-                  const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 1.5))
+                  const Scribbling(size: 12)
                 else
                   Dot(
                     color: services.isDemo
@@ -269,7 +284,7 @@ class _ModelChip extends StatelessWidget {
                 Flexible(
                   child: Text(
                     services.isDemo ? 'Demo engine' : planner?.name ?? 'No model',
-                    style: context.text.titleMedium,
+                    style: context.text.titleMedium?.copyWith(fontSize: 17),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -355,51 +370,69 @@ const _suggestions = [
 ];
 
 class _Welcome extends StatelessWidget {
-  const _Welcome({required this.onSuggestion});
+  const _Welcome({super.key, required this.onSuggestion});
   final void Function(_Suggestion s) onSuggestion;
+
+  static const _tilts = [-0.035, 0.025, 0.03, -0.02, -0.025, 0.035];
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
     final services = AppScope.services(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       children: [
-        Row(
-          children: [
-            Dot(size: 10, color: p.ink),
-            const SizedBox(width: 6),
-            Dot(size: 10, color: p.dot),
-          ],
+        const Enter(child: Row(children: [_LogoDots()])),
+        const SizedBox(height: 14),
+        Enter(
+          index: 1,
+          child: Text('What can I do\nfor you?', style: context.text.displaySmall?.copyWith(height: 0.95)),
         ),
-        const SizedBox(height: 20),
-        Text('What can I do\nfor you?', style: context.text.headlineMedium?.copyWith(fontSize: 30, height: 1.15)),
-        const SizedBox(height: 8),
-        Text(
-          'Private by design. Every model runs on this phone, and nothing you say leaves it.',
-          style: context.text.bodyMedium?.copyWith(color: p.muted),
+        Enter(index: 2, child: Underline(width: 190, seed: 4, delay: const Duration(milliseconds: 500))),
+        const SizedBox(height: 6),
+        Enter(
+          index: 2,
+          child: Text(
+            'Private by design. Every model runs on this phone, and nothing you say leaves it.',
+            style: context.text.bodyMedium?.copyWith(color: p.muted),
+          ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 26),
         LayoutBuilder(
           builder: (context, c) {
-            final w = (c.maxWidth - 10) / 2;
+            final w = (c.maxWidth - 14) / 2;
             return Wrap(
-              spacing: 10,
-              runSpacing: 10,
+              spacing: 14,
+              runSpacing: 16,
               children: [
-                for (final s in _suggestions)
-                  SizedBox(
-                    width: w,
-                    child: Panel(
-                      onTap: () => onSuggestion(s),
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(s.icon, size: 20, color: p.ink),
-                          const SizedBox(height: 18),
-                          Text(s.title, style: context.text.titleMedium),
-                        ],
+                for (var i = 0; i < _suggestions.length; i++)
+                  Enter(
+                    index: 3 + i,
+                    tilt: _tilts[i] * 3,
+                    child: Transform.rotate(
+                      angle: _tilts[i],
+                      child: SizedBox(
+                        width: w,
+                        child: Pressable(
+                          onTap: () => onSuggestion(_suggestions[i]),
+                          tilt: -_tilts[i],
+                          child: SketchBox(
+                            seed: 100 + i,
+                            fill: p.note(i),
+                            radius: 6,
+                            shadow: 3,
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(_suggestions[i].icon, size: 24, color: p.ink),
+                                const SizedBox(height: 16),
+                                Text(_suggestions[i].title, style: context.text.titleMedium?.copyWith(fontSize: 19)),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -407,7 +440,7 @@ class _Welcome extends StatelessWidget {
             );
           },
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         ListenableBuilder(
           listenable: services.skills,
           builder: (_, _) => Text(
@@ -421,7 +454,15 @@ class _Welcome extends StatelessWidget {
   }
 }
 
-class _Composer extends StatelessWidget {
+/// The brand: ink dot and green dot that hop once on arrival, then idle.
+class _LogoDots extends StatelessWidget {
+  const _LogoDots();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(height: 26, child: HoppingDots(size: 11));
+}
+
+class _Composer extends StatefulWidget {
   const _Composer({
     required this.controller,
     required this.pending,
@@ -430,7 +471,6 @@ class _Composer extends StatelessWidget {
     required this.onStop,
     required this.onAttach,
     required this.onRemove,
-    required this.hairline,
   });
 
   final TextEditingController controller;
@@ -440,85 +480,143 @@ class _Composer extends StatelessWidget {
   final VoidCallback onStop;
   final VoidCallback onAttach;
   final void Function(Attachment a) onRemove;
-  final Color hairline;
+
+  @override
+  State<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends State<_Composer> {
+  int _nudge = 0;
+
+  void _send() {
+    final canSend = widget.controller.text.trim().isNotEmpty || widget.pending.isNotEmpty;
+    if (!canSend) {
+      setState(() => _nudge++);
+      return;
+    }
+    widget.onSend();
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
     return SafeArea(
       top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-        decoration: BoxDecoration(
-          color: p.surface,
-          border: Border.all(color: hairline),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (pending.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [for (final a in pending) AttachmentChip(a, onRemove: () => onRemove(a))],
-                  ),
-                ),
-              ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+        child: Wiggle(
+          trigger: _nudge,
+          child: SketchBox(
+            seed: 201,
+            radius: 22,
+            shadow: 3,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(onPressed: busy ? null : onAttach, icon: const Icon(Icons.add_rounded), tooltip: 'Attach'),
-                Expanded(
-                  child: CallbackShortcuts(
-                    // Hardware keyboards: Enter sends, Shift+Enter adds a line.
-                    bindings: {const SingleActivator(LogicalKeyboardKey.enter): () => busy ? null : onSend()},
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 6,
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => onSend(),
-                      decoration: const InputDecoration(
-                        hintText: 'Ask anything',
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutBack,
+                  child: widget.pending.isEmpty
+                      ? const SizedBox(width: double.infinity)
+                      : Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final a in widget.pending)
+                                  Enter(
+                                    from: const Offset(0, 10),
+                                    child: AttachmentChip(a, onRemove: () => widget.onRemove(a)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Pressable(
+                        onTap: widget.busy ? null : widget.onAttach,
+                        scale: 0.85,
+                        tilt: 0.2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(Icons.attach_file_rounded, color: p.ink),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: ListenableBuilder(
-                    listenable: controller,
-                    builder: (_, _) {
-                      final canSend = controller.text.trim().isNotEmpty || pending.isNotEmpty;
-                      return IconButton.filled(
-                        style: IconButton.styleFrom(
-                          backgroundColor: busy || canSend ? p.ink : p.surfaceAlt,
-                          foregroundColor: busy || canSend ? p.bg : p.faint,
+                    Expanded(
+                      child: CallbackShortcuts(
+                        // Hardware keyboards: Enter sends, Shift+Enter adds a line.
+                        bindings: {const SingleActivator(LogicalKeyboardKey.enter): () => widget.busy ? null : _send()},
+                        child: TextField(
+                          controller: widget.controller,
+                          minLines: 1,
+                          maxLines: 6,
+                          textCapitalization: TextCapitalization.sentences,
+                          onSubmitted: (_) => _send(),
+                          style: context.text.bodyLarge,
+                          decoration: const InputDecoration(
+                            hintText: 'Ask anything…',
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 16),
+                          ),
                         ),
-                        onPressed: busy
-                            ? onStop
-                            : canSend
-                            ? onSend
-                            : null,
-                        icon: Icon(busy ? Icons.stop_rounded : Icons.arrow_upward_rounded, size: 20),
-                        tooltip: busy ? 'Stop' : 'Send',
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(7),
+                      child: ListenableBuilder(
+                        listenable: widget.controller,
+                        builder: (_, _) {
+                          final canSend = widget.controller.text.trim().isNotEmpty || widget.pending.isNotEmpty;
+                          final active = widget.busy || canSend;
+                          return Pressable(
+                            onTap: widget.busy ? widget.onStop : _send,
+                            scale: 0.8,
+                            tilt: 0.3,
+                            child: AnimatedRotation(
+                              turns: canSend && !widget.busy ? -0.08 : 0,
+                              duration: const Duration(milliseconds: 420),
+                              curve: Curves.elasticOut,
+                              child: SketchBox(
+                                seed: 202,
+                                radius: 20,
+                                fill: active ? p.ink : p.surfaceAlt,
+                                stroke: active ? p.ink : p.faint,
+                                child: SizedBox.square(
+                                  dimension: 42,
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 220),
+                                    transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                                    child: Icon(
+                                      widget.busy ? Icons.stop_rounded : Icons.send_rounded,
+                                      key: ValueKey(widget.busy),
+                                      size: 20,
+                                      color: active ? p.bg : p.faint,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
