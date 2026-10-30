@@ -72,6 +72,38 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  /// Runs one skill directly (skill "Try it", recipe runs) without asking a
+  /// model to pick it.
+  Future<void> runSkill(Skill skill, Map<String, dynamic> args, {String? label, List<Attachment> attachments = const []}) async {
+    if (busy) return;
+    busy = true;
+    final user = ChatMessage(id: _uuid.v4(), isUser: true, text: label ?? skill.name, attachments: attachments);
+    final reply = ChatMessage(id: _uuid.v4(), isUser: false, streaming: true);
+    messages
+      ..add(user)
+      ..add(reply);
+    if (conversation.title == 'New chat') conversation.title = label ?? skill.name;
+    notifyListeners();
+    try {
+      final call = ToolCallRequest(id: _uuid.v4(), name: skill.id, arguments: args);
+      final step = await _execute(call, reply, via: skill.kind == SkillKind.recipe ? 'recipe' : 'direct');
+      reply.text = step.status == StepStatus.done
+          ? '${step.result['summary'] ?? (step.cards.isEmpty ? 'Done.' : '')}'
+          : '';
+      if (step.status != StepStatus.done) reply.error = '${step.result['error'] ?? 'Failed'}';
+      reply.turns.addAll([
+        EngineTurn(role: TurnRole.model, toolCalls: [call]),
+        EngineTurn(role: TurnRole.tool, toolResponses: [ToolResponse(callId: call.id, name: call.name, response: _compact(step.result))]),
+        if (reply.text.isNotEmpty) EngineTurn(role: TurnRole.model, text: reply.text),
+      ]);
+    } finally {
+      reply.streaming = false;
+      busy = false;
+      notifyListeners();
+      await services.conversations.save(conversation);
+    }
+  }
+
   /// Retries the last user message.
   Future<void> retry() async {
     if (busy || messages.length < 2) return;
