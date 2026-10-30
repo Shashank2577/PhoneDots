@@ -6,8 +6,20 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record voice notes and meetings. Audio is processed on this iPhone and never uploaded.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to ask about. Images are processed on this iPhone.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pick photos to analyze on this iPhone.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Show your upcoming events when you ask.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Add events you ask for.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Find a contact's number when you ask.</string>
 	<key>CFBundleDisplayName</key>
-	<string>Phonedots</string>
+	<string>PhoneDots</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

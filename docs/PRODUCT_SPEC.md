@@ -29,8 +29,7 @@ Skills are the way new abilities get added. No cloud and no account, and it work
                                  ▼
  ┌──────────────────────────── RUNTIME ──────────────────────────────┐
  │ LiteRT-LM (Gemma 4, FunctionGemma, EmbeddingGemma)                 │
- │ Core ML / Neural Engine (Desert Ant on Apple devices)              │
- │ ONNX Runtime (Desert Ant fallback on Android)                      │
+ │ Desert Ant SDK: Core ML on Apple devices, LiteRT on Android        │
  │ Android AICore (optional system Gemma) · On-device vector store    │
  │ Model registry + download manager + benchmark                      │
  └────────────────────────────────────────────────────────────────────┘
@@ -72,7 +71,7 @@ Skills are the way new abilities get added. No cloud and no account, and it work
 | **Clips** | `pick_highlights`: best moments of a video for shorts |
 | **Shapes** | `clean_sketch`: rough drawing → clean shapes |
 
-> **Platform note:** Desert Ant is native on Apple devices (Core ML). Android currently gets the ONNX/Wasm path, which is slower. A native Android build is "not ready yet" according to Desert Ant. Licence: free up to 100k monthly active devices.
+> **Platform note (desert-ant-core 4.2.1):** Voz, Who, Ear, Clear, Redact, Tongue, Emo, Gist, Eye, Moderator and Shapes run natively on both Android (`ai.desertant:*`) and iOS (Core ML). Uhm, Align, Title and Clips are Apple-only. Face, Schemer and Toxic are in closed beta with no SDK, so the app covers those jobs with Gemma (`extract_fields`, `check_tone`). Licence: free up to 100k monthly active devices.
 
 ---
 
@@ -197,20 +196,23 @@ confirm: never         # never | first_time | always (always for anything that s
 
 - **App:** Flutter (UI, state, navigation), with platform channels into native engines.
 - **iOS native layer (Swift):** LiteRT-LM Swift API, Desert Ant `desert-ant-core` (Core ML), App Intents, EventKit, Contacts, Photos, Speech/TTS.
-- **Android native layer (Kotlin):** LiteRT-LM Kotlin API (GPU/NPU), optional AICore, Desert Ant ONNX path, Android intents, Calendar/Contacts providers, MediaStore.
-- **Storage:** SQLite (threads, skills, recipes) + an on-device vector index (sqlite-vec or similar) for EmbeddingGemma vectors.
+- **Android native layer (Kotlin):** LiteRT-LM Kotlin API (GPU, CPU fallback; constrained tool calling), Desert Ant Android SDK, Android intents, Calendar/Contacts providers, share-sheet intake.
+- **Storage:** JSON documents in app support storage (threads, recipes, memory, ledger) plus an on-device vector index for EmbeddingGemma vectors (hybrid cosine + keyword).
 - **Models:** hosted on Hugging Face (litert-community) and Desert Ant CDN, verified by checksum, resumable downloads, Wi-Fi-only option.
 
-### Repo layout (planned)
+### Repo layout
 ```
-app/                 Flutter app (lib/features/{chat,voice,camera,hub,skills,recipes,lab,privacy})
-packages/agent/      Agent core: planner, router, tool loop, trace (Dart)
-packages/skills/     Skill manifests + Dart-side executors
-packages/runtime/    Platform-channel interface: LlmEngine, SpecialistEngine, Embedder
-ios/Runner/Native/   Swift: LiteRT-LM bridge, DesertAnt bridge, device skills
-android/app/.../native/  Kotlin: LiteRT-LM bridge, ONNX bridge, device skills
-skills-community/    Example community skills + schema
-docs/                Specs, ADRs
+lib/
+  agent/          Agent loop, prompts, tool-call parser, conversations
+  core/           Engines (interfaces, platform channels, demo), models, storage, settings, ledger, utils
+  skills/         Skill model, registry, built-in skills, recipes, community skills
+  knowledge/      Knowledge base (vector search) and memory
+  features/       Screens: chat, voice, skills, models, lab, memory/files, privacy, settings, shell
+  theme/ widgets/ Design system
+android/app/src/main/kotlin/ai/phonedots/phonedots/   LlmBridge, SpecialistBridge, DeviceBridge, AudioFiles, MainActivity
+ios/Runner/       LlmBridge, SpecialistBridge, DeviceBridge (Swift)
+docs/             Spec, native bridge contract, iOS setup, community skill schema
+test/             Unit, agent end-to-end and widget tests
 ```
 
 ---
@@ -231,7 +233,7 @@ docs/                Specs, ADRs
 
 ## 9. Honest constraints
 
-- **Desert Ant on Android** is ONNX/web-speed only until they ship native. Android gets Gemma-based fallbacks where possible (e.g. Gemma 4 audio for short transcription).
+- **Desert Ant on Android** covers 11 of the 15 shipping models. Uhm, Align, Title and Clips are iOS-only, so Android uses Gemma for titles and skips filler-word detection.
 - **RAM.** E4B needs a high-end phone. The governor must downgrade gracefully. We never load E4B and large Desert Ant models at once on devices with ≤8 GB.
 - **First-load cost.** Core ML specialisation takes about 20 s the first time. We pre-warm during onboarding.
 - **iOS sandbox.** Some "phone actions" (system toggles) aren't possible on iOS. Those go through Shortcuts/App Intents or aren't offered.
