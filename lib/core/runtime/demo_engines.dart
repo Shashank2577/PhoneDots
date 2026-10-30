@@ -83,7 +83,7 @@ class DemoLlmEngine implements LlmEngine {
     final parts = <String>[];
     for (final r in responses) {
       final summary = r.response['summary'] ?? r.response['message'] ?? r.response['error'];
-      parts.add(summary == null ? 'Finished ${r.name}.' : '$summary');
+      parts.add(summary != null ? '$summary' : r.response['shown'] == true ? 'Here you go.' : 'Done.');
     }
     return parts.join('\n\n');
   }

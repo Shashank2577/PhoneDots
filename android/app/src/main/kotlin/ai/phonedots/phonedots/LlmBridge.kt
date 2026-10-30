@@ -285,6 +285,7 @@ class LlmBridge(private val context: Context, messenger: BinaryMessenger) :
     }
   }
 
+  @OptIn(ExperimentalApi::class)
   private fun stats(conversation: Conversation?, started: Long, firstTokenAt: Long, chunks: Int): Map<String, Any?> {
     val now = System.currentTimeMillis()
     val base = mutableMapOf<String, Any?>(

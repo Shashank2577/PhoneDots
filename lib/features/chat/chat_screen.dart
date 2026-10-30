@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../agent/agent.dart';
 import '../../app_services.dart';
@@ -71,7 +72,11 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -82,7 +87,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return confirmDialog(
       context,
       title: 'Allow ${skill.name}?',
-      body: '${skill.description}\n\n$shown${skill.confirm == ConfirmPolicy.firstTime ? '\n\nYou will not be asked again for this skill.' : ''}',
+      body:
+          '${skill.description}\n\n$shown${skill.confirm == ConfirmPolicy.firstTime ? '\n\nYou will not be asked again for this skill.' : ''}',
       confirm: 'Allow',
     );
   }
@@ -141,34 +147,36 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Column(children: [
-        if (s.isDemo) const DemoBanner(),
-        Expanded(
-          child: chat.messages.isEmpty
-              ? _Welcome(onSuggestion: _suggest)
-              : ListView.builder(
-                  controller: _scroll,
-                  padding: const EdgeInsets.only(bottom: 16),
-                  itemCount: chat.messages.length,
-                  itemBuilder: (_, i) => MessageView(
-                    message: chat.messages[i],
-                    isLast: i == chat.messages.length - 1,
-                    onRetry: chat.busy ? null : chat.retry,
-                    onOpenModels: () => state.goTo(2),
+      body: Column(
+        children: [
+          if (s.isDemo) const DemoBanner(),
+          Expanded(
+            child: chat.messages.isEmpty
+                ? _Welcome(onSuggestion: _suggest)
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: chat.messages.length,
+                    itemBuilder: (_, i) => MessageView(
+                      message: chat.messages[i],
+                      isLast: i == chat.messages.length - 1,
+                      onRetry: chat.busy ? null : chat.retry,
+                      onOpenModels: () => state.goTo(2),
+                    ),
                   ),
-                ),
-        ),
-        _Composer(
-          controller: _input,
-          pending: _pending,
-          busy: chat.busy,
-          onSend: _send,
-          onStop: chat.stop,
-          onAttach: _attach,
-          onRemove: (a) => setState(() => _pending.remove(a)),
-          hairline: p.hairline,
-        ),
-      ]),
+          ),
+          _Composer(
+            controller: _input,
+            pending: _pending,
+            busy: chat.busy,
+            onSend: _send,
+            onStop: chat.stop,
+            onAttach: _attach,
+            onRemove: (a) => setState(() => _pending.remove(a)),
+            hairline: p.hairline,
+          ),
+        ],
+      ),
     );
   }
 
@@ -242,22 +250,33 @@ class _ModelChip extends StatelessWidget {
           onTap: () => _pick(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (loading)
-                const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 1.5))
-              else
-                Dot(color: services.isDemo ? p.warn : loaded ? p.dot : ready ? p.faint : p.danger),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  services.isDemo ? 'Demo engine' : planner?.name ?? 'No model',
-                  style: context.text.titleMedium,
-                  overflow: TextOverflow.ellipsis,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (loading)
+                  const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 1.5))
+                else
+                  Dot(
+                    color: services.isDemo
+                        ? p.warn
+                        : loaded
+                        ? p.dot
+                        : ready
+                        ? p.faint
+                        : p.danger,
+                  ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    services.isDemo ? 'Demo engine' : planner?.name ?? 'No model',
+                    style: context.text.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 2),
-              Icon(Icons.expand_more_rounded, size: 18, color: p.muted),
-            ]),
+                const SizedBox(width: 2),
+                Icon(Icons.expand_more_rounded, size: 18, color: p.muted),
+              ],
+            ),
           ),
         );
       },
@@ -273,30 +292,36 @@ class _ModelChip extends StatelessWidget {
         builder: (_, _) {
           final planners = gemmaModels.where((g) => g.role == ModelRole.planner).toList();
           return SafeArea(
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SectionLabel('Brain', padding: EdgeInsets.fromLTRB(20, 0, 20, 8)),
-              for (final g in planners)
-                ListTile(
-                  title: Text(g.name),
-                  subtitle: Text(services.models.isReady(g.id) ? g.summary : 'Not downloaded · ${formatBytes(g.approxBytes)}'),
-                  trailing: services.settings.plannerId == g.id ? const Icon(Icons.check_rounded) : null,
-                  enabled: services.models.state(g.id).status == ModelStatus.ready || services.isDemo,
-                  onTap: () {
-                    services.settings.update((s) => s.plannerId = g.id);
-                    Navigator.pop(c);
-                  },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('Brain', padding: EdgeInsets.fromLTRB(20, 0, 20, 8)),
+                for (final g in planners)
+                  ListTile(
+                    title: Text(g.name),
+                    subtitle: Text(
+                      services.models.isReady(g.id) ? g.summary : 'Not downloaded · ${formatBytes(g.approxBytes)}',
+                    ),
+                    trailing: services.settings.plannerId == g.id ? const Icon(Icons.check_rounded) : null,
+                    enabled: services.models.state(g.id).status == ModelStatus.ready || services.isDemo,
+                    onTap: () {
+                      services.settings.update((s) => s.plannerId = g.id);
+                      Navigator.pop(c);
+                    },
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(c);
+                      state.goTo(2);
+                    },
+                    child: const Text('Manage models'),
+                  ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.pop(c);
-                    state.goTo(2);
-                  },
-                  child: const Text('Manage models'),
-                ),
-              ),
-            ]),
+              ],
+            ),
           );
         },
       ),
@@ -318,7 +343,12 @@ class _Suggestion {
 const _suggestions = [
   _Suggestion(Icons.mic_none_rounded, 'Meeting minutes', 'Make minutes from this meeting', attach: 'record'),
   _Suggestion(Icons.image_outlined, 'Ask about a photo', 'What is in this photo?', attach: 'photo'),
-  _Suggestion(Icons.shield_outlined, 'Redact before sharing', 'Redact my email bob@acme.com and phone +1 415 555 0100', send: false),
+  _Suggestion(
+    Icons.shield_outlined,
+    'Redact before sharing',
+    'Redact my email bob@acme.com and phone +1 415 555 0100',
+    send: false,
+  ),
   _Suggestion(Icons.timer_outlined, 'Set a timer', 'Set a timer for 10 minutes'),
   _Suggestion(Icons.calculate_outlined, 'Exact maths', 'What is 18% of 2450?'),
   _Suggestion(Icons.search_rounded, 'Search my files', 'Search my notes for ', send: false),
@@ -332,45 +362,62 @@ class _Welcome extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final services = AppScope.services(context);
-    return ListView(padding: const EdgeInsets.fromLTRB(20, 24, 20, 20), children: [
-      Row(children: [
-        Dot(size: 10, color: p.ink),
-        const SizedBox(width: 6),
-        Dot(size: 10, color: p.dot),
-      ]),
-      const SizedBox(height: 20),
-      Text('What can I do\nfor you?', style: context.text.headlineMedium?.copyWith(fontSize: 30, height: 1.15)),
-      const SizedBox(height: 8),
-      Text('Private by design. Every model runs on this phone, and nothing you say leaves it.', style: context.text.bodyMedium?.copyWith(color: p.muted)),
-      const SizedBox(height: 28),
-      LayoutBuilder(builder: (context, c) {
-        final w = (c.maxWidth - 10) / 2;
-        return Wrap(spacing: 10, runSpacing: 10, children: [
-          for (final s in _suggestions)
-            SizedBox(
-              width: w,
-              child: Panel(
-                onTap: () => onSuggestion(s),
-                padding: const EdgeInsets.all(14),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Icon(s.icon, size: 20, color: p.ink),
-                  const SizedBox(height: 18),
-                  Text(s.title, style: context.text.titleMedium),
-                ]),
-              ),
-            ),
-        ]);
-      }),
-      const SizedBox(height: 20),
-      ListenableBuilder(
-        listenable: services.skills,
-        builder: (_, _) => Text(
-          '${services.skills.enabled.length} skills ready · ${services.models.visibleModels.length} on-device models',
-          style: context.text.bodySmall,
-          textAlign: TextAlign.center,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      children: [
+        Row(
+          children: [
+            Dot(size: 10, color: p.ink),
+            const SizedBox(width: 6),
+            Dot(size: 10, color: p.dot),
+          ],
         ),
-      ),
-    ]);
+        const SizedBox(height: 20),
+        Text('What can I do\nfor you?', style: context.text.headlineMedium?.copyWith(fontSize: 30, height: 1.15)),
+        const SizedBox(height: 8),
+        Text(
+          'Private by design. Every model runs on this phone, and nothing you say leaves it.',
+          style: context.text.bodyMedium?.copyWith(color: p.muted),
+        ),
+        const SizedBox(height: 28),
+        LayoutBuilder(
+          builder: (context, c) {
+            final w = (c.maxWidth - 10) / 2;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final s in _suggestions)
+                  SizedBox(
+                    width: w,
+                    child: Panel(
+                      onTap: () => onSuggestion(s),
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(s.icon, size: 20, color: p.ink),
+                          const SizedBox(height: 18),
+                          Text(s.title, style: context.text.titleMedium),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+        ListenableBuilder(
+          listenable: services.skills,
+          builder: (_, _) => Text(
+            '${services.skills.enabled.length} skills ready · ${services.models.visibleModels.length} on-device models',
+            style: context.text.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -407,56 +454,72 @@ class _Composer extends StatelessWidget {
           border: Border.all(color: hairline),
           borderRadius: BorderRadius.circular(24),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (pending.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(spacing: 6, runSpacing: 6, children: [
-                  for (final a in pending) AttachmentChip(a, onRemove: () => onRemove(a)),
-                ]),
-              ),
-            ),
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            IconButton(onPressed: busy ? null : onAttach, icon: const Icon(Icons.add_rounded), tooltip: 'Attach'),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 6,
-                textCapitalization: TextCapitalization.sentences,
-                onSubmitted: (_) => onSend(),
-                decoration: const InputDecoration(
-                  hintText: 'Ask anything',
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (pending.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [for (final a in pending) AttachmentChip(a, onRemove: () => onRemove(a))],
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(6),
-              child: ListenableBuilder(
-                listenable: controller,
-                builder: (_, _) {
-                  final canSend = controller.text.trim().isNotEmpty || pending.isNotEmpty;
-                  return IconButton.filled(
-                    style: IconButton.styleFrom(
-                      backgroundColor: busy || canSend ? p.ink : p.surfaceAlt,
-                      foregroundColor: busy || canSend ? p.bg : p.faint,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(onPressed: busy ? null : onAttach, icon: const Icon(Icons.add_rounded), tooltip: 'Attach'),
+                Expanded(
+                  child: CallbackShortcuts(
+                    // Hardware keyboards: Enter sends, Shift+Enter adds a line.
+                    bindings: {const SingleActivator(LogicalKeyboardKey.enter): () => busy ? null : onSend()},
+                    child: TextField(
+                      controller: controller,
+                      minLines: 1,
+                      maxLines: 6,
+                      textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (_) => onSend(),
+                      decoration: const InputDecoration(
+                        hintText: 'Ask anything',
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
-                    onPressed: busy ? onStop : canSend ? onSend : null,
-                    icon: Icon(busy ? Icons.stop_rounded : Icons.arrow_upward_rounded, size: 20),
-                    tooltip: busy ? 'Stop' : 'Send',
-                  );
-                },
-              ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: ListenableBuilder(
+                    listenable: controller,
+                    builder: (_, _) {
+                      final canSend = controller.text.trim().isNotEmpty || pending.isNotEmpty;
+                      return IconButton.filled(
+                        style: IconButton.styleFrom(
+                          backgroundColor: busy || canSend ? p.ink : p.surfaceAlt,
+                          foregroundColor: busy || canSend ? p.bg : p.faint,
+                        ),
+                        onPressed: busy
+                            ? onStop
+                            : canSend
+                            ? onSend
+                            : null,
+                        icon: Icon(busy ? Icons.stop_rounded : Icons.arrow_upward_rounded, size: 20),
+                        tooltip: busy ? 'Stop' : 'Send',
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ]),
+          ],
+        ),
       ),
     );
   }

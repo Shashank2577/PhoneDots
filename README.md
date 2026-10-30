@@ -4,6 +4,16 @@
 
 Flutter app for Android and iOS, with native bridges to [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) and [desert-ant-core](https://github.com/Desert-Ant-Labs/desert-ant-core). Inspired by [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery).
 
+<p>
+<img src="docs/screenshots/home.png" width="190">
+<img src="docs/screenshots/chat.png" width="190">
+<img src="docs/screenshots/skills.png" width="190">
+<img src="docs/screenshots/models.png" width="190">
+<img src="docs/screenshots/chat-dark.png" width="190">
+</p>
+
+*Screenshots from the web preview, which runs the demo engine.*
+
 ## What it does
 
 | | |
@@ -92,7 +102,7 @@ flutter run -d <iphone> --release
 | Area | State |
 |---|---|
 | Dart app, agent, skills, UI | Done. `flutter analyze` is clean and 23 tests pass (unit, end-to-end agent loop, widget). |
-| Android native bridge | Written against LiteRT-LM 0.19.0 and desert-ant-core 4.2.1 APIs; compiles in a debug APK build. Not yet run on a physical device. |
+| Android native bridge | Builds into an APK (`flutter build apk`) against LiteRT-LM 0.19.0 and desert-ant-core 4.2.1. Not yet run on a physical device. Both SDKs ship `libLiteRt.so` and the APK keeps one copy, so check on a device that Gemma and the specialists both load. If they don't, align the LiteRT versions. |
 | iOS native bridge | Written against the LiteRT-LM and desert-ant-core Swift APIs. Not compiled here (needs macOS/Xcode). |
 | Share extension on iOS | Not built. Android share intake works. |
 

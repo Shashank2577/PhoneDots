@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../agent/conversation.dart';
+import '../../app_state.dart';
 import '../../core/models/model_catalog.dart';
 import '../../core/util/format.dart';
 import '../../skills/skill.dart';
@@ -142,12 +143,15 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = v.message;
     final p = context.pal;
+    final demo = AppScope.services(context).isDemo;
     final model = m.modelId == null ? null : modelById(m.modelId!);
-    final tps = m.stats?.effectiveTokensPerSec ?? 0;
+    final tps = demo ? 0 : m.stats?.effectiveTokensPerSec ?? 0;
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(children: [
-        if (model != null) ...[
+        if (demo)
+          Text('Demo engine', style: context.text.bodySmall?.copyWith(color: p.faint))
+        else if (model != null) ...[
           Text(model.name, style: context.text.bodySmall?.copyWith(color: p.faint)),
           if (tps > 0) Text(' · ${tps.toStringAsFixed(1)} tok/s', style: context.text.bodySmall?.copyWith(color: p.faint)),
         ],
