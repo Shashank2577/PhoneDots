@@ -34,15 +34,27 @@ android {
         // Large native libraries load straight from the APK; both SDKs ship their own JNI shims.
         jniLibs {
             useLegacyPackaging = true
-            pickFirsts.add("**/liblitertlm_jni.so")
+            pickFirsts.add("lib/arm64-v8a/liblitertlm_jni.so")
+            // Real phones only: the Desert Ant libraries are ~56 MB per model per ABI.
+            excludes += listOf("lib/x86_64/**", "lib/x86/**", "lib/armeabi-v7a/**")
+        }
+    }
+
+    signingConfigs {
+        // Public test key so sideloaded builds from GitHub Releases update in place.
+        // Not secret and not for Play Store: replace with a private key before publishing.
+        create("test") {
+            storeFile = file("phonedots-test.jks")
+            storePassword = "phonedots-test"
+            keyAlias = "phonedots-test"
+            keyPassword = "phonedots-test"
         }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("test")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
