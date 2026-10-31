@@ -161,6 +161,11 @@ class Conversation {
   );
 }
 
+String _clip(String s, int max) {
+  final runes = s.runes.toList();
+  return runes.length <= max ? s : '${String.fromCharCodes(runes.take(max))}…';
+}
+
 class ConversationSummary {
   const ConversationSummary(this.id, this.title, this.updated, {this.preview = '', this.count = 0});
   final String id;
@@ -178,9 +183,7 @@ class ConversationSummary {
       c.id,
       c.title,
       c.updated,
-      preview: text.isEmpty
-          ? ''
-          : '${last.isUser ? 'you: ' : ''}${text.length > 90 ? '${text.substring(0, 90)}…' : text}',
+      preview: text.isEmpty ? '' : '${last.isUser ? 'you: ' : ''}${_clip(text, 90)}',
       count: c.messages.where((m) => m.isUser).length,
     );
   }
@@ -202,27 +205,34 @@ class ConversationStore extends ChangeNotifier {
   final List<ConversationSummary> summaries = [];
 
   Future<void> load() async {
-    final raw = (await _store.read(_index) as List?) ?? const [];
-    summaries
-      ..clear()
-      ..addAll(
-        raw.map((e) {
-          final m = Map<String, dynamic>.from(e as Map);
-          return ConversationSummary(
+    final stored = await _store.read(_index);
+    final raw = stored is List ? stored : const [];
+    summaries.clear();
+    // One damaged entry must not stop the app from starting; skip it.
+    for (final e in raw) {
+      try {
+        final m = Map<String, dynamic>.from(e as Map);
+        summaries.add(
+          ConversationSummary(
             m['id'] as String,
-            m['title'] as String,
-            DateTime.parse(m['updated'] as String),
+            '${m['title'] ?? 'Chat'}',
+            DateTime.tryParse('${m['updated']}') ?? DateTime.fromMillisecondsSinceEpoch(0),
             preview: m['preview'] as String? ?? '',
             count: m['count'] as int? ?? 0,
-          );
-        }),
-      );
+          ),
+        );
+      } catch (_) {}
+    }
     notifyListeners();
   }
 
   Future<Conversation?> open(String id) async {
-    final j = await _store.read('conv/$id') as Map?;
-    return j == null ? null : Conversation.fromJson(Map<String, dynamic>.from(j));
+    try {
+      final j = await _store.read('conv/$id');
+      return j is Map ? Conversation.fromJson(Map<String, dynamic>.from(j)) : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Last save problem, shown in the chat so a failure is never silent.

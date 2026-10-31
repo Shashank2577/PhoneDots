@@ -157,6 +157,23 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           if (s.isDemo) const DemoBanner(),
+          ListenableBuilder(
+            listenable: s.conversations,
+            builder: (context, _) {
+              final err = s.conversations.saveError;
+              if (err == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 4),
+                child: Row(
+                  children: [
+                    DoodleIcon(Doodle.exclaim, size: 16, color: context.pal.redPen),
+                    const SizedBox(width: 6),
+                    Expanded(child: Meta(err, color: context.pal.redPen, maxLines: 2)),
+                  ],
+                ),
+              );
+            },
+          ),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),

@@ -26,18 +26,36 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Swaps the active chat. The permission prompt moves with it, so a skill
+  /// started right away still asks the user instead of being declined.
+  void _switchTo(ChatController next) {
+    final old = chat;
+    next.onConfirm = old.onConfirm;
+    chat = next;
+    // A chat still answering finishes (and saves) on its own before it goes.
+    if (old.busy) {
+      void done() {
+        if (old.busy) return;
+        old.removeListener(done);
+        old.dispose();
+      }
+
+      old.addListener(done);
+    } else {
+      old.dispose();
+    }
+  }
+
   void newChat() {
     if (chat.messages.isEmpty) return;
-    chat.dispose();
-    chat = ChatController(services);
+    _switchTo(ChatController(services));
     notifyListeners();
   }
 
   Future<void> open(String id) async {
     final c = await services.conversations.open(id);
     if (c == null) return;
-    chat.dispose();
-    chat = ChatController(services, conversation: c);
+    _switchTo(ChatController(services, conversation: c));
     tab = 0;
     notifyListeners();
   }

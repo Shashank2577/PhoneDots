@@ -120,7 +120,9 @@ class _Table extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final columns = (data['columns'] as List? ?? const []).map((e) => '$e').toList();
-    final rows = (data['rows'] as List? ?? const []).map((r) => (r as List).map((e) => '$e').toList()).toList();
+    final rows = (data['rows'] as List? ?? const [])
+        .map((r) => r is List ? r.map((e) => '$e').toList() : ['$r'])
+        .toList();
     final width = max(columns.length, rows.isEmpty ? 0 : rows.map((r) => r.length).reduce(max));
     if (width == 0) return const SizedBox.shrink();
     return SingleChildScrollView(
@@ -265,9 +267,9 @@ class _Transcript extends StatelessWidget {
                       if (speakers > 1)
                         Row(
                           children: [
-                            Dot(color: shades[(s['speaker'] as int) % shades.length], size: 6),
+                            Dot(color: shades[_speaker(s) % shades.length], size: 6),
                             const SizedBox(width: 6),
-                            Text('Speaker ${(s['speaker'] as int) + 1}', style: context.text.labelMedium),
+                            Text('Speaker ${_speaker(s) + 1}', style: context.text.labelMedium),
                           ],
                         ),
                       SelectableText('${s['text']}', style: context.text.bodyMedium),
@@ -309,7 +311,9 @@ class _Bars extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final labels = (data['labels'] as List? ?? const []).map((e) => '$e').toList();
-    final values = (data['values'] as List? ?? const []).map((e) => (e as num).toDouble()).toList();
+    final values = (data['values'] as List? ?? const [])
+        .map((e) => e is num ? e.toDouble() : (double.tryParse('$e') ?? 0))
+        .toList();
     final n = min(labels.length, values.length);
     if (n == 0) return const SizedBox.shrink();
     final top = values.take(n).map((v) => v.abs()).reduce(max);
@@ -560,4 +564,9 @@ class _LinkCard extends StatelessWidget {
       ],
     );
   }
+}
+
+int _speaker(Map s) {
+  final v = s['speaker'];
+  return v is int ? v.abs() : (int.tryParse('$v') ?? 0).abs();
 }

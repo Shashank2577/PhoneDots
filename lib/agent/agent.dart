@@ -22,6 +22,13 @@ typedef ConfirmCallback = Future<bool> Function(Skill skill, Map<String, dynamic
 /// Runs one conversation: routes each turn through FunctionGemma (fast path)
 /// or Gemma 4 (planner), executes skills in a bounded tool loop, and streams
 /// everything into the message list.
+/// Cuts [s] to [max] characters without splitting an emoji or other
+/// surrogate pair, adding an ellipsis when it was cut.
+String clipText(String s, int max) {
+  final runes = s.runes.toList();
+  return runes.length <= max ? s : '${String.fromCharCodes(runes.take(max))}…';
+}
+
 class ChatController extends ChangeNotifier {
   ChatController(this.services, {Conversation? conversation})
     : conversation = conversation ?? Conversation(id: _uuid.v4());
@@ -41,6 +48,22 @@ class ChatController extends ChangeNotifier {
 
   void refresh() => notifyListeners();
 
+  bool _disposed = false;
+
+  /// The chat screen may move on (new chat, another chat) while an answer is
+  /// still arriving; the answer keeps going and is saved, it just stops
+  /// telling a screen that no longer listens.
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> stop() async {
     _stopRequested = true;
     await services.llm.cancel();
@@ -57,13 +80,14 @@ class ChatController extends ChangeNotifier {
       ..add(reply);
     if (conversation.title == 'New chat') {
       final t = text.trim().isEmpty ? attachments.first.name : text.trim();
-      conversation.title = t.length > 48 ? '${t.substring(0, 48)}…' : t;
+      conversation.title = clipText(t, 48);
     }
     notifyListeners();
     // Saved the moment it's sent, so closing the app mid-answer loses nothing.
     await services.conversations.save(conversation);
     try {
       await _readLinks(user, reply);
+      if (_stopRequested) return;
       // Messages with links always go to the planner, which can talk about them.
       final routed = user.linkContext.isEmpty && await _tryRouter(user, reply);
       if (!routed) await _runPlanner(user, reply);
@@ -72,8 +96,8 @@ class ChatController extends ChangeNotifier {
     } finally {
       reply.streaming = false;
       busy = false;
-      notifyListeners();
       await services.conversations.save(conversation);
+      notifyListeners();
     }
   }
 
@@ -112,8 +136,8 @@ class ChatController extends ChangeNotifier {
     } finally {
       reply.streaming = false;
       busy = false;
-      notifyListeners();
       await services.conversations.save(conversation);
+      notifyListeners();
     }
   }
 
