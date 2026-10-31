@@ -162,10 +162,36 @@ class Conversation {
 }
 
 class ConversationSummary {
-  const ConversationSummary(this.id, this.title, this.updated);
+  const ConversationSummary(this.id, this.title, this.updated, {this.preview = '', this.count = 0});
   final String id;
   final String title;
   final DateTime updated;
+
+  /// The last thing said, for the list of past chats.
+  final String preview;
+  final int count;
+
+  factory ConversationSummary.of(Conversation c) {
+    final last = c.messages.lastWhere((m) => m.text.trim().isNotEmpty, orElse: () => c.messages.last);
+    final text = last.text.replaceAll(RegExp(r'[*`#]+'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return ConversationSummary(
+      c.id,
+      c.title,
+      c.updated,
+      preview: text.isEmpty
+          ? ''
+          : '${last.isUser ? 'you: ' : ''}${text.length > 90 ? '${text.substring(0, 90)}…' : text}',
+      count: c.messages.where((m) => m.isUser).length,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'updated': updated.toIso8601String(),
+    'preview': preview,
+    'count': count,
+  };
 }
 
 class ConversationStore extends ChangeNotifier {
@@ -182,7 +208,13 @@ class ConversationStore extends ChangeNotifier {
       ..addAll(
         raw.map((e) {
           final m = Map<String, dynamic>.from(e as Map);
-          return ConversationSummary(m['id'] as String, m['title'] as String, DateTime.parse(m['updated'] as String));
+          return ConversationSummary(
+            m['id'] as String,
+            m['title'] as String,
+            DateTime.parse(m['updated'] as String),
+            preview: m['preview'] as String? ?? '',
+            count: m['count'] as int? ?? 0,
+          );
         }),
       );
     notifyListeners();
@@ -193,14 +225,38 @@ class ConversationStore extends ChangeNotifier {
     return j == null ? null : Conversation.fromJson(Map<String, dynamic>.from(j));
   }
 
+  /// Last save problem, shown in the chat so a failure is never silent.
+  String? saveError;
+
   Future<void> save(Conversation c) async {
     if (c.messages.isEmpty) return;
     c.updated = DateTime.now();
-    await _store.write('conv/${c.id}', c.toJson());
-    summaries
-      ..removeWhere((s) => s.id == c.id)
-      ..insert(0, ConversationSummary(c.id, c.title, c.updated));
-    await _writeIndex();
+    try {
+      await _store.write('conv/${c.id}', c.toJson());
+      summaries
+        ..removeWhere((s) => s.id == c.id)
+        ..insert(0, ConversationSummary.of(c));
+      saveError = null;
+      await _writeIndex();
+    } catch (e) {
+      saveError = 'This chat could not be saved: $e';
+      notifyListeners();
+    }
+  }
+
+  /// The whole conversation as plain text, for copying or sharing.
+  static String transcript(Conversation c) {
+    final b = StringBuffer('${c.title}\n\n');
+    for (final m in c.messages) {
+      final text = m.text.trim();
+      final files = m.attachments.map((a) => '[${a.kind}: ${a.name}]').join(' ');
+      if (text.isEmpty && files.isEmpty) continue;
+      b.writeln(
+        '${m.isUser ? 'You' : 'PhoneDots'}: ${[if (files.isNotEmpty) files, if (text.isNotEmpty) text].join('\n')}',
+      );
+      b.writeln();
+    }
+    return b.toString().trim();
   }
 
   Future<void> delete(String id) async {
@@ -219,8 +275,6 @@ class ConversationStore extends ChangeNotifier {
 
   Future<void> _writeIndex() async {
     notifyListeners();
-    await _store.write(_index, [
-      for (final s in summaries) {'id': s.id, 'title': s.title, 'updated': s.updated.toIso8601String()},
-    ]);
+    await _store.write(_index, [for (final s in summaries) s.toJson()]);
   }
 }

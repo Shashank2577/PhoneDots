@@ -171,4 +171,36 @@ void main() {
     expect(item.summary, isNotNull);
     expect(s.ledger.entries.any((e) => e.network && e.detail.contains('instagram')), isTrue);
   });
+
+  test('a screenshot: every word is copied out first, then summarised in detail', () async {
+    final calls = <String>[];
+    final store = MemoryJsonStore();
+    final saved = SavedStore(store);
+    final sum = Summarizer(
+      store: saved,
+      links: LinkPreviewer(client: _web()),
+      reader: WebReader(client: _web()),
+      settings: AppSettings(store),
+      ledger: Ledger(store),
+      canSee: () => true,
+      ask: ({required system, required prompt, imagePaths = const []}) async {
+        calls.add(system);
+        if (system == Summarizer.ocrPrompt) return 'Flight BA117\nGate 22\nBoards 18:40';
+        expect(prompt, contains('Gate 22'));
+        return '{"summary": "A boarding pass for BA117 from gate 22.", "points": ["Gate 22", "Boards 18:40"], "collection": "travel"}';
+      },
+    );
+    final item = await sum.addShare(
+      files: [
+        {'path': '/tmp/shot.png', 'name': 'shot.png', 'kind': 'image'},
+      ],
+    );
+    await sum.resummarise(item);
+    expect(item.body, contains('Boards 18:40'));
+    expect(item.sources, contains('text in image'));
+    expect(item.summary, contains('BA117'));
+    expect(item.collection, 'travel');
+    expect(calls.first, Summarizer.ocrPrompt);
+    expect(Summarizer.systemPrompt(['x']), contains('detailed summary'));
+  });
 }

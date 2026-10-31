@@ -164,6 +164,8 @@ class Summarizer {
     } else if (url != null) {
       item.title ??= item.subject;
     }
+    // Show what was read straight away; the summary follows.
+    await store.save();
 
     // The cover is kept for the preview even when the model can't look at it.
     if (item.imagePath == null && item.imageUrl != null) {
@@ -191,13 +193,33 @@ class Summarizer {
       item.body = [?item.body, 'Transcript:\n${transcripts.join('\n')}'].join('\n\n');
     }
 
+    // Screenshots: copy out every word first, so the text is there to read
+    // and search even before the summary arrives.
+    final shot = item.files.where((f) => f['kind'] == 'image').map((f) => f['path']!).toList();
+    if (shot.isNotEmpty && canSee()) {
+      final texts = <String>[];
+      for (final path in shot.take(4)) {
+        try {
+          final t = await ask(system: ocrPrompt, prompt: 'Transcribe all the text in this image.', imagePaths: [path]);
+          if (t.trim().isNotEmpty && !t.toLowerCase().contains('no text')) texts.add(t.trim());
+        } on NoModelError {
+          break;
+        } catch (_) {}
+      }
+      if (texts.isNotEmpty) {
+        item.sources.add('text in image');
+        item.body = [?item.body, texts.join('\n\n')].join('\n\n');
+        await store.save();
+      }
+    }
+
     item.status = SavedStatus.summarising;
     await store.save();
     try {
       final see = canSee() && item.imagePath != null;
       final raw = await ask(
         system: systemPrompt({...store.collections, ...SavedStore.defaultCollections}.take(16).toList()),
-        prompt: material(item, pageText: pageText, transcript: transcripts.join('\n'), image: see),
+        prompt: material(item, pageText: item.body, image: see),
         imagePaths: see ? [item.imagePath!] : const [],
       );
       apply(item, raw);
@@ -233,13 +255,19 @@ class Summarizer {
   // ── prompt ───────────────────────────────────────────────────────────────
 
   static String systemPrompt(List<String> collections) =>
-      'You file things the user saved from other apps. Write a short summary of the saved item from the material '
+      'You file things the user saved from other apps. Write a detailed summary of the saved item from the material '
       'given, and reply with JSON only, no other text:\n'
-      '{"title": "short title, max 8 words", "summary": "one or two plain sentences: what it is and why it is useful", '
-      '"points": ["up to 4 key takeaways, steps or facts"], "collection": "one word", "tags": ["up to 4 lowercase tags"]}\n'
+      '{"title": "short title, max 8 words", '
+      '"summary": "a detailed summary in 3 to 6 sentences: what it is, who made it, the main idea, and why it is useful", '
+      '"points": ["up to 8 key takeaways, steps, ingredients, facts or numbers, in order"], '
+      '"collection": "one word", "tags": ["up to 5 lowercase tags"]}\n'
       'Pick the collection from: ${collections.join(', ')}; invent a better one-word name only if none fits.\n'
       'Use only the material. For a video or reel without a transcript or frames you only have its caption, cover and '
       'creator: summarise those and do not describe scenes you cannot see. If the material is thin, say plainly what it is. Never invent details.';
+
+  static const ocrPrompt =
+      'Transcribe all text in the image exactly, preserving line breaks and reading order. '
+      'Output only the text. If there is no text, output: no text';
 
   static String material(SavedItem i, {String? pageText, String transcript = '', bool image = false}) {
     String clip(String s, int n) => s.length <= n ? s : '${s.substring(0, n)}…';
@@ -250,7 +278,7 @@ class Summarizer {
     if (i.author != null) b.writeln('Creator: ${i.author}');
     if (i.sharedText.isNotEmpty) b.writeln('Text shared with it: ${clip(i.sharedText, 1500)}');
     if ((i.description ?? '').isNotEmpty) b.writeln('Caption / description: ${clip(i.description!, 2000)}');
-    if (pageText != null) b.writeln('Full text:\n${clip(pageText, 5000)}');
+    if (pageText != null) b.writeln('Full text:\n${clip(pageText, 4500)}');
     if (transcript.isNotEmpty) b.writeln('Transcript:\n${clip(transcript, 3000)}');
     for (final f in i.files.where((f) => f['kind'] != 'image')) {
       b.writeln('Shared file: ${f['name']}');
@@ -274,8 +302,8 @@ class Summarizer {
       if (title.isNotEmpty && (item.title == null || item.url == null || item.sources.isEmpty)) item.title = title;
       item
         ..summary = '${j['summary'] ?? ''}'.trim()
-        ..points = _strings(j['points'], 4)
-        ..tags = _strings(j['tags'], 4).map((t) => t.toLowerCase().replaceFirst('#', '')).toList()
+        ..points = _strings(j['points'], 8)
+        ..tags = _strings(j['tags'], 5).map((t) => t.toLowerCase().replaceFirst('#', '')).toList()
         ..collection = _collection('${j['collection'] ?? ''}');
       if (item.summary!.isEmpty) item.summary = null;
       return;
@@ -288,7 +316,7 @@ class Summarizer {
     final prose = lines.where((l) => !RegExp(r'^([-*•]|\d+[.)])\s+').hasMatch(l)).join(' ');
     item
       ..summary = prose.isNotEmpty ? prose : (bullets.isNotEmpty ? bullets.first : null)
-      ..points = bullets.take(4).toList()
+      ..points = bullets.take(8).toList()
       ..collection ??= 'other';
   }
 

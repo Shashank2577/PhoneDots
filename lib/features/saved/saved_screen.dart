@@ -40,9 +40,29 @@ class SavedScreen extends StatefulWidget {
 class _SavedScreenState extends State<SavedScreen> {
   final _query = TextEditingController();
   String? _collection;
+  ValueNotifier<String?>? _arrived;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_arrived == null) {
+      _arrived = AppScope.services(context).savedArrived..addListener(_openArrived);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openArrived());
+    }
+  }
+
+  /// A fresh share opens straight onto its page: text first, summary as it comes.
+  void _openArrived() {
+    final id = _arrived?.value;
+    if (id == null || !mounted) return;
+    _arrived!.value = null;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SavedDetailScreen(id: id)));
+  }
 
   @override
   void dispose() {
+    _arrived?.removeListener(_openArrived);
     _query.dispose();
     super.dispose();
   }
@@ -289,11 +309,38 @@ class SavedDetailScreen extends StatelessWidget {
                 child: localImage(item.imagePath!, width: double.infinity, height: 220),
               ),
             ],
+            if (item.sharedText.isNotEmpty) ...[
+              const SectionHead('shared with it'),
+              SelectableText(item.sharedText, style: context.text.bodyMedium?.copyWith(color: p.pencil)),
+            ],
+            if ((item.body ?? '').isNotEmpty) ...[
+              SectionHead('what we read', note: '${item.body!.length} characters'),
+              FullText(item.body!),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: HandLink(
+                  'copy the text',
+                  color: p.pencil,
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: item.body!));
+                    toast(context, 'copied');
+                  },
+                ),
+              ),
+            ] else if ((item.description ?? '').isNotEmpty) ...[
+              const SectionHead('caption'),
+              SelectableText(item.description!, style: context.text.bodyMedium?.copyWith(color: p.pencil)),
+            ] else if (!item.busy && item.url != null) ...[
+              const SizedBox(height: 12),
+              const Meta(
+                'The site shared no text for this post. Share a screenshot or a screen recording and PhoneDots will read that.',
+              ),
+            ],
             if (item.busy) ...[
               const SizedBox(height: 18),
               Row(children: [const HoppingDots(), const SizedBox(width: 10), Meta('$status…')]),
             ],
-            if (item.summary != null) ...[const SectionHead('in short', mark: true), Body(item.summary!)],
+            if (item.summary != null) ...[const SectionHead('summary', mark: true), Body(item.summary!)],
             if (item.points.isNotEmpty) ...[
               const SectionHead('key points'),
               for (final pt in item.points)
@@ -312,6 +359,27 @@ class SavedDetailScreen extends StatelessWidget {
                   ),
                 ),
             ],
+            if (item.summary != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: HandLink(
+                  'copy the summary',
+                  color: p.pencil,
+                  onTap: () {
+                    Clipboard.setData(
+                      ClipboardData(
+                        text: [
+                          item.displayTitle,
+                          item.summary!,
+                          for (final pt in item.points) '• $pt',
+                          if (item.url != null) item.url!,
+                        ].join('\n'),
+                      ),
+                    );
+                    toast(context, 'copied');
+                  },
+                ),
+              ),
             if (item.status == SavedStatus.needsModel || item.status == SavedStatus.failed) ...[
               const SizedBox(height: 14),
               Body(item.error ?? 'Not summarised yet.', color: item.status == SavedStatus.failed ? p.redPen : p.pencil),
@@ -326,14 +394,6 @@ class SavedDetailScreen extends StatelessWidget {
                   for (final t in item.tags) HandTag('#$t'),
                 ],
               ),
-            ],
-            if (item.sharedText.isNotEmpty) ...[const SectionHead('shared with it'), Meta(item.sharedText)],
-            if ((item.body ?? '').isNotEmpty) ...[
-              const SectionHead('the whole thing'),
-              FullText(item.body!),
-            ] else if ((item.description ?? '').isNotEmpty) ...[
-              const SectionHead('caption'),
-              Meta(item.description!, maxLines: 12),
             ],
             if (item.sources.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -406,7 +466,7 @@ class _FullTextState extends State<FullText> {
 
   @override
   Widget build(BuildContext context) {
-    final long = widget.text.length > 700;
+    final long = widget.text.length > 2500;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -414,7 +474,7 @@ class _FullTextState extends State<FullText> {
           duration: const Duration(milliseconds: 250),
           alignment: Alignment.topCenter,
           child: SelectableText(
-            !_open && long ? '${widget.text.substring(0, 700)}…' : widget.text,
+            !_open && long ? '${widget.text.substring(0, 2500)}…' : widget.text,
             style: context.text.bodyMedium?.copyWith(color: context.pal.pencil),
           ),
         ),

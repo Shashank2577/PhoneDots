@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../agent/agent.dart';
+import '../../agent/conversation.dart';
 import '../../app_services.dart';
 import '../../app_state.dart';
 import '../../core/models/model_catalog.dart';
@@ -141,7 +142,16 @@ class _ChatScreenState extends State<ChatScreen> {
           tooltip: 'Talk',
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceScreen())),
         ),
-        DoodleButton(Doodle.history, tooltip: 'Past chats', onTap: () => _history(context)),
+        if (chat.messages.isNotEmpty)
+          DoodleButton(
+            Doodle.copy,
+            tooltip: 'Copy this chat',
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: ConversationStore.transcript(chat.conversation)));
+              toast(context, 'chat copied');
+            },
+          ),
+        DoodleButton(Doodle.history, tooltip: 'Past chats', onTap: () => showPastChats(context)),
         DoodleButton(Doodle.newChat, tooltip: 'New chat', onTap: chat.messages.isEmpty ? null : state.newChat),
       ],
       body: Column(
@@ -151,7 +161,11 @@ class _ChatScreenState extends State<ChatScreen> {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               child: chat.messages.isEmpty
-                  ? _Welcome(key: const ValueKey('welcome'), onSuggestion: _suggest)
+                  ? _Welcome(
+                      key: const ValueKey('welcome'),
+                      onSuggestion: _suggest,
+                      onAllChats: () => showPastChats(context),
+                    )
                   : ListView.builder(
                       key: const ValueKey('messages'),
                       controller: _scroll,
@@ -191,47 +205,111 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+}
 
-  void _history(BuildContext context) {
-    final state = AppScope.of(context);
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (c) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        builder: (_, controller) => ListenableBuilder(
-          listenable: state.services.conversations,
-          builder: (context, _) {
-            final list = state.services.conversations.summaries;
-            return ListView(
-              controller: controller,
-              padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 24),
-              children: [
-                const PageIntro('past chats', 'Pick one to carry on. Everything here is stored on this phone only.'),
-                if (list.isEmpty)
-                  const HandEmpty(title: 'nothing yet', body: 'Your chats will show up here.', doodle: Doodle.bubble),
-                for (final s in list)
-                  Door(
-                    s.title,
-                    style: Hand.label.copyWith(fontSize: 24),
-                    meta: timeAgo(s.updated) + (s.id == state.chat.conversation.id ? ' · open now' : ''),
-                    onTap: () {
-                      Navigator.pop(c);
-                      state.open(s.id);
-                    },
-                    // No hidden swipe: delete is a visible button.
-                    trailing: DoodleButton(
-                      Doodle.trash,
-                      tooltip: 'Delete chat',
-                      color: context.pal.redPen,
-                      size: 22,
-                      onTap: () => state.services.conversations.delete(s.id),
-                    ),
+/// Every saved chat with a preview of where it left off. Pick one to carry on.
+void showPastChats(BuildContext context) {
+  final state = AppScope.of(context);
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (c) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      builder: (_, controller) => ListenableBuilder(
+        listenable: state.services.conversations,
+        builder: (context, _) {
+          final list = state.services.conversations.summaries;
+          return ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 24),
+            children: [
+              const PageIntro(
+                'past chats',
+                'Pick one to carry on where you left off. All of them are stored on this phone.',
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PillButton(
+                  'start a new chat',
+                  leading: Doodle.newChat,
+                  onTap: () {
+                    Navigator.pop(c);
+                    state.newChat();
+                    state.goTo(0);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (list.isEmpty)
+                const HandEmpty(title: 'nothing yet', body: 'Your chats will show up here.', doodle: Doodle.bubble),
+              for (final s in list)
+                ChatRow(
+                  s,
+                  open: s.id == state.chat.conversation.id,
+                  onTap: () {
+                    Navigator.pop(c);
+                    state.open(s.id);
+                  },
+                  onDelete: () => state.services.conversations.delete(s.id),
+                ),
+            ],
+          );
+        },
+      ),
+    ),
+  );
+}
+
+/// One past chat: title, where it left off, when, and a visible delete.
+class ChatRow extends StatelessWidget {
+  const ChatRow(this.summary, {super.key, required this.onTap, this.onDelete, this.open = false});
+  final ConversationSummary summary;
+  final VoidCallback onTap;
+  final VoidCallback? onDelete;
+  final bool open;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Pressable(
+      onTap: onTap,
+      scale: 0.99,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: DoodleIcon(Doodle.bubble, size: 18, color: p.pencil),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    summary.title,
+                    style: Hand.label.copyWith(fontSize: 22, color: p.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-              ],
-            );
-          },
+                  if (summary.preview.isNotEmpty) Meta(summary.preview, maxLines: 2),
+                  Meta(
+                    [
+                      timeAgo(summary.updated),
+                      if (summary.count > 0) '${summary.count} ${summary.count == 1 ? 'message' : 'messages'}',
+                      if (open) 'open now',
+                    ].join(' · '),
+                    color: p.graphite,
+                  ),
+                ],
+              ),
+            ),
+            if (onDelete != null)
+              DoodleButton(Doodle.trash, tooltip: 'Delete chat', color: p.redPen, size: 20, onTap: onDelete),
+          ],
         ),
       ),
     );
@@ -367,8 +445,9 @@ const _suggestions = [
 ];
 
 class _Welcome extends StatelessWidget {
-  const _Welcome({super.key, required this.onSuggestion});
+  const _Welcome({super.key, required this.onSuggestion, required this.onAllChats});
   final void Function(_Suggestion s) onSuggestion;
+  final VoidCallback onAllChats;
 
   static String _greeting() {
     final h = DateTime.now().hour;
@@ -393,6 +472,29 @@ class _Welcome extends StatelessWidget {
               'Ask anything, or pick a door below. Every model runs on this phone, and nothing you say leaves it.',
               doodle: Doodle.sun,
             ),
+          ),
+        ),
+        // Pick up where you left off, before anything new.
+        Column0(
+          child: ListenableBuilder(
+            listenable: services.conversations,
+            builder: (context, _) {
+              final recent = services.conversations.summaries.take(3).toList();
+              if (recent.isEmpty) return const SizedBox.shrink();
+              final state = AppScope.of(context);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionHead('carry on', padding: const EdgeInsets.only(bottom: 2)),
+                  for (final c in recent) ChatRow(c, onTap: () => state.open(c.id)),
+                  if (services.conversations.summaries.length > 3)
+                    HandLink('all ${services.conversations.summaries.length} chats', onTap: onAllChats)
+                  else
+                    HandLink('past chats', onTap: onAllChats),
+                  const SectionHead('or start something new'),
+                ],
+              );
+            },
           ),
         ),
         for (var i = 0; i < _suggestions.length; i++)

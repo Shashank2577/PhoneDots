@@ -60,6 +60,8 @@ class ChatController extends ChangeNotifier {
       conversation.title = t.length > 48 ? '${t.substring(0, 48)}…' : t;
     }
     notifyListeners();
+    // Saved the moment it's sent, so closing the app mid-answer loses nothing.
+    await services.conversations.save(conversation);
     try {
       await _readLinks(user, reply);
       // Messages with links always go to the planner, which can talk about them.

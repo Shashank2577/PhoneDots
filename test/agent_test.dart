@@ -123,6 +123,37 @@ void main() {
     final c = await again.conversations.open(chat.conversation.id);
     expect(c!.messages, hasLength(2));
     expect(c.messages.last.steps.single.skillId, 'calculate');
+
+    // The list of past chats survives a restart with a preview of where it left off.
+    final summary = again.conversations.summaries.single;
+    expect(summary.title, 'What is 2+2?');
+    expect(summary.preview, isNotEmpty);
+    expect(summary.count, 1);
+
+    // Carry on in the old chat after a restart.
+    final resumed = ChatController(again, conversation: c);
+    await resumed.send('And 3+3?');
+    expect((await again.conversations.open(c.id))!.messages, hasLength(4));
+    expect(again.conversations.summaries, hasLength(1));
+
+    final text = ConversationStore.transcript(resumed.conversation);
+    expect(text, startsWith('What is 2+2?'));
+    expect(text, contains('You: What is 2+2?'));
+    expect(text, contains('PhoneDots: '));
+  });
+
+  test('a chat is saved the moment it is sent, before the answer', () async {
+    final store = MemoryJsonStore();
+    final s = await AppServices.create(store: store, platform: 'demo');
+    final chat = ChatController(s);
+    final pending = chat.send('Tell me a story');
+    await Future<void>.delayed(Duration.zero);
+    final early = await (await AppServices.create(
+      store: store,
+      platform: 'demo',
+    )).conversations.open(chat.conversation.id);
+    expect(early, isNotNull);
+    await pending;
   });
 
   test('gated models: access classification and download guard', () async {

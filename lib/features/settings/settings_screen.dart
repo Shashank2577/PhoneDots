@@ -197,6 +197,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (v) => st.update((x) => x.youtubeKey = v.trim()),
             decoration: const InputDecoration(hintText: 'YouTube Data API key (optional)'),
           ),
+          _KeyLinks(
+            links: const [
+              ('1 · turn on the API', 'https://console.cloud.google.com/apis/library/youtube.googleapis.com'),
+              ('2 · create a key', 'https://console.cloud.google.com/apis/credentials'),
+            ],
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _jina,
@@ -204,6 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (v) => st.update((x) => x.jinaKey = v.trim()),
             decoration: const InputDecoration(hintText: 'Jina key (optional)'),
           ),
+          const _KeyLinks(links: [('get a free Jina key', 'https://jina.ai/api-dashboard/key-manager')]),
           const SectionHead('more'),
           SwitchRow(
             title: 'think first',
@@ -250,6 +257,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          const _KeyLinks(
+            links: [
+              ('create a token (read access)', 'https://huggingface.co/settings/tokens/new?tokenType=read'),
+              (
+                'accept the FunctionGemma licence',
+                'https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions',
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           HandLink('show the welcome again', color: p.pencil, onTap: () => st.update((x) => x.onboarded = false)),
         ],
@@ -293,4 +309,22 @@ class AboutScreen extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// One-tap links to the page where a key or token is made.
+class _KeyLinks extends StatelessWidget {
+  const _KeyLinks({required this.links});
+  final List<(String, String)> links;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.services(context);
+    return Wrap(
+      spacing: 12,
+      children: [
+        for (final (label, url) in links)
+          HandLink('$label ↗', color: context.pal.ink, onTap: () => s.device.invoke('url.open', {'url': url})),
+      ],
+    );
+  }
 }

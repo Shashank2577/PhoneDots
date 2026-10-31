@@ -119,7 +119,7 @@ class AppServices {
       settings: settings,
       ledger: ledger,
       ask: ({required system, required prompt, imagePaths = const []}) =>
-          services.ask(system: system, prompt: prompt, imagePaths: imagePaths, maxTokens: 600),
+          services.ask(system: system, prompt: prompt, imagePaths: imagePaths, maxTokens: 1000),
       canSee: () => !services.isDemo && (modelById(settings.plannerId)?.has(ModelCapability.image) ?? false),
       transcribe: native ? services._transcribe : null,
       videoSheet: native ? services._videoSheet : null,
