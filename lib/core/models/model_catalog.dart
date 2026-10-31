@@ -145,7 +145,8 @@ final desertAntModels = <ModelSpec>[
   _da('title', 'Title', 'Titles and short descriptions for any text.', {ModelCapability.text}, 290, android: false),
   _da('eye', 'Eye', 'Photo understanding: scenes, quality, faces, best crop.', {ModelCapability.vision}, 66),
   _da('moderator', 'Moderator', 'NSFW image detection.', {ModelCapability.vision}, 9),
-  _da('shapes', 'Shapes', 'Turns rough strokes into clean shapes.', {ModelCapability.vision}, 1),
+  // Not in the Android SDK yet (desert-ant-core 4.2.1 ships it for iOS only).
+  _da('shapes', 'Shapes', 'Turns rough strokes into clean shapes.', {ModelCapability.vision}, 1, android: false),
   _da('clips', 'Clips', 'Best moments of talking video for shorts.', {ModelCapability.speech}, 560, android: false),
 ];
 

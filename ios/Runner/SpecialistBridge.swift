@@ -208,12 +208,12 @@ final class SpecialistBridge: NSObject, FlutterStreamHandler {
     #if canImport(Voz)
     case "voz":
       let r = try await Voz().transcribe(audio)
-      return ["text": r.text, "duration": r.duration, "words": r.words.map { ["text": $0.text, "start": $0.start, "end": $0.end] }]
+      return ["text": r.text, "duration": r.duration, "words": r.words.map { ["text": $0.text, "start": $0.start, "end": $0.end] as [String: Any] }]
     #endif
     #if canImport(Who)
     case "who":
       let r = try await Who().diarize(contentsOf: audio)
-      return ["speakerCount": r.speakerCount, "turns": r.turns.map { ["speaker": $0.speaker, "start": $0.start, "end": $0.end] }]
+      return ["speakerCount": r.speakerCount, "turns": r.turns.map { ["speaker": $0.speaker, "start": $0.start, "end": $0.end] as [String: Any] }]
     #endif
     #if canImport(Ear)
     case "ear":
@@ -229,14 +229,14 @@ final class SpecialistBridge: NSObject, FlutterStreamHandler {
     #if canImport(Uhm)
     case "uhm":
       let r = try await Uhm().analyze(audioPath: audio.path)
-      return ["fillers": r.fillers.map { ["start": $0.start, "end": $0.end, "confidence": $0.confidence, "type": "\($0.type)"] }]
+      return ["fillers": r.fillers.map { ["start": $0.start, "end": $0.end, "confidence": $0.confidence, "type": "\($0.type)"] as [String: Any] }]
     #endif
     #if canImport(Redact)
     case "redact":
       let r = try await Redact().redaction(of: text)
       return [
         "redactedText": r.redactedText,
-        "items": r.items.map { ["label": $0.label.displayName, "original": $0.original, "placeholder": $0.placeholder, "confidence": $0.confidence] },
+        "items": r.items.map { ["label": $0.label.displayName, "original": $0.original, "placeholder": $0.placeholder, "confidence": $0.confidence] as [String: Any] },
       ]
     #endif
     #if canImport(Tongue)
@@ -247,12 +247,12 @@ final class SpecialistBridge: NSObject, FlutterStreamHandler {
     #if canImport(Emo)
     case "emo":
       let r = try await Emo().suggestions(for: text, limit: input["limit"] as? Int ?? 3)
-      return ["suggestions": r.map { ["emoji": $0.emoji, "confidence": $0.confidence] }]
+      return ["suggestions": r.map { ["emoji": $0.emoji, "confidence": $0.confidence] as [String: Any] }]
     #endif
     #if canImport(Gist)
     case "gist":
       let r = try await Gist().classify(text)
-      return ["topics": r.map { ["slug": $0.slug, "name": $0.name, "score": $0.score] }]
+      return ["topics": r.map { ["slug": $0.slug, "name": $0.name, "score": $0.score] as [String: Any] }]
     #endif
     #if canImport(Eye)
     case "eye":

@@ -79,9 +79,9 @@ class SpecialistBridge(private val context: Context, messenger: BinaryMessenger)
     val modelId = call.argument<String>("modelId")
     when (call.method) {
       "availability" -> result.success(
-        listOf("voz", "who", "ear", "clear", "redact", "emo", "gist", "eye", "moderator", "tongue", "shapes")
+        listOf("voz", "who", "ear", "clear", "redact", "emo", "gist", "eye", "moderator", "tongue")
           .associate { "desertant.$it" to "native" } +
-          listOf("uhm", "align", "title", "clips").associate { "desertant.$it" to "unsupported" }
+          listOf("uhm", "align", "title", "clips", "shapes").associate { "desertant.$it" to "unsupported" }
       )
       "isDownloaded" -> scope.launch {
         val ok = try {

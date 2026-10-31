@@ -43,7 +43,10 @@ final class DeviceBridge: NSObject {
   @MainActor
   private func invoke(_ action: String, _ a: [String: Any]) async -> [String: Any] {
     let s = { (k: String) in "\(a[k] ?? "")" }
-    let enc = { (v: String) in v.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? v }
+    // Query values: escape the separators too, or "a & b" is cut at the "&".
+    var valueAllowed = CharacterSet.urlQueryAllowed
+    valueAllowed.remove(charactersIn: "&=+;?#")
+    let enc = { (v: String) in v.addingPercentEncoding(withAllowedCharacters: valueAllowed) ?? v }
     switch action {
     case "timer.set", "alarm.set":
       return ["error": "iOS does not let apps set timers or alarms. Ask Siri, or use the Clock app."]
@@ -83,7 +86,7 @@ final class DeviceBridge: NSObject {
         let keys = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactPhoneNumbersKey, CNContactEmailAddressesKey] as [CNKeyDescriptor]
         let found = try contacts.unifiedContacts(matching: CNContact.predicateForContacts(matchingName: s("name")), keysToFetch: keys)
         return ["contacts": found.prefix(10).map {
-          ["name": "\($0.givenName) \($0.familyName)", "phones": $0.phoneNumbers.map { $0.value.stringValue }, "emails": $0.emailAddresses.map { "\($0.value)" }]
+          ["name": "\($0.givenName) \($0.familyName)", "phones": $0.phoneNumbers.map { $0.value.stringValue }, "emails": $0.emailAddresses.map { "\($0.value)" }] as [String: Any]
         }]
       } catch {
         return ["error": "\(error.localizedDescription)"]

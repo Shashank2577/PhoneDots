@@ -197,7 +197,12 @@ class DeviceBridge(private val activity: Activity, messenger: BinaryMessenger) :
       val n = count.coerceIn(1, 9)
       val frames = (0 until n).mapNotNull { i ->
         val t = (durationMs * (i + 0.5) / n).toLong() * 1000
-        r.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        // Scaled frames keep six 4K frames from exhausting memory.
+        if (android.os.Build.VERSION.SDK_INT >= 27) {
+          r.getScaledFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 768, 768)
+        } else {
+          r.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        }
       }
       if (frames.isEmpty()) return mapOf("error" to "Could not read frames")
       val cols = if (frames.size <= 4) 2 else 3
@@ -214,7 +219,9 @@ class DeviceBridge(private val activity: Activity, messenger: BinaryMessenger) :
         canvas.drawBitmap(f, null, Rect(x, y, x + cell, y + cellH), null)
         f.recycle()
       }
-      val out = File(activity.cacheDir, "frames-${System.currentTimeMillis()}.jpg")
+      // Kept with the app's files (not the cache) because saved items show it as their preview.
+      val dir = File(activity.filesDir, "frames").apply { mkdirs() }
+      val out = File(dir, "frames-${System.currentTimeMillis()}.jpg")
       out.outputStream().use { sheet.compress(Bitmap.CompressFormat.JPEG, 85, it) }
       sheet.recycle()
       return mapOf("path" to out.path, "frames" to frames.size, "duration" to durationMs / 1000.0)
@@ -257,9 +264,32 @@ class DeviceBridge(private val activity: Activity, messenger: BinaryMessenger) :
       arrayOf("%$name%"),
       null,
     )?.use { c ->
-      while (c.moveToNext() && found.size < 10) found.getOrPut(c.getString(0)) { mutableListOf() }.add(c.getString(1))
+      while (c.moveToNext() && found.size < 10) {
+        val who = c.getString(0) ?: continue
+        val number = c.getString(1) ?: continue
+        found.getOrPut(who) { mutableListOf() }.add(number)
+      }
     }
-    return mapOf("contacts" to found.map { mapOf("name" to it.key, "phones" to it.value.distinct()) })
+    val emails = linkedMapOf<String, MutableList<String>>()
+    activity.contentResolver.query(
+      ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+      arrayOf(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME_PRIMARY, ContactsContract.CommonDataKinds.Email.ADDRESS),
+      "${ContactsContract.CommonDataKinds.Email.DISPLAY_NAME_PRIMARY} LIKE ?",
+      arrayOf("%$name%"),
+      null,
+    )?.use { c ->
+      while (c.moveToNext() && emails.size < 10) {
+        val who = c.getString(0) ?: continue
+        val address = c.getString(1) ?: continue
+        emails.getOrPut(who) { mutableListOf() }.add(address)
+      }
+    }
+    val names = (found.keys + emails.keys).distinct().take(10)
+    return mapOf(
+      "contacts" to names.map {
+        mapOf("name" to it, "phones" to (found[it] ?: emptyList<String>()).distinct(), "emails" to (emails[it] ?: emptyList<String>()).distinct())
+      }
+    )
   }
 
   private fun openApp(name: String): Map<String, Any?> {
