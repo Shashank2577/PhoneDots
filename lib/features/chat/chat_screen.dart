@@ -11,7 +11,7 @@ import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
-import '../../widgets/sketch.dart';
+import '../../widgets/hand.dart';
 import '../voice/voice_screen.dart';
 import 'attach.dart';
 import 'message_view.dart';
@@ -87,10 +87,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final shown = args.entries.where((e) => '${e.value}'.isNotEmpty).map((e) => '${e.key}: ${e.value}').join('\n');
     return confirmDialog(
       context,
-      title: 'Allow ${skill.name}?',
+      title: 'allow ${skill.name.toLowerCase()}?',
       body:
           '${skill.description}\n\n$shown${skill.confirm == ConfirmPolicy.firstTime ? '\n\nYou will not be asked again for this skill.' : ''}',
-      confirm: 'Allow',
+      confirm: 'allow',
     );
   }
 
@@ -132,27 +132,24 @@ class _ChatScreenState extends State<ChatScreen> {
     final state = AppScope.of(context);
     final chat = state.chat;
     final s = state.services;
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 12,
-        title: _ModelChip(services: s),
-        actions: [
-          IconButton(
-            tooltip: 'Voice',
-            icon: const Icon(Icons.graphic_eq_rounded),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceScreen())),
-          ),
-          IconButton(tooltip: 'History', icon: const Icon(Icons.history_rounded), onPressed: () => _history(context)),
-          IconButton(tooltip: 'New chat', icon: const Icon(Icons.edit_square), onPressed: state.newChat),
-          const SizedBox(width: 4),
-        ],
-      ),
+    return HandPage(
+      wordmark: true,
+      actions: [
+        _ModelChip(services: s),
+        DoodleButton(
+          Doodle.mic,
+          tooltip: 'Talk',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceScreen())),
+        ),
+        DoodleButton(Doodle.history, tooltip: 'Past chats', onTap: () => _history(context)),
+        DoodleButton(Doodle.newChat, tooltip: 'New chat', onTap: chat.messages.isEmpty ? null : state.newChat),
+      ],
       body: Column(
         children: [
           if (s.isDemo) const DemoBanner(),
           Expanded(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 260),
               child: chat.messages.isEmpty
                   ? _Welcome(key: const ValueKey('welcome'), onSuggestion: _suggest)
                   : ListView.builder(
@@ -163,30 +160,32 @@ class _ChatScreenState extends State<ChatScreen> {
                       itemCount: chat.messages.length,
                       itemBuilder: (_, i) {
                         final m = chat.messages[i];
-                        // New messages fly in from their side: yours from the right, replies from the left.
                         return Enter(
                           key: ValueKey(m.id),
-                          from: Offset(m.isUser ? 40 : -24, 12),
-                          tilt: m.isUser ? -0.04 : 0.03,
-                          child: MessageView(
-                            message: m,
-                            isLast: i == chat.messages.length - 1,
-                            onRetry: chat.busy ? null : chat.retry,
-                            onOpenModels: () => state.goTo(2),
+                          from: Offset(m.isUser ? 24 : 0, 10),
+                          child: Column0(
+                            child: MessageView(
+                              message: m,
+                              isLast: i == chat.messages.length - 1,
+                              onRetry: chat.busy ? null : chat.retry,
+                              onOpenModels: () => state.goTo(2),
+                            ),
                           ),
                         );
                       },
                     ),
             ),
           ),
-          _Composer(
-            controller: _input,
-            pending: _pending,
-            busy: chat.busy,
-            onSend: _send,
-            onStop: chat.stop,
-            onAttach: _attach,
-            onRemove: (a) => setState(() => _pending.remove(a)),
+          Column0(
+            child: _Composer(
+              controller: _input,
+              pending: _pending,
+              busy: chat.busy,
+              onSend: _send,
+              onStop: chat.stop,
+              onAttach: _attach,
+              onRemove: (a) => setState(() => _pending.remove(a)),
+            ),
           ),
         ],
       ),
@@ -203,38 +202,34 @@ class _ChatScreenState extends State<ChatScreen> {
         initialChildSize: 0.7,
         builder: (_, controller) => ListenableBuilder(
           listenable: state.services.conversations,
-          builder: (_, _) {
+          builder: (context, _) {
             final list = state.services.conversations.summaries;
-            if (list.isEmpty) {
-              return const EmptyState(icon: Icons.chat_bubble_outline_rounded, title: 'No conversations yet');
-            }
-            return ListView.builder(
+            return ListView(
               controller: controller,
-              itemCount: list.length + 1,
-              itemBuilder: (_, i) {
-                if (i == 0) return const SectionLabel('History', padding: EdgeInsets.fromLTRB(20, 0, 20, 8));
-                final s = list[i - 1];
-                return Dismissible(
-                  key: ValueKey(s.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: context.pal.danger,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 24),
-                    child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
-                  ),
-                  onDismissed: (_) => state.services.conversations.delete(s.id),
-                  child: ListTile(
-                    title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(timeAgo(s.updated)),
-                    selected: s.id == state.chat.conversation.id,
+              padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 24),
+              children: [
+                const PageIntro('past chats', 'Pick one to carry on. Everything here is stored on this phone only.'),
+                if (list.isEmpty)
+                  const HandEmpty(title: 'nothing yet', body: 'Your chats will show up here.', doodle: Doodle.bubble),
+                for (final s in list)
+                  Door(
+                    s.title,
+                    style: Hand.label.copyWith(fontSize: 24),
+                    meta: timeAgo(s.updated) + (s.id == state.chat.conversation.id ? ' · open now' : ''),
                     onTap: () {
                       Navigator.pop(c);
                       state.open(s.id);
                     },
+                    // No hidden swipe: delete is a visible button.
+                    trailing: DoodleButton(
+                      Doodle.trash,
+                      tooltip: 'Delete chat',
+                      color: context.pal.redPen,
+                      size: 22,
+                      onTap: () => state.services.conversations.delete(s.id),
+                    ),
                   ),
-                );
-              },
+              ],
             );
           },
         ),
@@ -256,40 +251,24 @@ class _ModelChip extends StatelessWidget {
         final m = services.models;
         final planner = modelById(services.settings.plannerId);
         final loaded = m.loadedPlanner == services.settings.plannerId;
-        final ready = m.isReady(services.settings.plannerId);
-        final loading = m.loadingModel != null;
+        final name = services.isDemo ? 'demo' : (planner?.name.replaceFirst('Gemma ', '').toLowerCase() ?? 'no model');
         return Pressable(
           onTap: () => _pick(context),
-          child: SketchBox(
-            seed: 301,
-            radius: 18,
-            fill: p.note(3),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (loading)
+                if (m.loadingModel != null)
                   const Scribbling(size: 12)
                 else
-                  Dot(
-                    color: services.isDemo
-                        ? p.warn
-                        : loaded
-                        ? p.dot
-                        : ready
-                        ? p.faint
-                        : p.danger,
-                  ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    services.isDemo ? 'Demo engine' : planner?.name ?? 'No model',
-                    style: context.text.titleMedium?.copyWith(fontSize: 17),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Dot(size: 6, color: loaded ? p.ink : p.graphite),
+                const SizedBox(width: 6),
+                HandUnderline(
+                  seed: 11,
+                  color: p.pencil,
+                  child: Text(name, style: Hand.small.copyWith(color: p.ink)),
                 ),
-                const SizedBox(width: 2),
-                Icon(Icons.expand_more_rounded, size: 18, color: p.muted),
               ],
             ),
           ),
@@ -304,38 +283,42 @@ class _ModelChip extends StatelessWidget {
       context: context,
       builder: (c) => ListenableBuilder(
         listenable: services.models,
-        builder: (_, _) {
+        builder: (context, _) {
           final planners = gemmaModels.where((g) => g.role == ModelRole.planner).toList();
           return SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionLabel('Brain', padding: EdgeInsets.fromLTRB(20, 0, 20, 8)),
-                for (final g in planners)
-                  ListTile(
-                    title: Text(g.name),
-                    subtitle: Text(
-                      services.models.isReady(g.id) ? g.summary : 'Not downloaded · ${formatBytes(g.approxBytes)}',
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const PageIntro('the brain', 'Which Gemma answers you. Bigger is smarter and slower.'),
+                  for (final g in planners)
+                    Door(
+                      g.name,
+                      style: Hand.label.copyWith(fontSize: 25),
+                      mark: services.settings.plannerId == g.id ? g.name : null,
+                      meta: services.models.isReady(g.id)
+                          ? g.summary
+                          : 'not downloaded · ${formatBytes(g.approxBytes)}',
+                      onTap: services.models.state(g.id).status == ModelStatus.ready || services.isDemo
+                          ? () {
+                              services.settings.update((s) => s.plannerId = g.id);
+                              Navigator.pop(c);
+                            }
+                          : null,
                     ),
-                    trailing: services.settings.plannerId == g.id ? const Icon(Icons.check_rounded) : null,
-                    enabled: services.models.state(g.id).status == ModelStatus.ready || services.isDemo,
+                  const SizedBox(height: 8),
+                  PillButton(
+                    'manage models',
+                    leading: Doodle.chip,
                     onTap: () {
-                      services.settings.update((s) => s.plannerId = g.id);
-                      Navigator.pop(c);
-                    },
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                  child: OutlinedButton(
-                    onPressed: () {
                       Navigator.pop(c);
                       state.goTo(2);
                     },
-                    child: const Text('Manage models'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -345,9 +328,10 @@ class _ModelChip extends StatelessWidget {
 }
 
 class _Suggestion {
-  const _Suggestion(this.icon, this.title, this.prompt, {this.attach, this.send = true});
-  final IconData icon;
+  const _Suggestion(this.doodle, this.title, this.meta, this.prompt, {this.attach, this.send = true});
+  final Doodle doodle;
   final String title;
+  final String meta;
   final String prompt;
 
   /// record | photo
@@ -356,97 +340,84 @@ class _Suggestion {
 }
 
 const _suggestions = [
-  _Suggestion(Icons.mic_none_rounded, 'Meeting minutes', 'Make minutes from this meeting', attach: 'record'),
-  _Suggestion(Icons.image_outlined, 'Ask about a photo', 'What is in this photo?', attach: 'photo'),
   _Suggestion(
-    Icons.shield_outlined,
-    'Redact before sharing',
+    Doodle.mic,
+    'record a meeting',
+    'notes, who spoke, and follow-ups',
+    'Make minutes from this meeting',
+    attach: 'record',
+  ),
+  _Suggestion(
+    Doodle.camera,
+    'ask about a photo',
+    'Gemma looks at it right here',
+    'What is in this photo?',
+    attach: 'photo',
+  ),
+  _Suggestion(
+    Doodle.mask,
+    'mask before you share',
+    'names and numbers swapped out',
     'Redact my email bob@acme.com and phone +1 415 555 0100',
     send: false,
   ),
-  _Suggestion(Icons.timer_outlined, 'Set a timer', 'Set a timer for 10 minutes'),
-  _Suggestion(Icons.calculate_outlined, 'Exact maths', 'What is 18% of 2450?'),
-  _Suggestion(Icons.search_rounded, 'Search my files', 'Search my notes for ', send: false),
+  _Suggestion(Doodle.timer, 'set a timer', 'the quick model does it instantly', 'Set a timer for 10 minutes'),
+  _Suggestion(Doodle.calc, 'exact maths', 'no guessing, a real calculator', 'What is 18% of 2450?'),
+  _Suggestion(Doodle.search, 'search my files', 'notes, receipts, transcripts', 'Search my notes for ', send: false),
 ];
 
 class _Welcome extends StatelessWidget {
   const _Welcome({super.key, required this.onSuggestion});
   final void Function(_Suggestion s) onSuggestion;
 
-  static const _tilts = [-0.035, 0.025, 0.03, -0.02, -0.025, 0.035];
+  static String _greeting() {
+    final h = DateTime.now().hour;
+    return h < 12
+        ? 'good morning.'
+        : h < 18
+        ? 'good afternoon.'
+        : 'good evening.';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = context.pal;
     final services = AppScope.services(context);
     return ListView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.only(top: 8, bottom: 16),
       children: [
-        const Enter(child: Row(children: [_LogoDots()])),
-        const SizedBox(height: 14),
-        Enter(
-          index: 1,
-          child: Text('What can I do\nfor you?', style: context.text.displaySmall?.copyWith(height: 0.95)),
-        ),
-        Enter(index: 2, child: Underline(width: 190, seed: 4, delay: const Duration(milliseconds: 500))),
-        const SizedBox(height: 6),
-        Enter(
-          index: 2,
-          child: Text(
-            'Private by design. Every model runs on this phone, and nothing you say leaves it.',
-            style: context.text.bodyMedium?.copyWith(color: p.muted),
+        Column0(
+          child: Enter(
+            child: PageIntro(
+              _greeting(),
+              'Ask anything, or pick a door below. Every model runs on this phone, and nothing you say leaves it.',
+              doodle: Doodle.sun,
+            ),
           ),
         ),
-        const SizedBox(height: 26),
-        LayoutBuilder(
-          builder: (context, c) {
-            final w = (c.maxWidth - 14) / 2;
-            return Wrap(
-              spacing: 14,
-              runSpacing: 16,
+        for (var i = 0; i < _suggestions.length; i++)
+          Column0(
+            child: Enter(
+              index: i + 1,
+              child: Door(
+                _suggestions[i].title,
+                leading: _suggestions[i].doodle,
+                meta: _suggestions[i].meta,
+                onTap: () => onSuggestion(_suggestions[i]),
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        Column0(
+          child: ListenableBuilder(
+            listenable: services.skills,
+            builder: (_, _) => Row(
               children: [
-                for (var i = 0; i < _suggestions.length; i++)
-                  Enter(
-                    index: 3 + i,
-                    tilt: _tilts[i] * 3,
-                    child: Transform.rotate(
-                      angle: _tilts[i],
-                      child: SizedBox(
-                        width: w,
-                        child: Pressable(
-                          onTap: () => onSuggestion(_suggestions[i]),
-                          tilt: -_tilts[i],
-                          child: SketchBox(
-                            seed: 100 + i,
-                            fill: p.note(i),
-                            radius: 6,
-                            shadow: 3,
-                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(_suggestions[i].icon, size: 24, color: p.ink),
-                                const SizedBox(height: 16),
-                                Text(_suggestions[i].title, style: context.text.titleMedium?.copyWith(fontSize: 19)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                const OnDeviceStamp(),
+                const Spacer(),
+                Meta('${services.skills.enabled.length} skills · ${services.models.visibleModels.length} models'),
               ],
-            );
-          },
-        ),
-        const SizedBox(height: 24),
-        ListenableBuilder(
-          listenable: services.skills,
-          builder: (_, _) => Text(
-            '${services.skills.enabled.length} skills ready · ${services.models.visibleModels.length} on-device models',
-            style: context.text.bodySmall,
-            textAlign: TextAlign.center,
+            ),
           ),
         ),
       ],
@@ -454,15 +425,7 @@ class _Welcome extends StatelessWidget {
   }
 }
 
-/// The brand: ink dot and green dot that hop once on arrival, then idle.
-class _LogoDots extends StatelessWidget {
-  const _LogoDots();
-
-  @override
-  Widget build(BuildContext context) => const SizedBox(height: 26, child: HoppingDots(size: 11));
-}
-
-class _Composer extends StatefulWidget {
+class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
     required this.pending,
@@ -482,140 +445,105 @@ class _Composer extends StatefulWidget {
   final void Function(Attachment a) onRemove;
 
   @override
-  State<_Composer> createState() => _ComposerState();
-}
-
-class _ComposerState extends State<_Composer> {
-  int _nudge = 0;
-
-  void _send() {
-    final canSend = widget.controller.text.trim().isNotEmpty || widget.pending.isNotEmpty;
-    if (!canSend) {
-      setState(() => _nudge++);
-      return;
-    }
-    widget.onSend();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final p = context.pal;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-        child: Wiggle(
-          trigger: _nudge,
-          child: SketchBox(
-            seed: 201,
-            radius: 22,
-            shadow: 3,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutBack,
-                  child: widget.pending.isEmpty
-                      ? const SizedBox(width: double.infinity)
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                for (final a in widget.pending)
-                                  Enter(
-                                    from: const Offset(0, 10),
-                                    child: AttachmentChip(a, onRemove: () => widget.onRemove(a)),
-                                  ),
-                              ],
+        padding: const EdgeInsets.only(top: 4, bottom: 10),
+        // The smudge well: the only filled shape on the page.
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: p.smudge, borderRadius: BorderRadius.circular(24)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: pending.isEmpty
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final a in pending) Enter(child: AttachmentChip(a, onRemove: () => onRemove(a))),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 4),
+                    child: DoodleButton(Doodle.clip, tooltip: 'Attach', size: 22, onTap: busy ? null : onAttach),
+                  ),
+                  Expanded(
+                    child: CallbackShortcuts(
+                      // Hardware keyboards: Enter sends, Shift+Enter adds a line.
+                      bindings: {const SingleActivator(LogicalKeyboardKey.enter): () => busy ? null : onSend()},
+                      child: TextField(
+                        controller: controller,
+                        minLines: 1,
+                        maxLines: 6,
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => onSend(),
+                        decoration: const InputDecoration(
+                          hintText: 'ask anything…',
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: ListenableBuilder(
+                      listenable: controller,
+                      builder: (_, _) {
+                        final canSend = controller.text.trim().isNotEmpty || pending.isNotEmpty;
+                        final active = busy || canSend;
+                        return Pressable(
+                          onTap: busy ? onStop : (canSend ? onSend : null),
+                          scale: 0.86,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: active ? p.ink : Colors.transparent,
+                              border: Border.all(color: active ? p.ink : p.graphite, width: 1.6),
                             ),
-                          ),
-                        ),
-                ),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Pressable(
-                        onTap: widget.busy ? null : widget.onAttach,
-                        scale: 0.85,
-                        tilt: 0.2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: Icon(Icons.attach_file_rounded, color: p.ink),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: CallbackShortcuts(
-                        // Hardware keyboards: Enter sends, Shift+Enter adds a line.
-                        bindings: {const SingleActivator(LogicalKeyboardKey.enter): () => widget.busy ? null : _send()},
-                        child: TextField(
-                          controller: widget.controller,
-                          minLines: 1,
-                          maxLines: 6,
-                          textCapitalization: TextCapitalization.sentences,
-                          onSubmitted: (_) => _send(),
-                          style: context.text.bodyLarge,
-                          decoration: const InputDecoration(
-                            hintText: 'Ask anything…',
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(7),
-                      child: ListenableBuilder(
-                        listenable: widget.controller,
-                        builder: (_, _) {
-                          final canSend = widget.controller.text.trim().isNotEmpty || widget.pending.isNotEmpty;
-                          final active = widget.busy || canSend;
-                          return Pressable(
-                            onTap: widget.busy ? widget.onStop : _send,
-                            scale: 0.8,
-                            tilt: 0.3,
-                            child: AnimatedRotation(
-                              turns: canSend && !widget.busy ? -0.08 : 0,
-                              duration: const Duration(milliseconds: 420),
-                              curve: Curves.elasticOut,
-                              child: SketchBox(
-                                seed: 202,
-                                radius: 20,
-                                fill: active ? p.ink : p.surfaceAlt,
-                                stroke: active ? p.ink : p.faint,
-                                child: SizedBox.square(
-                                  dimension: 42,
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 220),
-                                    transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-                                    child: Icon(
-                                      widget.busy ? Icons.stop_rounded : Icons.send_rounded,
-                                      key: ValueKey(widget.busy),
-                                      size: 20,
-                                      color: active ? p.bg : p.faint,
-                                    ),
-                                  ),
+                            child: Center(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                                child: DoodleIcon(
+                                  busy ? Doodle.stop : Doodle.arrow,
+                                  key: ValueKey(busy),
+                                  size: 22,
+                                  color: active ? p.paper : p.graphite,
+                                  semanticLabel: busy ? 'Stop' : 'Send',
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

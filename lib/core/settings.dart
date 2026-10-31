@@ -9,6 +9,9 @@ class AppSettings extends ChangeNotifier {
   static const _key = 'settings';
 
   ThemeMode themeMode = ThemeMode.system;
+
+  /// Body font voice (see Voice in theme.dart): formal, friendly, neat, loose, handwritten.
+  String voice = 'neat';
   String hfToken = '';
   String plannerId = 'gemma-4-e2b';
   String routerId = 'functiongemma-270m-mobile-actions';
@@ -28,6 +31,7 @@ class AppSettings extends ChangeNotifier {
     final j = await _store.read(_key) as Map?;
     if (j == null) return;
     themeMode = ThemeMode.values.byName(j['themeMode'] as String? ?? 'system');
+    voice = j['voice'] as String? ?? voice;
     hfToken = j['hfToken'] as String? ?? '';
     plannerId = j['plannerId'] as String? ?? plannerId;
     routerId = j['routerId'] as String? ?? routerId;
@@ -47,6 +51,7 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
     await _store.write(_key, {
       'themeMode': themeMode.name,
+      'voice': voice,
       'hfToken': hfToken,
       'plannerId': plannerId,
       'routerId': routerId,

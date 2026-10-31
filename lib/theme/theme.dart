@@ -1,85 +1,80 @@
 import 'package:flutter/material.dart';
 
-import 'rough.dart';
-
-/// Design tokens: ink on paper (light) and chalk on a board (dark), with
-/// sticky-note pastels and a highlighter for emphasis.
+/// Burrow · Hand-drawn Minimal (from Shashank2577/Android-Showcase,
+/// design/burrow-a/theme/tokens.json): white paper, ink, one marker-yellow
+/// accent, Caveat hand-lettering over a quiet body voice.
 @immutable
 class Palette extends ThemeExtension<Palette> {
   const Palette({
-    required this.bg,
-    required this.surface,
-    required this.surfaceAlt,
+    required this.paper,
     required this.ink,
-    required this.stroke,
-    required this.muted,
-    required this.faint,
-    required this.hairline,
-    required this.grid,
-    required this.dot,
-    required this.danger,
-    required this.warn,
-    required this.highlight,
-    required this.notes,
+    required this.pencil,
+    required this.graphite,
+    required this.rule,
+    required this.smudge,
+    required this.marker,
+    required this.markerInk,
+    required this.redPen,
   });
 
-  final Color bg;
-  final Color surface;
-  final Color surfaceAlt;
+  final Color paper;
   final Color ink;
 
-  /// Pen colour for hand-drawn outlines.
-  final Color stroke;
-  final Color muted;
-  final Color faint;
+  /// Meta lines and secondary text.
+  final Color pencil;
 
-  /// Light pencil for dividers and tracks.
-  final Color hairline;
+  /// Placeholders, disabled items.
+  final Color graphite;
 
-  /// The dot grid printed on the paper.
-  final Color grid;
-  final Color dot;
-  final Color danger;
-  final Color warn;
-  final Color highlight;
+  /// Sketchy hairline dividers.
+  final Color rule;
 
-  /// Sticky-note fills: yellow, pink, mint, blue, lavender.
-  final List<Color> notes;
+  /// The only fill: input wells, the selected row.
+  final Color smudge;
 
-  Color note(int i) => notes[i % notes.length];
+  /// The single highlight per screen.
+  final Color marker;
+  final Color markerInk;
+
+  /// Private and destructive states only.
+  final Color redPen;
+
+  // Role names used across the app, mapped onto Burrow's tokens.
+  Color get bg => paper;
+  Color get surface => paper;
+  Color get surfaceAlt => smudge;
+  Color get stroke => ink;
+  Color get muted => pencil;
+  Color get faint => graphite;
+  Color get hairline => rule;
+  Color get dot => ink;
+  Color get danger => redPen;
+  Color get warn => pencil;
+  Color get highlight => marker;
 
   static const light = Palette(
-    bg: Color(0xFFFBF7EE),
-    surface: Color(0xFFFFFDF8),
-    surfaceAlt: Color(0xFFF3EDE0),
-    ink: Color(0xFF221E19),
-    stroke: Color(0xFF2B2620),
-    muted: Color(0xFF6F675C),
-    faint: Color(0xFFA49B8E),
-    hairline: Color(0xFFDDD5C6),
-    grid: Color(0xFFE4DCCB),
-    dot: Color(0xFF1F9D57),
-    danger: Color(0xFFE0453A),
-    warn: Color(0xFFDB8A1A),
-    highlight: Color(0xFFFFE27A),
-    notes: [Color(0xFFFFF1A8), Color(0xFFFFD8E2), Color(0xFFCDF3DE), Color(0xFFD5E7FF), Color(0xFFE7DCFF)],
+    paper: Color(0xFFFFFFFF),
+    ink: Color(0xFF1A1A1A),
+    pencil: Color(0xFF6B6B6B),
+    graphite: Color(0xFFA3A3A3),
+    rule: Color(0x261A1A1A),
+    smudge: Color(0xFFF4F3EF),
+    marker: Color(0xFFFFE45C),
+    markerInk: Color(0xFF1A1A1A),
+    redPen: Color(0xFFDC2626),
   );
 
+  /// A night notebook, not white-on-black: warm charcoal and chalky ink.
   static const dark = Palette(
-    bg: Color(0xFF1D2320),
-    surface: Color(0xFF242B27),
-    surfaceAlt: Color(0xFF2D3530),
-    ink: Color(0xFFF1EEE4),
-    stroke: Color(0xFFE6E2D6),
-    muted: Color(0xFFA9B0A6),
-    faint: Color(0xFF6E776F),
-    hairline: Color(0xFF3A433D),
-    grid: Color(0xFF2A322D),
-    dot: Color(0xFF4ADE80),
-    danger: Color(0xFFFF7A70),
-    warn: Color(0xFFF6C35B),
-    highlight: Color(0xFF8A7A2A),
-    notes: [Color(0xFF4A4526), Color(0xFF4A2F38), Color(0xFF26443A), Color(0xFF2A3A52), Color(0xFF3A3352)],
+    paper: Color(0xFF1E1D1B),
+    ink: Color(0xFFE8E3D8),
+    pencil: Color(0xFFB9B3A8),
+    graphite: Color(0xFF948E84),
+    rule: Color(0x4DE8E3D8),
+    smudge: Color(0xFF2D2B28),
+    marker: Color(0xFFD9BF45),
+    markerInk: Color(0xFF1E1D1B),
+    redPen: Color(0xFFFF8A80),
   );
 
   @override
@@ -95,235 +90,245 @@ extension PaletteX on BuildContext {
 }
 
 const radius = 14.0;
-const handFont = 'PatrickHand';
-const scriptFont = 'Caveat';
+const caveat = 'Caveat';
 
-/// Paper slides in with a slight tilt, like turning to a new page.
-class PaperPageTransitions extends PageTransitionsBuilder {
-  const PaperPageTransitions();
+/// Max content width, so pages stay centred on a Fold's inner screen.
+const maxColumn = 560.0;
+const gutter = 24.0;
 
-  @override
-  Widget buildTransitions<T>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutBack, reverseCurve: Curves.easeInCubic);
-    return AnimatedBuilder(
-      animation: curved,
-      child: child,
-      builder: (_, child) {
-        final t = curved.value;
-        return Opacity(
-          opacity: animation.value.clamp(0, 1),
-          child: Transform(
-            alignment: Alignment.bottomLeft,
-            transform: Matrix4.identity()
-              ..translateByDouble((1 - t) * 60, (1 - t) * 18, 0, 1)
-              ..rotateZ((1 - t) * 0.06),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
+/// How handwritten the quiet text under the Caveat headlines is.
+enum Voice {
+  formal('formal', 'Inter, a crisp sans', 'Inter', 1.0),
+  friendly('friendly', 'Nunito, a rounded sans', 'Nunito', 1.02),
+  neat('neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', 0.98, informality: 0),
+  loose('loose hand', 'Shantell Sans, informal', 'ShantellSans', 0.98, informality: 100),
+  handwritten('all handwritten', 'Patrick Hand', 'PatrickHand', 1.14);
+
+  const Voice(this.label, this.note, this.family, this.scale, {this.informality});
+
+  final String label;
+  final String note;
+  final String family;
+  final double scale;
+
+  /// Shantell Sans' INFM axis; null for static fonts.
+  final double? informality;
+
+  List<FontVariation>? get variations => informality == null ? null : [FontVariation('INFM', informality!)];
 }
 
-ThemeData buildTheme(Brightness brightness) {
+/// Hand-lettered styles (Caveat) that have no Material role.
+class Hand {
+  static const display = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w700, fontSize: 52, height: 54 / 52);
+  static const headline = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w700, fontSize: 40, height: 42 / 40);
+  static const title = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w700, fontSize: 30, height: 33 / 30);
+  static const door = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w600, fontSize: 28, height: 32 / 28);
+  static const label = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w600, fontSize: 21, height: 24 / 21);
+  static const small = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w600, fontSize: 18, height: 21 / 18);
+}
+
+ThemeData buildTheme(Brightness brightness, {Voice voice = Voice.neat}) {
   final p = brightness == Brightness.light ? Palette.light : Palette.dark;
   final scheme = ColorScheme(
     brightness: brightness,
     primary: p.ink,
-    onPrimary: p.bg,
-    secondary: p.muted,
-    onSecondary: p.bg,
-    error: p.danger,
-    onError: Colors.white,
-    surface: p.surface,
+    onPrimary: p.paper,
+    secondary: p.pencil,
+    onSecondary: p.paper,
+    error: p.redPen,
+    onError: p.paper,
+    surface: p.paper,
     onSurface: p.ink,
-    surfaceContainerLowest: p.bg,
-    surfaceContainerLow: p.surface,
-    surfaceContainer: p.surface,
-    surfaceContainerHigh: p.surfaceAlt,
-    surfaceContainerHighest: p.surfaceAlt,
-    outline: p.stroke,
-    outlineVariant: p.hairline,
-    onSurfaceVariant: p.muted,
+    surfaceContainerLowest: p.paper,
+    surfaceContainerLow: p.paper,
+    surfaceContainer: p.paper,
+    surfaceContainerHigh: p.smudge,
+    surfaceContainerHighest: p.smudge,
+    outline: p.ink,
+    outlineVariant: p.rule,
+    onSurfaceVariant: p.pencil,
   );
-  final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: brightness, fontFamily: handFont);
-  final t = base.textTheme;
-  TextStyle script(TextStyle? s, double size) => (s ?? const TextStyle()).copyWith(
-    fontFamily: scriptFont,
-    fontWeight: FontWeight.w700,
-    fontSize: size,
-    height: 1.0,
-    color: p.ink,
+  TextStyle body(double size, double line, {FontWeight weight = FontWeight.w400, Color? color}) => TextStyle(
+    fontFamily: voice.family,
+    fontVariations: voice.variations,
+    fontWeight: weight,
+    fontSize: size * voice.scale,
+    height: line / size,
+    color: color ?? p.ink,
   );
-  final text = t.copyWith(
-    displaySmall: script(t.displaySmall, 46),
-    headlineMedium: script(t.headlineMedium, 36),
-    titleLarge: script(t.titleLarge, 30),
-    titleMedium: t.titleMedium?.copyWith(fontSize: 18, height: 1.2, color: p.ink),
-    bodyLarge: t.bodyLarge?.copyWith(fontSize: 18, height: 1.4, color: p.ink),
-    bodyMedium: t.bodyMedium?.copyWith(fontSize: 16.5, height: 1.35, color: p.ink),
-    bodySmall: t.bodySmall?.copyWith(fontSize: 14.5, height: 1.3, color: p.muted),
-    labelLarge: t.labelLarge?.copyWith(fontSize: 17, color: p.ink),
-    labelMedium: t.labelMedium?.copyWith(fontSize: 14.5, color: p.muted),
-    labelSmall: t.labelSmall?.copyWith(fontSize: 13.5, letterSpacing: 1.2, color: p.muted),
+  final text = TextTheme(
+    displayLarge: Hand.display.copyWith(fontSize: 64, height: 1, color: p.ink),
+    displayMedium: Hand.display.copyWith(color: p.ink),
+    displaySmall: Hand.headline.copyWith(color: p.ink),
+    headlineLarge: Hand.headline.copyWith(color: p.ink),
+    headlineMedium: Hand.title.copyWith(fontSize: 34, height: 36 / 34, color: p.ink),
+    headlineSmall: Hand.title.copyWith(color: p.ink),
+    titleLarge: Hand.title.copyWith(color: p.ink),
+    titleMedium: Hand.door.copyWith(fontSize: 24, height: 27 / 24, color: p.ink),
+    titleSmall: Hand.label.copyWith(color: p.ink),
+    bodyLarge: body(16, 23),
+    bodyMedium: body(15, 21),
+    bodySmall: body(13, 18, color: p.pencil),
+    labelLarge: Hand.label.copyWith(fontSize: 20, color: p.ink),
+    labelMedium: body(12, 16, weight: FontWeight.w500, color: p.pencil),
+    labelSmall: body(11, 14, weight: FontWeight.w500, color: p.pencil),
   );
-  final pen = BorderSide(color: p.stroke, width: 1.6);
-  RoughBorder rough([int seed = 7, double r = radius]) => RoughBorder(side: pen, seed: seed, radius: r);
-  return base.copyWith(
-    extensions: [p],
-    scaffoldBackgroundColor: Colors.transparent,
+  const pill = StadiumBorder();
+  final pen = BorderSide(color: p.ink, width: 1.6);
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: scheme,
+    brightness: brightness,
+    fontFamily: voice.family,
     textTheme: text,
-    pageTransitionsTheme: const PageTransitionsTheme(
-      builders: {
-        TargetPlatform.android: PaperPageTransitions(),
-        TargetPlatform.iOS: PaperPageTransitions(),
-        TargetPlatform.linux: PaperPageTransitions(),
-        TargetPlatform.macOS: PaperPageTransitions(),
-        TargetPlatform.windows: PaperPageTransitions(),
-      },
-    ),
-    dividerTheme: DividerThemeData(color: p.hairline, thickness: 1, space: 1),
+    extensions: [p],
+    scaffoldBackgroundColor: p.paper,
+    splashFactory: NoSplash.splashFactory,
+    highlightColor: p.smudge,
+    dividerTheme: DividerThemeData(color: p.rule, thickness: 1, space: 1),
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.transparent,
+      backgroundColor: p.paper,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: text.titleLarge,
+      titleTextStyle: Hand.title.copyWith(color: p.ink),
       iconTheme: IconThemeData(color: p.ink, size: 24),
-    ),
-    cardTheme: CardThemeData(
-      color: p.surface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: rough(11),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: p.ink,
-        foregroundColor: p.bg,
-        shape: rough(5, 22),
-        minimumSize: const Size(0, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        textStyle: text.labelLarge?.copyWith(fontSize: 18),
+        foregroundColor: p.paper,
+        disabledBackgroundColor: p.ink.withValues(alpha: 0.35),
+        disabledForegroundColor: p.paper,
+        shape: pill,
+        minimumSize: const Size(0, 56),
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        textStyle: Hand.label.copyWith(fontSize: 23),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: p.ink,
         side: pen,
-        shape: rough(9, 22),
+        shape: pill,
         minimumSize: const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        textStyle: text.labelLarge,
+        textStyle: Hand.label,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: p.ink,
-        textStyle: text.labelLarge,
-        shape: rough(13, 22).copyWith(side: BorderSide.none),
+        textStyle: Hand.label,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(6))),
       ),
     ),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(foregroundColor: p.ink)),
     chipTheme: ChipThemeData(
-      backgroundColor: p.surface,
-      side: BorderSide(color: p.stroke, width: 1.2),
-      shape: rough(17, 20),
-      labelStyle: text.labelMedium?.copyWith(color: p.ink),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      backgroundColor: p.paper,
+      side: BorderSide(color: p.rule, width: 1.2),
+      shape: pill,
+      labelStyle: Hand.small.copyWith(color: p.ink),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: p.surface,
-      hintStyle: TextStyle(color: p.faint, fontFamily: handFont),
-      labelStyle: TextStyle(color: p.muted, fontFamily: handFont),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: RoughInputBorder(borderSide: pen, gapColor: p.bg),
-      enabledBorder: RoughInputBorder(borderSide: pen, gapColor: p.bg),
-      focusedBorder: RoughInputBorder(
-        borderSide: BorderSide(color: p.ink, width: 2.4),
-        seed: 4,
-        gapColor: p.bg,
+      fillColor: p.smudge,
+      hintStyle: text.bodyMedium?.copyWith(color: p.graphite),
+      labelStyle: text.bodyMedium?.copyWith(color: p.pencil),
+      floatingLabelStyle: text.bodySmall?.copyWith(color: p.pencil),
+      helperStyle: text.labelMedium,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(radius)),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(radius)),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(radius)),
+        borderSide: BorderSide(color: p.ink, width: 1.4),
       ),
     ),
     listTileTheme: ListTileThemeData(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      contentPadding: const EdgeInsets.symmetric(horizontal: gutter),
       iconColor: p.ink,
       titleTextStyle: text.bodyLarge,
       subtitleTextStyle: text.bodySmall,
     ),
     sliderTheme: SliderThemeData(
       activeTrackColor: p.ink,
-      inactiveTrackColor: p.hairline,
+      inactiveTrackColor: p.rule,
       thumbColor: p.ink,
-      overlayColor: p.ink.withValues(alpha: 0.08),
-      trackHeight: 3,
+      overlayColor: p.ink.withValues(alpha: 0.06),
+      trackHeight: 2,
     ),
-    progressIndicatorTheme: ProgressIndicatorThemeData(color: p.ink, linearTrackColor: p.hairline),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: p.ink,
+      linearTrackColor: p.rule,
+      circularTrackColor: Colors.transparent,
+    ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: p.bg,
+      backgroundColor: p.paper,
       surfaceTintColor: Colors.transparent,
       showDragHandle: true,
-      dragHandleColor: p.faint,
-      shape: rough(21, 26),
+      dragHandleColor: p.graphite,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: p.bg,
+      backgroundColor: p.paper,
       surfaceTintColor: Colors.transparent,
-      shape: rough(23, 20),
-      titleTextStyle: text.titleLarge,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(22))),
+      titleTextStyle: Hand.title.copyWith(color: p.ink),
+      contentTextStyle: text.bodyMedium?.copyWith(color: p.pencil),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: p.ink,
-      contentTextStyle: TextStyle(color: p.bg, fontFamily: handFont, fontSize: 17),
-      shape: rough(29, 16).copyWith(side: BorderSide.none),
+      contentTextStyle: Hand.label.copyWith(color: p.paper),
+      shape: pill,
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: SegmentedButton.styleFrom(
-        backgroundColor: p.surface,
-        selectedBackgroundColor: p.highlight,
-        selectedForegroundColor: p.ink,
+        backgroundColor: p.paper,
+        selectedBackgroundColor: p.ink,
+        selectedForegroundColor: p.paper,
         foregroundColor: p.ink,
         side: pen,
-        shape: rough(31, 18),
-        textStyle: text.labelLarge,
+        shape: pill,
+        textStyle: Hand.label,
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: p.surface,
+      color: p.paper,
       surfaceTintColor: Colors.transparent,
-      shape: rough(37, 12),
-      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: p.rule),
+      ),
+      textStyle: Hand.label.copyWith(color: p.ink),
+      elevation: 1,
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: ShapeDecoration(
-        color: p.ink,
-        shape: rough(41, 10).copyWith(side: BorderSide.none),
-      ),
-      textStyle: TextStyle(color: p.bg, fontFamily: handFont, fontSize: 15),
+      decoration: ShapeDecoration(color: p.ink, shape: pill),
+      textStyle: text.bodySmall?.copyWith(color: p.paper),
     ),
     tabBarTheme: TabBarThemeData(
       labelColor: p.ink,
-      unselectedLabelColor: p.muted,
-      dividerColor: p.hairline,
+      unselectedLabelColor: p.pencil,
+      dividerColor: p.rule,
       indicatorColor: p.ink,
-      labelStyle: text.labelLarge,
-      unselectedLabelStyle: text.labelLarge,
+      labelStyle: Hand.label,
+      unselectedLabelStyle: Hand.label,
     ),
     expansionTileTheme: ExpansionTileThemeData(
       shape: const Border(),
       collapsedShape: const Border(),
-      iconColor: p.muted,
-      collapsedIconColor: p.muted,
+      iconColor: p.pencil,
+      collapsedIconColor: p.pencil,
     ),
   );
 }

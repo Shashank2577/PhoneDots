@@ -8,8 +8,7 @@ import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/local_image.dart';
-import '../../widgets/sketch.dart';
-import '../../theme/rough.dart';
+import '../../widgets/hand.dart';
 
 /// Renders a skill's [UiCard] in the chat.
 class ResultCard extends StatelessWidget {
@@ -33,23 +32,27 @@ class ResultCard extends StatelessWidget {
       'file' => _FileCard(card.data),
       _ => _TextBlock(card.data),
     };
+    // Results sit on the paper under a hand-lettered head, closed by a hairline.
     return Panel(
-      seed: seedOf(card.title ?? card.type),
-      shadow: 3,
       margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (card.title != null && card.title!.isNotEmpty) ...[
-            Row(
-              children: [
-                Expanded(child: Text(card.title!.toUpperCase(), style: context.text.labelSmall)),
-                if (card.data['demo'] == true) const Tag('Demo data'),
-              ],
+          if (card.title != null && card.title!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      card.title!.toLowerCase(),
+                      style: Hand.title.copyWith(fontSize: 25, color: context.pal.ink),
+                    ),
+                  ),
+                  if (card.data['demo'] == true) const HandTag('demo data'),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-          ],
           body,
         ],
       ),
@@ -71,13 +74,12 @@ class _TextBlock extends StatelessWidget {
         if (data['copy'] == true)
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () {
+            child: HandLink(
+              'copy',
+              onTap: () {
                 Clipboard.setData(ClipboardData(text: text));
-                toast(context, 'Copied');
+                toast(context, 'copied');
               },
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy'),
             ),
           ),
       ],
@@ -184,20 +186,14 @@ class _ChecklistState extends State<_Checklist> {
                             padding: const EdgeInsets.all(6),
                             child: Dot(color: p.ink, size: 6),
                           )
-                        : SketchBox(
-                            seed: 500 + i,
-                            radius: 5,
-                            strokeWidth: 1.4,
-                            fill: done[i] ? p.note(2) : p.surface,
-                            child: SizedBox.square(
-                              dimension: 20,
-                              child: done[i]
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(2),
-                                      child: DrawnCheck(key: ValueKey('c$i'), size: 16, color: p.ink),
-                                    )
-                                  : null,
+                        : Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: p.ink, width: 1.6),
                             ),
+                            child: done[i] ? DrawnDoodle(Doodle.tick, key: ValueKey('c$i'), size: 18) : null,
                           ),
                   ),
                   const SizedBox(width: 10),
@@ -206,24 +202,18 @@ class _ChecklistState extends State<_Checklist> {
                       children: [
                         AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 250),
-                          style: context.text.bodyMedium!.copyWith(color: done[i] ? p.muted : p.ink),
+                          style: context.text.bodyMedium!.copyWith(color: done[i] ? p.pencil : p.ink),
                           child: Text(items[i]),
                         ),
                         // A pen line strikes the item through when ticked.
                         if (done[i])
                           Positioned.fill(
                             child: LayoutBuilder(
-                              builder: (_, c) => DrawnPath(
+                              builder: (_, c) => _StrikeThrough(
                                 key: ValueKey('s$i'),
-                                size: Size(c.maxWidth, c.maxHeight),
-                                color: p.danger.withValues(alpha: 0.8),
-                                width: 2,
-                                delay: const Duration(milliseconds: 150),
-                                builder: (sz) => Rough.line(
-                                  Offset(0, sz.height * 0.55),
-                                  Offset(min(sz.width, items[i].length * 8.5), sz.height * 0.5),
-                                  seed: i,
-                                ),
+                                width: min(c.maxWidth, items[i].length * 8.0),
+                                color: p.pencil,
+                                seed: i,
                               ),
                             ),
                           ),
@@ -340,13 +330,13 @@ class _Bars extends StatelessWidget {
                         tween: Tween(begin: 0, end: top == 0 ? 0 : values[i].abs() / top),
                         duration: Duration(milliseconds: 500 + 80 * i),
                         curve: Curves.easeOutBack,
-                        builder: (_, f, _) => SketchBox(
-                          seed: 600 + i,
-                          radius: 4,
-                          strokeWidth: 1.3,
-                          fill: p.note(i),
-                          hatch: p.ink.withValues(alpha: 0.35),
-                          child: SizedBox(height: 16, width: max(6, c.maxWidth * f)),
+                        builder: (_, f, _) => Container(
+                          height: 12,
+                          width: max(4, c.maxWidth * f),
+                          decoration: BoxDecoration(
+                            color: i == values.indexOf(values.reduce(max)) ? p.marker : p.ink,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
                       ),
                     ),
@@ -432,11 +422,7 @@ class _FileCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              data['kind'] == 'audio' ? Icons.graphic_eq_rounded : Icons.description_outlined,
-              size: 18,
-              color: p.muted,
-            ),
+            DoodleIcon(data['kind'] == 'audio' ? Doodle.wave : Doodle.doc, size: 18, color: p.pencil),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -453,7 +439,7 @@ class _FileCard extends StatelessWidget {
             width: double.infinity,
             constraints: const BoxConstraints(maxHeight: 140),
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: p.smudge, borderRadius: BorderRadius.circular(radius)),
             child: SingleChildScrollView(
               child: Text(
                 preview,
@@ -463,17 +449,56 @@ class _FileCard extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () {
+            child: HandLink(
+              'copy',
+              onTap: () {
                 Clipboard.setData(ClipboardData(text: preview));
-                toast(context, 'Copied');
+                toast(context, 'copied');
               },
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy'),
             ),
           ),
         ],
       ],
     );
   }
+}
+
+/// A pencil line that draws itself through a ticked item.
+class _StrikeThrough extends StatelessWidget {
+  const _StrikeThrough({super.key, required this.width, required this.color, required this.seed});
+  final double width;
+  final Color color;
+  final int seed;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: const Duration(milliseconds: 320),
+    curve: Curves.easeOutCubic,
+    builder: (_, t, _) => CustomPaint(painter: _StrikePainter(width * t, color, seed)),
+  );
+}
+
+class _StrikePainter extends CustomPainter {
+  _StrikePainter(this.width, this.color, this.seed);
+  final double width;
+  final Color color;
+  final int seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (width <= 0) return;
+    final y = size.height * 0.55;
+    canvas.drawPath(
+      handLinePath(Offset(0, y), Offset(width, y - 1), seed),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_StrikePainter o) => o.width != width;
 }

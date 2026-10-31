@@ -10,9 +10,9 @@ import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/hand.dart';
 import '../../widgets/local_image.dart';
 import '../../widgets/rich_text.dart';
-import '../../widgets/sketch.dart';
 import 'cards.dart';
 
 class MessageView extends StatelessWidget {
@@ -27,6 +27,7 @@ class MessageView extends StatelessWidget {
   Widget build(BuildContext context) => message.isUser ? _UserMessage(message) : _AssistantMessage(this);
 }
 
+/// An attachment: photos are small tilted snapshots, files are pills.
 class AttachmentChip extends StatelessWidget {
   const AttachmentChip(this.a, {super.key, this.onRemove});
   final Attachment a;
@@ -35,56 +36,52 @@ class AttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
+    final remove = onRemove == null ? null : DoodleButton(Doodle.close, tooltip: 'Remove', size: 16, onTap: onRemove);
     if (a.kind == 'image') {
       return Stack(
+        clipBehavior: Clip.none,
         children: [
-          ClipRRect(borderRadius: BorderRadius.circular(10), child: localImage(a.path, width: 64, height: 64)),
-          if (onRemove != null) Positioned(right: 2, top: 2, child: _RemoveButton(onRemove!)),
+          Transform.rotate(
+            angle: -0.035,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: p.paper,
+                borderRadius: BorderRadius.circular(2),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 2, offset: const Offset(0, 1)),
+                ],
+              ),
+              child: localImage(a.path, width: 64, height: 64),
+            ),
+          ),
+          if (remove != null) Positioned(right: -18, top: -18, child: remove),
         ],
       );
     }
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border.all(color: p.hairline),
-        borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.fromLTRB(12, 4, 2, 4),
+      decoration: ShapeDecoration(
+        shape: StadiumBorder(side: BorderSide(color: p.rule, width: 1.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(a.kind == 'audio' ? Icons.graphic_eq_rounded : Icons.description_outlined, size: 16, color: p.muted),
+          DoodleIcon(a.kind == 'audio' ? Doodle.wave : Doodle.doc, size: 16, color: p.pencil),
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 150),
             child: Text(
               a.name,
-              style: context.text.bodySmall?.copyWith(color: p.ink),
+              style: Hand.small.copyWith(color: p.ink),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 4),
-          if (onRemove != null) _RemoveButton(onRemove!) else const SizedBox(width: 4),
+          if (remove != null) SizedBox(height: 32, child: remove) else const SizedBox(width: 10),
         ],
       ),
     );
   }
-}
-
-class _RemoveButton extends StatelessWidget {
-  const _RemoveButton(this.onTap);
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    customBorder: const CircleBorder(),
-    child: Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(color: context.pal.ink.withValues(alpha: 0.7), shape: BoxShape.circle),
-      child: Icon(Icons.close_rounded, size: 12, color: context.pal.bg),
-    ),
-  );
 }
 
 class _UserMessage extends StatelessWidget {
@@ -95,27 +92,24 @@ class _UserMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(56, 12, 16, 4),
+      padding: const EdgeInsets.only(left: 48, top: 14, bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (m.attachments.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 alignment: WrapAlignment.end,
                 children: [for (final a in m.attachments) AttachmentChip(a)],
               ),
             ),
           if (m.text.isNotEmpty)
-            Transform.rotate(
-              angle: -0.012,
-              child: SketchBox(
-                seed: seedOf(m.id),
-                fill: p.note(0),
-                radius: 16,
+            DecoratedBox(
+              decoration: BoxDecoration(color: p.smudge, borderRadius: BorderRadius.circular(18)),
+              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: SelectableText(m.text, style: context.text.bodyLarge),
               ),
@@ -136,7 +130,7 @@ class _AssistantMessage extends StatelessWidget {
     final p = context.pal;
     final waiting = m.streaming && m.text.isEmpty && m.steps.isEmpty && m.thinking.isEmpty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.only(top: 14, bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -150,17 +144,24 @@ class _AssistantMessage extends StatelessWidget {
             ),
           for (final c in m.cards) ResultCard(c),
           if (m.error != null)
-            Panel(
-              margin: const EdgeInsets.only(top: 8),
-              color: p.danger.withValues(alpha: 0.06),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(m.error!, style: context.text.bodyMedium),
-                  if (m.error!.contains('Models') && v.onOpenModels != null) ...[
-                    const SizedBox(height: 10),
-                    FilledButton(onPressed: v.onOpenModels, child: const Text('Open Models')),
-                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DoodleIcon(Doodle.exclaim, size: 22, color: p.redPen, stroke: 2.6),
+                      const SizedBox(width: 6),
+                      Expanded(child: Body(m.error!)),
+                    ],
+                  ),
+                  if (m.error!.contains('Models') && v.onOpenModels != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: InkButton('open models', trailing: Doodle.arrow, onTap: v.onOpenModels),
+                    ),
                 ],
               ),
             ),
@@ -178,45 +179,29 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = v.message;
-    final p = context.pal;
     final demo = AppScope.services(context).isDemo;
     final model = m.modelId == null ? null : modelById(m.modelId!);
     final tps = demo ? 0 : m.stats?.effectiveTokensPerSec ?? 0;
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        children: [
-          if (demo)
-            Text('Demo engine', style: context.text.bodySmall?.copyWith(color: p.faint))
-          else if (model != null) ...[
-            Text(model.name, style: context.text.bodySmall?.copyWith(color: p.faint)),
-            if (tps > 0)
-              Text(' · ${tps.toStringAsFixed(1)} tok/s', style: context.text.bodySmall?.copyWith(color: p.faint)),
-          ],
-          const Spacer(),
-          if (m.text.isNotEmpty)
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 16,
-              color: p.muted,
-              tooltip: 'Copy',
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: m.text));
-                toast(context, 'Copied');
-              },
-              icon: const Icon(Icons.copy_rounded),
-            ),
-          if (v.isLast && v.onRetry != null)
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 16,
-              color: p.muted,
-              tooltip: 'Retry',
-              onPressed: v.onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-        ],
-      ),
+    final who = demo ? 'demo engine' : model?.name.toLowerCase();
+    return Row(
+      children: [
+        if (who != null)
+          Meta('$who${tps > 0 ? ' · ${tps.toStringAsFixed(1)} tok/s' : ''}', color: context.pal.graphite),
+        const Spacer(),
+        if (m.text.isNotEmpty)
+          DoodleButton(
+            Doodle.share,
+            tooltip: 'Copy',
+            size: 18,
+            color: context.pal.pencil,
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: m.text));
+              toast(context, 'copied');
+            },
+          ),
+        if (v.isLast && v.onRetry != null)
+          DoodleButton(Doodle.curl, tooltip: 'Try again', size: 18, color: context.pal.pencil, onTap: v.onRetry),
+      ],
     );
   }
 }
@@ -226,32 +211,21 @@ class _Thinking extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) {
-    final p = context.pal;
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        title: Text('Thinking', style: context.text.labelMedium),
-        leading: Icon(Icons.blur_on_rounded, size: 16, color: p.muted),
-        childrenPadding: const EdgeInsets.only(left: 8, bottom: 8),
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: p.hairline, width: 2)),
-            ),
-            padding: const EdgeInsets.only(left: 10),
-            child: Text(text, style: context.text.bodySmall),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Theme(
+    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+    child: ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      title: Text('thinking', style: Hand.small.copyWith(color: context.pal.pencil)),
+      leading: DoodleIcon(Doodle.squiggle, size: 18, color: context.pal.pencil),
+      childrenPadding: const EdgeInsets.only(left: 8, bottom: 8),
+      children: [Meta(text)],
+    ),
+  );
 }
 
-/// One skill call: status dot, name, timing; tap to see inputs and output.
+/// One skill call, pencilled into the reply: a drawn tick when done.
 class StepTile extends StatelessWidget {
   const StepTile(this.step, {super.key});
   final AgentStep step;
@@ -260,45 +234,37 @@ class StepTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final label = switch (step.status) {
-      StepStatus.running => step.progress ?? 'Working…',
+      StepStatus.running => step.progress ?? 'working…',
       StepStatus.done => formatMs(step.ms),
-      StepStatus.failed => '${step.result['error'] ?? 'Failed'}',
-      StepStatus.declined => 'Declined',
+      StepStatus.failed => '${step.result['error'] ?? 'failed'}',
+      StepStatus.declined => 'you said no',
     };
     final marker = switch (step.status) {
       StepStatus.running => const Scribbling(size: 16),
-      StepStatus.done => const DrawnCheck(size: 16),
-      StepStatus.failed => Icon(Icons.close_rounded, size: 16, color: p.danger),
-      StepStatus.declined => Icon(Icons.block_rounded, size: 15, color: p.faint),
+      StepStatus.done => const DrawnDoodle(Doodle.tick, size: 18),
+      StepStatus.failed => DoodleIcon(Doodle.close, size: 16, color: p.redPen),
+      StepStatus.declined => DoodleIcon(Doodle.close, size: 16, color: p.graphite),
     };
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Pressable(
-        onTap: () => _showDetails(context),
-        scale: 0.97,
-        child: SketchBox(
-          seed: seedOf(step.skillId),
-          radius: 10,
-          strokeWidth: 1.2,
-          stroke: p.faint,
-          fill: step.status == StepStatus.running ? p.note(0).withValues(alpha: 0.6) : p.surface.withValues(alpha: 0.7),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            children: [
-              AnimatedSwitcher(
+    return Pressable(
+      onTap: () => _showDetails(context),
+      scale: 0.98,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                child: SizedBox(key: ValueKey(step.status), width: 18, child: marker),
+                child: KeyedSubtree(key: ValueKey(step.status), child: marker),
               ),
-              const SizedBox(width: 8),
-              Text(step.skillName, style: context.text.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-              if (step.via == 'router') ...[const SizedBox(width: 6), Tag('fast path', color: p.dot, filled: true)],
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(label, style: context.text.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
-              ),
-              Icon(Icons.chevron_right_rounded, size: 16, color: p.faint),
-            ],
-          ),
+            ),
+            const SizedBox(width: 6),
+            Text(step.skillName.toLowerCase(), style: Hand.label.copyWith(color: p.ink)),
+            if (step.via == 'router') ...[const SizedBox(width: 8), const HandTag('fast path')],
+            const SizedBox(width: 8),
+            Expanded(child: Meta(label, maxLines: 2, color: step.status == StepStatus.failed ? p.redPen : null)),
+          ],
         ),
       ),
     );
@@ -314,17 +280,15 @@ class StepTile extends StatelessWidget {
         initialChildSize: 0.6,
         builder: (_, controller) => ListView(
           controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 32),
           children: [
-            Text(step.skillName, style: context.text.titleLarge),
-            const SizedBox(height: 4),
-            Text(
+            PageIntro(
+              step.skillName.toLowerCase(),
               '${step.skillId} · via ${step.via} · ${formatMs(step.ms)} · ${step.status.name}',
-              style: context.text.bodySmall,
             ),
-            const SectionLabel('Input', padding: EdgeInsets.only(top: 20, bottom: 8)),
+            const SectionHead('what went in', padding: EdgeInsets.only(bottom: 6)),
             _Code(enc.convert(step.args)),
-            const SectionLabel('Output', padding: EdgeInsets.only(top: 20, bottom: 8)),
+            const SectionHead('what came out'),
             _Code(enc.convert(step.result)),
           ],
         ),
@@ -341,10 +305,10 @@ class _Code extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+    decoration: BoxDecoration(color: context.pal.smudge, borderRadius: BorderRadius.circular(radius)),
     child: SelectableText(
       text,
-      style: context.text.bodySmall?.copyWith(fontFamily: 'monospace', color: context.pal.ink),
+      style: const TextStyle(fontFamily: 'monospace', fontSize: 12).copyWith(color: context.pal.ink),
     ),
   );
 }

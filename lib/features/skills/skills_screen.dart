@@ -7,7 +7,7 @@ import '../../skills/recipes/recipe.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
-import '../../widgets/sketch.dart';
+import '../../widgets/hand.dart';
 import '../chat/attach.dart';
 import 'recipe_editor.dart';
 
@@ -22,15 +22,15 @@ const categoryLabels = {
   SkillCategory.community: 'Community',
 };
 
-IconData categoryIcon(SkillCategory c) => switch (c) {
-  SkillCategory.audio => Icons.graphic_eq_rounded,
-  SkillCategory.vision => Icons.photo_camera_outlined,
-  SkillCategory.text => Icons.edit_note_rounded,
-  SkillCategory.phone => Icons.smartphone_rounded,
-  SkillCategory.knowledge => Icons.auto_stories_outlined,
-  SkillCategory.output => Icons.dashboard_outlined,
-  SkillCategory.recipes => Icons.account_tree_outlined,
-  SkillCategory.community => Icons.public_rounded,
+Doodle categoryDoodle(SkillCategory c) => switch (c) {
+  SkillCategory.audio => Doodle.wave,
+  SkillCategory.vision => Doodle.camera,
+  SkillCategory.text => Doodle.pen,
+  SkillCategory.phone => Doodle.phone,
+  SkillCategory.knowledge => Doodle.book,
+  SkillCategory.output => Doodle.squiggle,
+  SkillCategory.recipes => Doodle.curl,
+  SkillCategory.community => Doodle.people,
 };
 
 class SkillsScreen extends StatefulWidget {
@@ -47,36 +47,49 @@ class _SkillsScreenState extends State<SkillsScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
-    return DoodlePage(
-      title: 'Skills',
-      bottom: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<int>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 0, label: Text('Skills')),
-              ButtonSegment(value: 1, label: Text('Recipes')),
-              ButtonSegment(value: 2, label: Text('Community')),
-            ],
-            selected: {_segment},
-            onSelectionChanged: (v) => setState(() => _segment = v.first),
-          ),
-        ),
-      ),
+    return HandPage(
+      wordmark: true,
       body: ListenableBuilder(
         listenable: Listenable.merge([s.skills, s.settings, s.models]),
-        builder: (context, _) => AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          child: KeyedSubtree(
-            key: ValueKey(_segment),
-            child: switch (_segment) {
-              0 => _skillList(context),
-              1 => const _Recipes(),
-              _ => const _Community(),
-            },
-          ),
+        builder: (context, _) => ListView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            Column0(
+              child: PageIntro(
+                'skills',
+                switch (_segment) {
+                  0 => 'Everything the assistant can do. Switch any of them off, or tap one to try it.',
+                  1 => 'Recipes chain skills into one tap. The assistant can run them by name too.',
+                  _ => 'Skills other people wrote, as plain JSON. They can\'t run code.',
+                },
+                mark: _segment == 0 ? '${s.skills.enabled.length}' : null,
+                doodle: Doodle.spark,
+              ),
+            ),
+            Column0(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (i, label) in ['skills', 'recipes', 'community'].indexed)
+                    ChoicePill(label, selected: _segment == i, onTap: () => setState(() => _segment = i)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: KeyedSubtree(
+                key: ValueKey(_segment),
+                child: switch (_segment) {
+                  0 => _skillList(context),
+                  1 => const _Recipes(),
+                  _ => const _Community(),
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -93,25 +106,31 @@ class _SkillsScreenState extends State<SkillsScreen> {
     for (final k in skills) {
       groups.putIfAbsent(k.category, () => []).add(k);
     }
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+    return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: TextField(
-            onChanged: (v) => setState(() => _query = v),
-            decoration: const InputDecoration(
-              hintText: 'Search skills',
-              prefixIcon: Icon(Icons.search_rounded, size: 20),
+        Column0(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TextField(
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'search every skill…',
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: DoodleIcon(Doodle.search, size: 20, color: context.pal.pencil),
+                ),
+              ),
             ),
           ),
         ),
         for (final e in groups.entries) ...[
-          SectionLabel('${categoryLabels[e.key]} · ${e.value.length}'),
+          Column0(child: SectionHead(categoryLabels[e.key]!.toLowerCase(), note: '${e.value.length}')),
           for (var i = 0; i < e.value.length; i++)
-            Enter(
-              index: i,
-              child: SkillTile(skill: e.value[i]),
+            Column0(
+              child: Enter(
+                index: i,
+                child: SkillTile(skill: e.value[i]),
+              ),
             ),
         ],
       ],
@@ -128,17 +147,42 @@ class SkillTile extends StatelessWidget {
     final s = AppScope.services(context);
     final p = context.pal;
     final missing = skill.requiresModels.where((m) => !s.models.isReady(m)).toList();
-    return ListTile(
-      leading: Icon(categoryIcon(skill.category), size: 20, color: p.muted),
-      title: Text(skill.name),
-      subtitle: Text(
-        missing.isEmpty ? skill.description : 'Needs ${missing.map((m) => modelById(m)?.name ?? m).join(', ')}',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: missing.isEmpty ? null : context.text.bodySmall?.copyWith(color: p.warn),
-      ),
-      trailing: SketchSwitch(value: s.skills.isEnabled(skill), onChanged: (v) => s.skills.setEnabled(skill, v)),
+    return Pressable(
       onTap: () => showSkillSheet(context, skill),
+      scale: 0.985,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            DoodleIcon(categoryDoodle(skill.category), color: p.pencil),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(skill.name.toLowerCase(), style: Hand.label.copyWith(fontSize: 23, color: p.ink)),
+                      ),
+                      const SizedBox(width: 6),
+                      DoodleIcon(Doodle.arrow, size: 16, color: p.graphite),
+                    ],
+                  ),
+                  Meta(
+                    missing.isEmpty
+                        ? skill.description
+                        : 'needs ${missing.map((m) => modelById(m)?.name ?? m).join(', ')}',
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            HandSwitch(value: s.skills.isEnabled(skill), onChanged: (v) => s.skills.setEnabled(skill, v)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -214,60 +258,59 @@ class _SkillDetailState extends State<_SkillDetail> {
     final p = context.pal;
     return ListView(
       controller: widget.scroll,
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 32),
       children: [
-        Row(
-          children: [
-            Icon(categoryIcon(k.category), size: 22),
-            const SizedBox(width: 10),
-            Expanded(child: Text(k.name, style: context.text.titleLarge)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(k.description, style: context.text.bodyMedium?.copyWith(color: p.muted)),
-        const SizedBox(height: 12),
+        PageIntro(k.name.toLowerCase(), k.description, doodle: categoryDoodle(k.category)),
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
-            Tag(k.id, icon: Icons.code_rounded),
-            Tag(switch (k.confirm) {
-              ConfirmPolicy.never => 'Runs without asking',
-              ConfirmPolicy.firstTime => 'Asks once',
-              ConfirmPolicy.always => 'Asks every time',
+            HandTag(k.id),
+            HandTag(switch (k.confirm) {
+              ConfirmPolicy.never => 'runs without asking',
+              ConfirmPolicy.firstTime => 'asks once',
+              ConfirmPolicy.always => 'asks every time',
             }),
-            if (k.platforms.isNotEmpty) Tag('${k.platforms.join(', ')} only'),
+            if (k.platforms.isNotEmpty) HandTag('${k.platforms.join(', ')} only'),
           ],
         ),
         if (k.requiresModels.isNotEmpty) ...[
-          const SectionLabel('Models', padding: EdgeInsets.only(top: 20, bottom: 6)),
+          const SectionHead('models it uses'),
           for (final id in k.requiresModels)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Dot(color: s.models.isReady(id) ? p.dot : p.faint),
+                  if (s.models.isReady(id))
+                    const DoodleIcon(Doodle.tick, size: 18)
+                  else
+                    DoodleIcon(Doodle.close, size: 16, color: p.graphite),
                   const SizedBox(width: 10),
-                  Expanded(child: Text(modelById(id)?.name ?? id)),
-                  Text(s.models.isReady(id) ? 'Ready' : 'Not downloaded', style: context.text.bodySmall),
+                  Expanded(
+                    child: Text((modelById(id)?.name ?? id).toLowerCase(), style: Hand.label.copyWith(color: p.ink)),
+                  ),
+                  Meta(s.models.isReady(id) ? 'on this phone' : 'not downloaded yet'),
                 ],
               ),
             ),
         ],
         if (k.examples.isNotEmpty) ...[
-          const SectionLabel('Say', padding: EdgeInsets.only(top: 20, bottom: 6)),
-          for (final e in k.examples) Text('“$e”', style: context.text.bodyMedium),
+          const SectionHead('say'),
+          for (final e in k.examples) Body('“$e”', color: p.pencil),
         ],
         if (k.params.isNotEmpty) ...[
-          const SectionLabel('Try it', padding: EdgeInsets.only(top: 20, bottom: 8)),
+          const SectionHead('try it'),
           for (final param in k.params)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: param.type == ParamType.attachment
-                  ? OutlinedButton.icon(
-                      onPressed: () => _pick(param),
-                      icon: Icon(_attachments.isEmpty ? Icons.attach_file_rounded : Icons.check_rounded, size: 18),
-                      label: Text(_attachments.isEmpty ? 'Attach ${param.name}' : _attachments.last.name),
+                  ? Align(
+                      alignment: Alignment.centerLeft,
+                      child: PillButton(
+                        _attachments.isEmpty ? 'attach ${param.name}' : _attachments.last.name,
+                        leading: _attachments.isEmpty ? Doodle.clip : Doodle.tick,
+                        onTap: () => _pick(param),
+                      ),
                     )
                   : TextField(
                       controller: _field(param.name),
@@ -276,15 +319,15 @@ class _SkillDetailState extends State<_SkillDetail> {
                           ? TextInputType.number
                           : null,
                       decoration: InputDecoration(
-                        labelText: '${param.name}${param.required ? '' : ' (optional)'}',
+                        hintText: '${param.name}${param.required ? '' : ' (optional)'}',
                         helperText: param.description,
                         helperMaxLines: 2,
                       ),
                     ),
             ),
         ],
-        const SizedBox(height: 12),
-        FilledButton(onPressed: _run, child: const Text('Run in chat')),
+        const SizedBox(height: 16),
+        InkButton('run it in chat', trailing: Doodle.arrow, expand: true, onTap: _run),
       ],
     );
   }
@@ -297,69 +340,57 @@ class _Recipes extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
     final p = context.pal;
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          child: Text(
-            'Recipes chain skills into one tap. The agent can also run them by name.',
-            style: context.text.bodyMedium?.copyWith(color: p.muted),
+        Column0(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: PillButton(
+                'new recipe',
+                leading: Doodle.plus,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const RecipeEditor())),
+              ),
+            ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const RecipeEditor())),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('New recipe'),
-          ),
-        ),
-        const SectionLabel('Your recipes'),
-        for (final r in s.skills.recipes)
-          Panel(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            onTap: () => showSkillSheet(context, RecipeSkill(r)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(r.name, style: context.text.titleMedium)),
-                    if (r.builtIn) const Tag('Built in'),
-                    if (!r.builtIn)
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_horiz_rounded, size: 20),
-                        onSelected: (v) {
-                          if (v == 'edit') {
-                            Navigator.of(context)
-                                .push(MaterialPageRoute<void>(builder: (_) => RecipeEditor(recipe: r)));
-                          } else {
-                            s.skills.deleteRecipe(r);
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Edit')),
-                          PopupMenuItem(value: 'delete', child: Text('Delete')),
-                        ],
-                      ),
-                  ],
+        for (final (i, r) in s.skills.recipes.indexed)
+          Column0(
+            child: Enter(
+              index: i,
+              child: Panel(
+                child: Door(
+                  r.name.toLowerCase(),
+                  style: Hand.label.copyWith(fontSize: 25),
+                  meta:
+                      '${r.description}\n${[for (final st in r.steps) (s.skills.byId(st.skillId)?.name ?? st.skillId).toLowerCase()].join('  →  ')}',
+                  onTap: () => showSkillSheet(context, RecipeSkill(r)),
+                  trailing: r.builtIn
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DoodleButton(
+                              Doodle.pen,
+                              tooltip: 'Edit',
+                              size: 20,
+                              onTap: () =>
+                                  Navigator.of(context)
+                                      .push(MaterialPageRoute<void>(builder: (_) => RecipeEditor(recipe: r))),
+                            ),
+                            DoodleButton(
+                              Doodle.trash,
+                              tooltip: 'Delete',
+                              size: 20,
+                              color: p.redPen,
+                              onTap: () => s.skills.deleteRecipe(r),
+                            ),
+                          ],
+                        ),
                 ),
-                const SizedBox(height: 4),
-                Text(r.description, style: context.text.bodySmall),
-                const SizedBox(height: 12),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 4,
-                  runSpacing: 6,
-                  children: [
-                    for (var i = 0; i < r.steps.length; i++) ...[
-                      Tag(s.skills.byId(r.steps[i].skillId)?.name ?? r.steps[i].skillId),
-                      if (i < r.steps.length - 1) Icon(Icons.arrow_forward_rounded, size: 14, color: p.faint),
-                    ],
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
       ],
@@ -423,60 +454,57 @@ class _CommunityState extends State<_Community> {
         .map(CommunitySkill.parse)
         .where((c) => !installed.any((i) => i.id == c.id))
         .toList();
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _url,
-                  keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(hintText: 'https://…/skill.json'),
+        Column0(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _url,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(hintText: 'https://…/skill.json'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _loading ? null : _fetch,
-                child: _loading
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Add'),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-          child: Text(
-            'Community skills are JSON: a prompt or a chain of existing skills. They cannot run code.',
-            style: context.text.bodySmall,
+                const SizedBox(width: 10),
+                PillButton(_loading ? 'checking…' : 'add', onTap: _loading ? null : _fetch),
+              ],
+            ),
           ),
         ),
         if (installed.isNotEmpty) ...[
-          const SectionLabel('Installed'),
+          const Column0(child: SectionHead('installed')),
           for (final c in installed)
-            ListTile(
-              leading: const Icon(Icons.extension_outlined, size: 20),
-              title: Text(c.name),
-              subtitle: Text('${c.description}\nby ${c.author}', maxLines: 3),
-              isThreeLine: true,
-              onTap: () => showSkillSheet(context, c),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () => s.skills.uninstall(c),
+            Column0(
+              child: Door(
+                c.name.toLowerCase(),
+                style: Hand.label.copyWith(fontSize: 25),
+                meta: '${c.description} · by ${c.author}',
+                onTap: () => showSkillSheet(context, c),
+                trailing: DoodleButton(
+                  Doodle.trash,
+                  tooltip: 'Remove',
+                  size: 20,
+                  color: context.pal.redPen,
+                  onTap: () => s.skills.uninstall(c),
+                ),
               ),
             ),
         ],
         if (featured.isNotEmpty) ...[
-          const SectionLabel('Featured'),
+          const Column0(child: SectionHead('worth trying')),
           for (final c in featured)
-            ListTile(
-              leading: const Icon(Icons.extension_outlined, size: 20),
-              title: Text(c.name),
-              subtitle: Text(c.description),
-              trailing: OutlinedButton(onPressed: () => _review(c), child: const Text('Install')),
+            Column0(
+              child: Door(
+                c.name.toLowerCase(),
+                style: Hand.label.copyWith(fontSize: 25),
+                meta: c.description,
+                onTap: () => _review(c),
+                trailing: PillButton('install', onTap: () => _review(c)),
+              ),
             ),
         ],
       ],

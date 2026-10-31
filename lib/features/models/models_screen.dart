@@ -7,7 +7,7 @@ import '../../core/models/model_spec.dart';
 import '../../core/util/format.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
-import '../../widgets/sketch.dart';
+import '../../widgets/hand.dart';
 
 class ModelsScreen extends StatelessWidget {
   const ModelsScreen({super.key});
@@ -15,9 +15,8 @@ class ModelsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
-    final p = context.pal;
-    return DoodlePage(
-      title: 'Models',
+    return HandPage(
+      wordmark: true,
       body: ListenableBuilder(
         listenable: Listenable.merge([s.models, s.settings]),
         builder: (context, _) {
@@ -25,46 +24,84 @@ class ModelsScreen extends StatelessWidget {
           final visible = m.visibleModels;
           final brains = visible.where((x) => x.provider == ModelProvider.gemma).toList();
           final specialists = visible.where((x) => x.provider == ModelProvider.desertAnt).toList();
-          final ready = visible.where((x) => m.isReady(x.id)).length;
+          final missing = visible.where((x) => !m.isReady(x.id) && x.recommended).toList();
+          final used = formatBytes(m.storageUsed);
           return ListView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
             padding: const EdgeInsets.only(bottom: 32),
             children: [
-              Panel(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              Column0(
+                child: PageIntro(
+                  'the models',
+                  'The AI behind PhoneDots. Each one is downloaded once, then runs on this phone\'s own chip. '
+                      'Your words, photos and voice never go to the internet.',
+                  doodle: Doodle.spark,
+                ),
+              ),
+              Column0(
                 child: Row(
                   children: [
-                    _Stat(label: 'On device', value: '$ready / ${visible.length}'),
-                    _Stat(label: 'Storage', value: formatBytes(m.storageUsed)),
-                    _Stat(
-                      label: 'Memory',
-                      value: m.device.totalRamMb == 0 ? '—' : '${(m.device.totalRamMb / 1024).toStringAsFixed(0)} GB',
-                    ),
+                    MarkedText('$used on this phone', mark: used, style: Hand.label.copyWith(fontSize: 22)),
+                    const Spacer(),
+                    if (m.device.totalRamMb > 0) Meta('${(m.device.totalRamMb / 1024).toStringAsFixed(0)} GB memory'),
                   ],
                 ),
               ),
+              if (missing.isNotEmpty)
+                Column0(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: PillButton(
+                        'download the ${missing.length} recommended',
+                        leading: Doodle.arrow,
+                        onTap: () {
+                          for (final x in missing) {
+                            if (m.fits(x)) m.download(x.id);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
               if (m.loadError != null)
-                Panel(
-                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  color: p.danger.withValues(alpha: 0.06),
-                  child: Text(m.loadError!, style: context.text.bodySmall?.copyWith(color: p.ink)),
+                Column0(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DoodleIcon(Doodle.exclaim, size: 20, color: context.pal.redPen, stroke: 2.6),
+                        const SizedBox(width: 6),
+                        Expanded(child: Body(m.loadError!)),
+                      ],
+                    ),
+                  ),
                 ),
-              const SectionLabel('Gemma · the brain'),
-              for (final spec in brains) ModelTile(spec: spec, services: s),
-              const SectionLabel('Desert Ant · the specialists'),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text(
-                  'Small models that each do one job very well. Skills download them when first needed.',
-                  style: context.text.bodySmall,
+              const Column0(child: SectionHead('gemma · the brain', note: 'talks, plans, sees')),
+              for (final (i, spec) in brains.indexed)
+                Column0(
+                  child: Enter(
+                    index: i,
+                    child: ModelTile(spec: spec, services: s),
+                  ),
                 ),
-              ),
-              for (final spec in specialists) ModelTile(spec: spec, services: s),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Text(
-                  'Downloads are the only time PhoneDots uses the network. Gemma files come from Hugging Face (litert-community) '
-                  'and are checked against their SHA-256 before use.',
-                  style: context.text.bodySmall,
+              const Column0(child: SectionHead('desert ant · the specialists', note: 'one job each')),
+              for (final (i, spec) in specialists.indexed)
+                Column0(
+                  child: Enter(
+                    index: i,
+                    child: ModelTile(spec: spec, services: s),
+                  ),
+                ),
+              const Column0(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 16),
+                  child: Meta(
+                    'Downloads are the only time PhoneDots uses the network. Gemma files come from Hugging Face '
+                    '(litert-community) and are checked against their SHA-256 before use.',
+                  ),
                 ),
               ),
             ],
@@ -75,24 +112,7 @@ class ModelsScreen extends StatelessWidget {
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(value, style: context.text.titleLarge),
-        const SizedBox(height: 2),
-        Text(label, style: context.text.bodySmall),
-      ],
-    ),
-  );
-}
-
+/// One model as a line on the page: "voz · 470 MB", what it does, and its state.
 class ModelTile extends StatelessWidget {
   const ModelTile({super.key, required this.spec, required this.services});
   final ModelSpec spec;
@@ -105,58 +125,70 @@ class ModelTile extends StatelessWidget {
     final st = m.state(spec.id);
     final settings = services.settings;
     final role = switch (spec.role) {
-      ModelRole.planner when settings.plannerId == spec.id => 'Brain',
-      ModelRole.router when settings.routerId == spec.id => 'Router',
-      ModelRole.embedder when settings.embedderId == spec.id => 'Search',
+      ModelRole.planner when settings.plannerId == spec.id => 'brain',
+      ModelRole.router when settings.routerId == spec.id => 'router',
+      ModelRole.embedder when settings.embedderId == spec.id => 'search',
       _ => null,
     };
-    final loaded = m.loadedPlanner == spec.id || m.loadedRouter == spec.id;
-    return Panel(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    final size = '${spec.provider == ModelProvider.desertAnt ? '~' : ''}${formatBytes(spec.approxBytes)}';
+    final notes = [
+      if (spec.has(ModelCapability.image)) 'sees',
+      if (spec.has(ModelCapability.audio)) 'hears',
+      if (spec.has(ModelCapability.tools)) 'uses tools',
+      if (spec.has(ModelCapability.thinking)) 'thinks',
+      if (!m.fits(spec)) 'needs ${(spec.minRamMb / 1000).round()} GB memory',
+      if (spec.beta) 'beta',
+    ];
+    final status = switch (st.status) {
+      ModelStatus.ready => 'on this phone',
+      ModelStatus.downloading => 'downloading ${(st.progress * 100).round()}%',
+      ModelStatus.failed => st.error ?? 'download failed',
+      ModelStatus.absent => 'not downloaded yet',
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Dot(
-                color: loaded
-                    ? p.dot
-                    : st.status == ModelStatus.ready
-                    ? p.ink
-                    : p.hairline,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${spec.name.toLowerCase()} · $size',
+                            style: Hand.label.copyWith(fontSize: 23, color: p.ink),
+                          ),
+                        ),
+                        if (role != null) ...[const SizedBox(width: 8), HandTag(role, marked: true)],
+                      ],
+                    ),
+                    Meta(spec.summary),
+                    if (notes.isNotEmpty) Meta(notes.join(' · '), color: p.graphite),
+                    Meta(status, color: st.status == ModelStatus.failed ? p.redPen : p.pencil),
+                  ],
+                ),
               ),
-              const SizedBox(width: 10),
-              Expanded(child: Text(spec.name, style: context.text.titleMedium)),
-              if (role != null) Tag(role, color: p.ink, filled: true),
+              const SizedBox(width: 12),
+              _Action(spec: spec, services: services, state: st),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(spec.summary, style: context.text.bodySmall),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              Tag('${spec.provider == ModelProvider.desertAnt ? '≈ ' : ''}${formatBytes(spec.approxBytes)}'),
-              if (spec.recommended) Tag('Recommended', color: p.dot, filled: true),
-              if (spec.has(ModelCapability.image)) const Tag('Vision'),
-              if (spec.has(ModelCapability.audio)) const Tag('Audio'),
-              if (spec.has(ModelCapability.tools)) const Tag('Tools'),
-              if (spec.has(ModelCapability.thinking)) const Tag('Thinking'),
-              if (spec.beta) Tag('Beta', color: p.warn, filled: true),
-              if (!m.fits(spec)) Tag('Needs ${(spec.minRamMb / 1000).round()} GB RAM', color: p.warn, filled: true),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _Actions(spec: spec, services: services, state: st),
+          if (st.status == ModelStatus.downloading)
+            Padding(padding: const EdgeInsets.only(top: 8), child: HandProgress(st.progress == 0 ? null : st.progress)),
+          const HandDivider(padding: EdgeInsets.only(top: 12)),
         ],
       ),
     );
   }
 }
 
-class _Actions extends StatelessWidget {
-  const _Actions({required this.spec, required this.services, required this.state});
+class _Action extends StatelessWidget {
+  const _Action({required this.spec, required this.services, required this.state});
   final ModelSpec spec;
   final AppServices services;
   final ModelState state;
@@ -167,17 +199,13 @@ class _Actions extends StatelessWidget {
     final p = context.pal;
     switch (state.status) {
       case ModelStatus.downloading:
-        return Row(
-          children: [
-            Expanded(child: SketchProgress(value: state.progress == 0 ? null : state.progress)),
-            const SizedBox(width: 12),
-            Text('${(state.progress * 100).round()}%', style: context.text.bodySmall),
-            if (spec.appDownloads)
-              IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: () => m.cancel(spec.id)),
-          ],
-        );
+        return spec.appDownloads
+            ? DoodleButton(Doodle.close, tooltip: 'Cancel', onTap: () => m.cancel(spec.id))
+            : const Scribbling(size: 20);
+      case ModelStatus.failed:
+      case ModelStatus.absent:
+        return PillButton(state.status == ModelStatus.failed ? 'retry' : 'download', onTap: () => m.download(spec.id));
       case ModelStatus.ready:
-        final canUse = spec.role != ModelRole.specialist;
         final inUse = switch (spec.role) {
           ModelRole.planner => services.settings.plannerId == spec.id,
           ModelRole.router => services.settings.routerId == spec.id,
@@ -185,10 +213,12 @@ class _Actions extends StatelessWidget {
           ModelRole.specialist => true,
         };
         return Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (canUse && !inUse)
-              FilledButton(
-                onPressed: () => services.settings.update((s) {
+            if (!inUse)
+              PillButton(
+                'use',
+                onTap: () => services.settings.update((s) {
                   switch (spec.role) {
                     case ModelRole.planner:
                       s.plannerId = spec.id;
@@ -199,56 +229,23 @@ class _Actions extends StatelessWidget {
                     case ModelRole.specialist:
                   }
                 }),
-                child: const Text('Use'),
-              )
-            else
-              Text(
-                spec.role == ModelRole.specialist ? 'Ready' : 'In use',
-                style: context.text.bodySmall?.copyWith(color: p.dot),
               ),
-            const Spacer(),
-            TextButton(
-              onPressed: () async {
+            DoodleButton(
+              Doodle.trash,
+              tooltip: 'Delete',
+              size: 20,
+              color: p.redPen,
+              onTap: () async {
                 if (await confirmDialog(
                   context,
-                  title: 'Delete ${spec.name}?',
+                  title: 'delete ${spec.name.toLowerCase()}?',
                   body: 'Frees ${formatBytes(spec.approxBytes)}. You can download it again later.',
-                  confirm: 'Delete',
+                  confirm: 'delete',
                   destructive: true,
                 )) {
                   await m.delete(spec.id);
                 }
               },
-              child: Text('Delete', style: TextStyle(color: p.danger)),
-            ),
-          ],
-        );
-      case ModelStatus.failed:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(state.error ?? 'Download failed', style: context.text.bodySmall?.copyWith(color: p.danger)),
-            const SizedBox(height: 8),
-            OutlinedButton(onPressed: () => m.download(spec.id), child: const Text('Try again')),
-          ],
-        );
-      case ModelStatus.absent:
-        return Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: () => m.download(spec.id),
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text('Download'),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                spec.license,
-                textAlign: TextAlign.right,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: context.text.bodySmall?.copyWith(color: p.faint, fontSize: 11),
-              ),
             ),
           ],
         );

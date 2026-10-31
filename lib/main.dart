@@ -4,7 +4,6 @@ import 'app_services.dart';
 import 'app_state.dart';
 import 'features/shell/shell.dart';
 import 'theme/theme.dart';
-import 'widgets/sketch.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +15,8 @@ class PhoneDotsApp extends StatelessWidget {
   const PhoneDotsApp({super.key, required this.state});
   final AppState state;
 
+  Voice get _voice => Voice.values.firstWhere((v) => v.name == state.services.settings.voice, orElse: () => Voice.neat);
+
   @override
   Widget build(BuildContext context) => AppScope(
     state: state,
@@ -24,11 +25,9 @@ class PhoneDotsApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
         title: 'PhoneDots',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
+        theme: buildTheme(Brightness.light, voice: _voice),
+        darkTheme: buildTheme(Brightness.dark, voice: _voice),
         themeMode: state.services.settings.themeMode,
-        // Dotted paper under every route; scaffolds are transparent.
-        builder: (context, child) => PaperBackground(child: child!),
         home: const Shell(),
       ),
     ),

@@ -6,28 +6,51 @@ import '../../core/runtime/engine_types.dart';
 import '../../core/util/format.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/hand.dart';
 
 class LabScreen extends StatelessWidget {
   const LabScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
-    child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Lab'),
-        bottom: TabBar(
-          indicatorColor: context.pal.ink,
-          labelColor: context.pal.ink,
-          unselectedLabelColor: context.pal.muted,
-          dividerColor: context.pal.hairline,
-          tabs: const [
-            Tab(text: 'Prompt Lab'),
-            Tab(text: 'Benchmark'),
-          ],
+  Widget build(BuildContext context) => const _Lab();
+}
+
+class _Lab extends StatefulWidget {
+  const _Lab();
+
+  @override
+  State<_Lab> createState() => _LabState();
+}
+
+class _LabState extends State<_Lab> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) => HandPage(
+    body: Column(
+      children: [
+        Column0(
+          child: PageIntro(
+            'lab',
+            _tab == 0
+                ? 'Talk to the model directly, with your own instructions and settings.'
+                : 'Measure how fast the brain runs on this phone.',
+            doodle: Doodle.flask,
+          ),
         ),
-      ),
-      body: const TabBarView(children: [_PromptLab(), _Benchmark()]),
+        Column0(
+          child: Row(
+            children: [
+              ChoicePill('prompt lab', selected: _tab == 0, onTap: () => setState(() => _tab = 0)),
+              const SizedBox(width: 8),
+              ChoicePill('speed test', selected: _tab == 1, onTap: () => setState(() => _tab = 1)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: IndexedStack(index: _tab, children: const [_PromptLab(), _Benchmark()]),
+        ),
+      ],
     ),
   );
 }
@@ -112,20 +135,17 @@ class _PromptLabState extends State<_PromptLab> {
   Widget build(BuildContext context) {
     final p = context.pal;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 40),
       children: [
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
             for (final t in _templates.keys)
-              ChoiceChip(
-                label: Text(t),
-                selected: _template == t,
-                showCheckmark: false,
-                selectedColor: p.ink,
-                labelStyle: TextStyle(color: _template == t ? p.bg : p.ink),
-                onSelected: (_) => setState(() {
+              HandTag(
+                t.toLowerCase(),
+                marked: _template == t,
+                onTap: () => setState(() {
                   _template = t;
                   _system.text = _templates[t]!;
                 }),
@@ -176,15 +196,18 @@ class _PromptLabState extends State<_PromptLab> {
             ),
           ],
         ),
-        FilledButton(onPressed: _running ? null : _run, child: Text(_running ? 'Running…' : 'Run')),
+        InkButton('run', busy: _running, trailing: Doodle.play, expand: true, onTap: _run),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Text(_error!, style: TextStyle(color: p.danger)),
           ),
         if (_output.isNotEmpty || _stats != null) ...[
-          const SectionLabel('Output', padding: EdgeInsets.only(top: 20, bottom: 8)),
-          Panel(child: SelectableText(_output, style: context.text.bodyMedium)),
+          const SectionHead('what it said'),
+          Panel(
+            color: context.pal.smudge,
+            child: SelectableText(_output, style: context.text.bodyMedium),
+          ),
           if (_stats != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -277,7 +300,7 @@ class _BenchmarkState extends State<_Benchmark> {
     final p = context.pal;
     final best = _results.isEmpty ? null : _results.first;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 40),
       children: [
         Panel(
           child: Column(
@@ -309,7 +332,7 @@ class _BenchmarkState extends State<_Benchmark> {
                   ],
                 )
               else
-                FilledButton(onPressed: _run, child: const Text('Run benchmark')),
+                InkButton('run the speed test', trailing: Doodle.play, expand: true, onTap: _run),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -319,7 +342,7 @@ class _BenchmarkState extends State<_Benchmark> {
           ),
         ),
         if (_results.length > 1) ...[
-          const SectionLabel('History', padding: EdgeInsets.only(top: 20, bottom: 8)),
+          const SectionHead('earlier runs'),
           for (final r in _results.skip(1))
             ListTile(
               contentPadding: EdgeInsets.zero,

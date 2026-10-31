@@ -12,6 +12,7 @@ import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/hand.dart';
 
 /// Pickers that turn the outside world into [Attachment]s stored in app space.
 class Attach {
@@ -48,19 +49,28 @@ class Attach {
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder: (c) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final (key, icon, label) in [
-              ('camera', Icons.photo_camera_outlined, 'Camera'),
-              ('photo', Icons.image_outlined, 'Photo'),
-              ('record', Icons.mic_none_rounded, 'Record audio'),
-              ('audio', Icons.graphic_eq_rounded, 'Audio file'),
-              ('document', Icons.description_outlined, 'Text document'),
-            ])
-              ListTile(leading: Icon(icon), title: Text(label), onTap: () => Navigator.pop(c, key)),
-            const SizedBox(height: 8),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const PageIntro('add something', 'It stays on this phone. Models read it right here.'),
+              for (final (key, doodle, label, meta) in [
+                ('camera', Doodle.camera, 'take a photo', 'ask about it, read text in it'),
+                ('photo', Doodle.image, 'pick a photo', 'from your gallery'),
+                ('record', Doodle.mic, 'record audio', 'a meeting, a voice note'),
+                ('audio', Doodle.wave, 'an audio file', 'transcribe it, find who spoke'),
+                ('document', Doodle.doc, 'a text file', 'summarize it, save it to my files'),
+              ])
+                Door(
+                  label,
+                  leading: doodle,
+                  meta: meta,
+                  style: Hand.label.copyWith(fontSize: 24),
+                  onTap: () => Navigator.pop(c, key),
+                ),
+            ],
+          ),
         ),
       ),
     );

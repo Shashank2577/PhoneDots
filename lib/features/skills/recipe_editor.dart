@@ -5,6 +5,7 @@ import '../../skills/recipes/recipe.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/hand.dart';
 
 class _EditStep {
   _EditStep(this.skill, Map<String, String> args)
@@ -62,12 +63,14 @@ class _RecipeEditorState extends State<RecipeEditor> {
         initialChildSize: 0.7,
         builder: (_, scroll) => ListView(
           controller: scroll,
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 24),
           children: [
-            const SectionLabel('Add a step', padding: EdgeInsets.fromLTRB(20, 0, 20, 8)),
+            const PageIntro('add a step', 'Pick the skill this step runs.'),
             for (final k in choices)
-              ListTile(
-                title: Text(k.name),
-                subtitle: Text(k.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Door(
+                k.name.toLowerCase(),
+                style: Hand.label.copyWith(fontSize: 23),
+                meta: k.description,
                 onTap: () => Navigator.pop(c, k),
               ),
           ],
@@ -118,67 +121,61 @@ class _RecipeEditorState extends State<RecipeEditor> {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.recipe == null ? 'New recipe' : 'Edit recipe'),
-        actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-        children: [
-          TextField(
-            controller: _name,
-            decoration: const InputDecoration(labelText: 'Name'),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _description,
-            decoration: const InputDecoration(labelText: 'What it does'),
-          ),
-          const SectionLabel('Starts from', padding: EdgeInsets.only(top: 20, bottom: 8)),
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 'text', label: Text('Text')),
-              ButtonSegment(value: 'audio', label: Text('Audio')),
-              ButtonSegment(value: 'image', label: Text('Image')),
-              ButtonSegment(value: 'none', label: Text('Nothing')),
-            ],
-            selected: {_input},
-            onSelectionChanged: (v) => setState(() => _input = v.first),
-          ),
-          const SectionLabel('Steps', padding: EdgeInsets.only(top: 20, bottom: 8)),
-          Text(
-            'Use {{input}}, {{prev.field}} or {{steps.1.field}} to pass results along.',
-            style: context.text.bodySmall,
-          ),
-          const SizedBox(height: 10),
-          for (var i = 0; i < _steps.length; i++)
-            Panel(
-              margin: const EdgeInsets.only(bottom: 10),
+    return HandPage(
+      bottom: InkButton('save the recipe', trailing: Doodle.tick, expand: true, onTap: _save),
+      children: [
+        PageIntro(
+          widget.recipe == null ? 'new recipe' : 'edit recipe',
+          'Chain skills so one tap runs them all. Pass results along with {{input}}, {{prev.field}} or {{steps.1.field}}.',
+          doodle: Doodle.curl,
+        ),
+        TextField(
+          controller: _name,
+          decoration: const InputDecoration(hintText: 'name it'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _description,
+          decoration: const InputDecoration(hintText: 'what it does'),
+        ),
+        const SectionHead('starts from'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (v, label) in [
+              ('text', 'text'),
+              ('audio', 'a recording'),
+              ('image', 'a photo'),
+              ('none', 'nothing'),
+            ])
+              ChoicePill(label, selected: _input == v, onTap: () => setState(() => _input = v)),
+          ],
+        ),
+        const SectionHead('steps'),
+        for (var i = 0; i < _steps.length; i++)
+          Enter(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(color: p.ink, shape: BoxShape.circle),
+                      Text('${i + 1}.', style: Hand.title.copyWith(fontSize: 26, color: p.ink)),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: Text(
-                          '${i + 1}',
-                          style: TextStyle(color: p.bg, fontSize: 12, fontWeight: FontWeight.w600),
+                          _steps[i].skill.name.toLowerCase(),
+                          style: Hand.label.copyWith(fontSize: 24, color: p.ink),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(_steps[i].skill.name, style: context.text.titleMedium)),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        onPressed: () => setState(() => _steps.removeAt(i)),
+                      DoodleButton(
+                        Doodle.close,
+                        tooltip: 'Remove step',
+                        size: 20,
+                        color: p.redPen,
+                        onTap: () => setState(() => _steps.removeAt(i)),
                       ),
                     ],
                   ),
@@ -187,23 +184,19 @@ class _RecipeEditorState extends State<RecipeEditor> {
                       padding: const EdgeInsets.only(top: 8),
                       child: TextField(
                         controller: _steps[i].fields[param.name],
-                        decoration: InputDecoration(
-                          labelText: param.name,
-                          helperText: param.description,
-                          isDense: true,
-                        ),
+                        decoration: InputDecoration(hintText: param.name, helperText: param.description, isDense: true),
                       ),
                     ),
+                  const HandDivider(padding: EdgeInsets.only(top: 12)),
                 ],
               ),
             ),
-          OutlinedButton.icon(
-            onPressed: _addStep,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add step'),
           ),
-        ],
-      ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PillButton('add a step', leading: Doodle.plus, onTap: _addStep),
+        ),
+      ],
     );
   }
 }

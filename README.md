@@ -5,7 +5,7 @@
 Flutter app for Android and iOS, with native bridges to [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) and [desert-ant-core](https://github.com/Desert-Ant-Labs/desert-ant-core). Inspired by [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery).
 
 <p>
-<img src="docs/screenshots/demo.gif" width="230">
+<img src="docs/screenshots/welcome.png" width="190">
 <img src="docs/screenshots/home.png" width="190">
 <img src="docs/screenshots/chat.png" width="190">
 <img src="docs/screenshots/skills.png" width="190">
@@ -13,7 +13,6 @@ Flutter app for Android and iOS, with native bridges to [LiteRT-LM](https://gith
 <p>
 <img src="docs/screenshots/models.png" width="190">
 <img src="docs/screenshots/you.png" width="190">
-<img src="docs/screenshots/onboarding.png" width="190">
 <img src="docs/screenshots/home-dark.png" width="190">
 <img src="docs/screenshots/chat-dark.png" width="190">
 </p>
@@ -22,13 +21,15 @@ Flutter app for Android and iOS, with native bridges to [LiteRT-LM](https://gith
 
 ## Look and feel
 
-A hand-drawn notebook: wobbly pen outlines on dotted paper (chalkboard in dark mode), tilted sticky notes, a highlighter, and two bundled handwriting fonts (Patrick Hand and Caveat, under the SIL Open Font License) so it works offline.
+PhoneDots uses **Burrow's "hand-drawn minimal" design system** (from [Android-Showcase](https://github.com/Shashank2577/Android-Showcase), `design/burrow-a/theme`), ported to Flutter so both apps feel like one family:
 
-- **Micro-interactions:** buttons and cards squish and spring back with a light haptic tick; the send button tilts when there is something to send; an empty send wiggles the composer; switches bounce.
-- **Drawn feedback:** skill steps scribble while running and draw a check when done; checklist items get a drawn tick and a pen strike-through; bars grow in with hatching; the active tab is circled in highlighter.
-- **Motion:** messages fly in from their side; panels and rows rise into place as they scroll into view; page headers collapse on scroll; scrolling is bouncy; pages turn in with a slight tilt.
+- White paper and ink (a warm "night notebook" in dark mode), with one marker-yellow swipe per screen and red pen only for destructive things.
+- Caveat hand-lettering for headings over a quieter body voice you choose in settings (formal, friendly, neat hand, loose hand or all handwritten).
+- No cards: content sits on the paper, separated by wobbly hairlines. Pages open with a name and a one-line purpose; "doors" with circled arrows lead somewhere; the bottom bar is four words with a drawn ring.
+- Burrow's doodle icon set, ink-pill primary buttons, outlined pills, drawn switches with a tick, and visible buttons instead of hidden gestures.
+- Calm motion: a light squish and haptic tick on press, rows rising in as they scroll into view, the nav ring drawing itself, ticks drawing on.
 
-The drawing code is in `lib/theme/rough.dart` (hand-drawn Material borders, so every themed button, card, input and dialog gets the look) and `lib/widgets/sketch.dart` (animations and doodles).
+Tokens, fonts and components live in `lib/theme/theme.dart` and `lib/widgets/hand.dart`.
 
 ## What it does
 
