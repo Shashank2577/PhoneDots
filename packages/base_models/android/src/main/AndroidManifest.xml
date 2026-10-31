@@ -1,0 +1,35 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Shared model store, sibling copy. The two placeholders come from the app's
+      build.gradle.kts (manifestPlaceholders), and must be the same in every app
+      of the vendor (platform.yaml → sharedModels). The permission is
+      signature-level: only apps signed with the same key can read the models.
+    -->
+    <permission
+        android:name="${baseModelsPermission}"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="${baseModelsPermission}" />
+    <!-- Model downloads. Flutter only declares INTERNET in debug/profile manifests. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <queries>
+        <intent>
+            <action android:name="${baseModelsDiscoveryAction}" />
+        </intent>
+    </queries>
+
+    <application>
+        <provider
+            android:name="dev.baseplatform.base_models.BaseModelsProvider"
+            android:authorities="${applicationId}.basemodels"
+            android:exported="true"
+            android:readPermission="${baseModelsPermission}">
+            <meta-data
+                android:name="dev.baseplatform.base_models.ACTION"
+                android:value="${baseModelsDiscoveryAction}" />
+            <intent-filter>
+                <action android:name="${baseModelsDiscoveryAction}" />
+            </intent-filter>
+        </provider>
+    </application>
+</manifest>

@@ -17,14 +17,14 @@ description: Keep PhoneDots in step with the base platform (the baseApp repo), w
 
 ## The shared model store (done)
 
-PhoneDots uses `base_models` (a git dependency on baseApp, `packages/base_models`): `ModelManager` keeps its states and the resource governor, and gets files through the store (`ensure`, `pathOf`, `release`, `adopt`). So:
+PhoneDots uses `base_models`, a copy of baseApp's `packages/base_models` in `packages/base_models` that `baseApp/./base sync` writes (a path dependency, so builds never need to reach the baseApp repo, which can be private). Never edit that copy here; change baseApp and sync: `ModelManager` keeps its states and the resource governor, and gets files through the store (`ensure`, `pathOf`, `release`, `adopt`). So:
 
 - Gemma files live in the shared store (`<store>/<model id>/<file>`), shared with every app of the vendor: in place on iOS (App Group `group.com.showcase.shared`, `ios/Runner/Runner.entitlements`), copied from sibling apps on Android (`manifestPlaceholders` in `android/app/build.gradle.kts`; same signing key).
 - Desert Ant weights go to `<store>/desertant.<key>` on Android (`SpecialistBridge.setStoreRoot`); iOS's SDK picks its own folder.
 - Old downloads (`<app support>/models/<file>`, `filesDir/desertant/<key>`) move into the store once, without downloading again.
 - `test/shared_models_test.dart` checks that PhoneDots' catalog matches the shared one and that models come from, and are released to, the store.
 
-For local work against a baseApp checkout next to this repo, add `pubspec_overrides.yaml` (git-ignored) with `dependency_overrides: {base_models: {path: ../baseApp/packages/base_models}}`. When baseApp's branch merges, change the git `ref` in `pubspec.yaml` to `main`.
+After a sync, run `flutter pub get` and the tests.
 
 ## Synced files
 

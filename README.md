@@ -85,7 +85,7 @@ The channel contract is documented in [docs/NATIVE_BRIDGE.md](docs/NATIVE_BRIDGE
 
 Gemma files and checksums are pinned in `lib/core/models/model_catalog.dart`, and match the base platform's shared catalog (a test checks this). The Desert Ant SDK downloads and verifies its own weights.
 
-**One download per device.** Models live in the base platform's shared model store (`base_models`, from [baseApp](https://github.com/Shashank2577/baseApp)), not in PhoneDots' own folder:
+**One download per device.** Models live in the base platform's shared model store (`base_models`, synced from baseApp into `packages/base_models`), not in PhoneDots' own folder:
 
 - **iOS:** one folder in the App Group `group.com.showcase.shared`, used in place by every app of the vendor. Your Apple team needs that App Group; without it PhoneDots keeps its models to itself.
 - **Android:** each app keeps its own copy, and copies a model from a sibling app that has it instead of downloading it (the Models tab says "already on this phone in another app"). Siblings must be signed with the same key. Desert Ant weights go to `<store>/desertant.<key>`.

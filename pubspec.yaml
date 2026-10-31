@@ -9,11 +9,10 @@ environment:
 dependencies:
   # The shared on-device model store and catalog (one download per device for
   # every app of the vendor). Pinned to the base platform branch until it merges.
+  # The base platform's shared model store, synced from baseApp by `./base sync`
+  # (packages/base_models); never edit it here.
   base_models:
-    git:
-      url: https://github.com/Shashank2577/baseApp.git
-      path: packages/base_models
-      ref: ccr-81ba2f7d-qkqv1h
+    path: packages/base_models
   crypto: ^3.0.8
   file_picker: ^13.3.0
   flutter:
