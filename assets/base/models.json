@@ -312,9 +312,7 @@
       ],
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
-      "platforms": [
-        "ios"
-      ],
+      "platforms": [],
       "recommended": false,
       "source": "sdk",
       "sdk": {
@@ -442,9 +440,7 @@
       ],
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
-      "platforms": [
-        "ios"
-      ],
+      "platforms": [],
       "recommended": false,
       "source": "sdk",
       "sdk": {
@@ -541,9 +537,7 @@
       ],
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
-      "platforms": [
-        "ios"
-      ],
+      "platforms": [],
       "recommended": false,
       "source": "sdk",
       "sdk": {
