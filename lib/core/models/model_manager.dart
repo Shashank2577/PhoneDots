@@ -1,9 +1,10 @@
-import '../app_log.dart';
 import 'dart:async';
 
 import 'package:base_models/base_models.dart' as bm;
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
+import '../app_log.dart';
 import '../ledger.dart';
 import '../runtime/engine_types.dart';
 import '../runtime/engines.dart';
@@ -15,6 +16,17 @@ import 'model_catalog.dart';
 import 'model_spec.dart';
 
 enum ModelStatus { absent, downloading, ready, failed }
+
+/// Whether this phone may download a gated model right now.
+enum Access { ok, needsToken, badToken, needsLicence, unknown }
+
+/// Maps Hugging Face's answer for a gated file to what the user must do.
+Access classifyAccess(int status, {required bool hasToken}) => switch (status) {
+  200 || 206 || 302 || 303 || 307 => Access.ok,
+  401 => hasToken ? Access.badToken : Access.needsToken,
+  403 => hasToken ? Access.needsLicence : Access.needsToken,
+  _ => Access.unknown,
+};
 
 class ModelState {
   const ModelState(this.status, {this.progress = 0, this.error, this.inSibling = false, this.busyElsewhere = false});
@@ -48,17 +60,17 @@ class ModelManager extends ChangeNotifier {
     required this.settings,
     required this.ledger,
     this.shared,
-    this.log,
-  }) {
+    http.Client? client,
+  }) : _http = client ?? http.Client() {
     shared?.addListener(_mirrorShared);
   }
 
+  final http.Client _http;
+
   final JsonStore store;
 
-  /// Step-by-step log for Settings → Logs.
-  final AppLog? log;
-
-  void _log(String message) => log?.add('models', message);
+  /// Model steps for the diagnostics log (ids and sizes only).
+  void _log(String message) => message.contains('FAILED') ? appLog.error('model', message) : appLog.info('model', message);
   final LlmEngine llm;
   final Embedder embedder;
   final SpecialistEngine specialists;
@@ -176,11 +188,37 @@ class ModelManager extends ChangeNotifier {
   /// Models this phone can comfortably run.
   bool fits(ModelSpec m) => device.totalRamMb == 0 || m.minRamMb <= device.totalRamMb;
 
+  /// Asks Hugging Face (without downloading) whether the saved token may
+  /// fetch [m]. One small request, logged in the privacy ledger.
+  Future<Access> checkAccess(ModelSpec m) async {
+    if (isDemo || !m.gated) return Access.ok;
+    final hasToken = settings.hfToken.isNotEmpty;
+    try {
+      final req = http.Request('GET', Uri.parse(m.downloadUrl!))
+        ..followRedirects = false
+        ..headers['Range'] = 'bytes=0-0';
+      if (hasToken) req.headers['Authorization'] = 'Bearer ${settings.hfToken}';
+      final res = await _http.send(req).timeout(const Duration(seconds: 15));
+      await res.stream.drain<void>();
+      unawaited(ledger.record('download', 'Checked access to ${m.name}', network: true));
+      return classifyAccess(res.statusCode, hasToken: hasToken);
+    } catch (_) {
+      return Access.unknown;
+    }
+  }
+
+  /// Gated models need a token first; skip them in bulk downloads until then.
+  bool canTryDownload(ModelSpec m) => isDemo || !m.gated || settings.hfToken.isNotEmpty;
+
   Future<void> download(String id) async {
     final m = modelById(id)!;
     if (state(id).status == ModelStatus.downloading) return;
     // A copy from a sibling app is not a download: no network in the ledger.
     final copy = state(id).inSibling;
+    if (!copy && !canTryDownload(m)) {
+      _set(id, const ModelState(ModelStatus.failed, error: 'needs a free Hugging Face OK: tap "get access"'));
+      return;
+    }
     _set(id, const ModelState(ModelStatus.downloading));
     _log('${m.id}: ${copy ? 'copy from another app' : 'download'} started (${formatBytes(m.approxBytes)})');
     unawaited(ledger.record('download', '${copy ? 'Copying' : 'Started'} ${m.name} (${formatBytes(m.approxBytes)})', network: !copy));
@@ -243,9 +281,12 @@ class ModelManager extends ChangeNotifier {
 
   String _friendly(Object e) {
     final s = '$e';
-    if (s.contains('401') || s.contains('403')) {
-      return 'Hugging Face refused the download. Accept the Gemma licence on huggingface.co and add a token in Settings.';
+    if (s.contains('HTTP 401')) {
+      return settings.hfToken.isEmpty
+          ? 'needs a free Hugging Face OK: tap "get access"'
+          : 'Hugging Face didn\'t accept the token. Check it under "get access".';
     }
+    if (s.contains('HTTP 403')) return 'accept Google\'s licence on the model page first: tap "get access"';
     return s.replaceFirst('Exception: ', '');
   }
 
@@ -313,7 +354,12 @@ class ModelManager extends ChangeNotifier {
         loadedRouter = null;
       }
       final started = DateTime.now();
-      _log('$id: loading (${settings.useGpu ? 'GPU' : 'CPU'})');
+      appLog.info('model', 'loading ${m.name}', {
+        'gpu': settings.useGpu,
+        'ramMb': device.totalRamMb,
+        'router': isRouter,
+      });
+      await appLog.busy('loading ${m.name}');
       await llm.load(
         modelId: id,
         path: pathFor(m) ?? id,
@@ -331,10 +377,13 @@ class ModelManager extends ChangeNotifier {
       unawaited(
         ledger.record('model', 'Loaded ${m.name} in ${formatMs(DateTime.now().difference(started).inMilliseconds)}'),
       );
+      appLog.info('model', 'loaded ${m.name}', {'ms': DateTime.now().difference(started).inMilliseconds});
+      await appLog.idle();
       return true;
-    } catch (e) {
+    } catch (e, st) {
+      await appLog.idle();
+      appLog.error('model', 'could not load ${m.name}', {'gpu': settings.useGpu}, e, st);
       loadError = 'Could not load ${m.name}: $e';
-      _log('$id: FAILED to load: $e');
       return false;
     } finally {
       loadingModel = null;

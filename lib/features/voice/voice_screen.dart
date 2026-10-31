@@ -8,7 +8,7 @@ import 'package:record/record.dart';
 import '../../app_state.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
-import '../../widgets/common.dart';
+import '../../widgets/hand.dart';
 
 enum _Phase { idle, listening, transcribing, thinking, speaking }
 
@@ -127,90 +127,91 @@ class _VoiceScreenState extends State<VoiceScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     final p = context.pal;
     final label = switch (_phase) {
-      _Phase.idle => 'Tap to talk',
-      _Phase.listening => 'Listening… tap when done',
-      _Phase.transcribing => 'Transcribing on device',
-      _Phase.thinking => 'Thinking',
-      _Phase.speaking => 'Speaking · tap to stop',
+      _Phase.idle => 'tap to talk',
+      _Phase.listening => 'listening… tap when you\'re done',
+      _Phase.transcribing => 'writing down what you said',
+      _Phase.thinking => 'thinking',
+      _Phase.speaking => 'speaking · tap to stop',
     };
-    return Scaffold(
-      appBar: AppBar(title: const Text('Voice')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Expanded(
-                child: ListView(
-                  children: [
-                    if (_heard.isNotEmpty) ...[
-                      Text('YOU', style: context.text.labelSmall),
-                      const SizedBox(height: 6),
-                      Text(_heard, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 24),
-                    ],
-                    if (_reply.isNotEmpty) ...[
-                      Text('PHONEDOTS', style: context.text.labelSmall),
-                      const SizedBox(height: 6),
-                      Text(_reply, style: context.text.bodyLarge),
-                    ],
-                    if (_error != null) Text(_error!, style: context.text.bodyMedium?.copyWith(color: p.danger)),
-                  ],
+    final active = _phase == _Phase.listening;
+    return HandPage(
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              children: [
+                const PageIntro(
+                  'talk',
+                  'Say it out loud. Voz writes it down on this phone, and the reply is read back to you.',
+                  doodle: Doodle.mic,
                 ),
-              ),
-              GestureDetector(
-                onTap: _tap,
-                child: AnimatedBuilder(
-                  animation: _pulse,
-                  builder: (_, _) {
-                    final active = _phase == _Phase.listening;
-                    final busy = _phase == _Phase.transcribing || _phase == _Phase.thinking;
-                    final scale = active
-                        ? 1 + _level * 0.35
-                        : busy
-                        ? 1 + 0.05 * sin(_pulse.value * 2 * pi)
-                        : 1.0;
-                    return Stack(
-                      alignment: Alignment.center,
+                if (_heard.isNotEmpty) ...[
+                  const SectionHead('you said', padding: EdgeInsets.only(bottom: 4)),
+                  Text(_heard, style: Hand.title.copyWith(fontSize: 28, color: p.ink)),
+                ],
+                if (_reply.isNotEmpty) ...[const SectionHead('phonedots'), Body(_reply)],
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
                       children: [
-                        if (active || busy)
-                          Container(
-                            width: 150 * scale,
-                            height: 150 * scale,
-                            decoration: BoxDecoration(shape: BoxShape.circle, color: p.ink.withValues(alpha: 0.06)),
-                          ),
+                        DoodleIcon(Doodle.exclaim, size: 20, color: p.redPen, stroke: 2.6),
+                        const SizedBox(width: 6),
+                        Expanded(child: Body(_error!)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // The big button: an ink circle that breathes with your voice.
+          Pressable(
+            onTap: _tap,
+            scale: 0.92,
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (_, _) {
+                final busy = _phase == _Phase.transcribing || _phase == _Phase.thinking;
+                final scale = active ? 1 + _level * 0.3 : (busy ? 1 + 0.05 * sin(_pulse.value * 2 * pi) : 1.0);
+                return SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (active || busy)
                         Container(
-                          width: 104,
-                          height: 104,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: active ? p.danger : p.ink),
-                          child: Icon(
-                            active
-                                ? Icons.stop_rounded
-                                : _phase == _Phase.speaking
-                                ? Icons.volume_up_rounded
-                                : Icons.mic_rounded,
-                            color: p.bg,
-                            size: 36,
+                          width: 110 * scale + 30,
+                          height: 110 * scale + 30,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: p.rule, width: 1.6),
                           ),
                         ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Dot(color: _phase == _Phase.listening ? p.danger : p.dot, size: 6),
-                  const SizedBox(width: 8),
-                  Text(label, style: context.text.bodyMedium?.copyWith(color: p.muted)),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
+                      Container(
+                        width: 104,
+                        height: 104,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: active ? p.redPen : p.ink),
+                        child: Center(
+                          child: DoodleIcon(
+                            active ? Doodle.stop : (_phase == _Phase.speaking ? Doodle.wave : Doodle.mic),
+                            size: 40,
+                            color: p.paper,
+                            stroke: 2.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+          MarkedText(label, mark: active ? 'listening' : null, style: Hand.label.copyWith(fontSize: 23)),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../app_state.dart';
-import '../../widgets/sketch.dart';
+import '../../widgets/hand.dart';
 import '../chat/chat_screen.dart';
 import '../models/models_screen.dart';
+import '../saved/saved_screen.dart';
 import '../settings/settings_screen.dart';
 import '../skills/skills_screen.dart';
 import 'onboarding.dart';
@@ -24,18 +25,13 @@ class Shell extends StatelessWidget {
             index: state.tab,
             child: IndexedStack(
               index: state.tab,
-              children: const [ChatScreen(), SkillsScreen(), ModelsScreen(), YouScreen()],
+              children: const [ChatScreen(), SavedScreen(), SkillsScreen(), ModelsScreen(), YouScreen()],
             ),
           ),
-          bottomNavigationBar: SketchNavBar(
+          bottomNavigationBar: HandNav(
             index: state.tab,
             onTap: state.goTo,
-            items: const [
-              (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
-              (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Skills'),
-              (Icons.memory_outlined, Icons.memory_rounded, 'Models'),
-              (Icons.sentiment_satisfied_outlined, Icons.sentiment_satisfied_rounded, 'You'),
-            ],
+            labels: const ['chat', 'saved', 'skills', 'models', 'you'],
           ),
         );
       },

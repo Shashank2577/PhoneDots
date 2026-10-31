@@ -53,8 +53,11 @@ class MemoryStore extends ChangeNotifier {
     await _save();
   }
 
-  static Set<String> _terms(String s) =>
-      s.toLowerCase().split(RegExp(r'[^a-z0-9]+')).where((w) => w.length > 2).toSet();
+  static Set<String> _terms(String s) => s
+      .toLowerCase()
+      .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+      .where((w) => w.length > 2 || w.runes.any((c) => c > 0x2e80))
+      .toSet();
 
   List<String> recall(String query, {int limit = 8}) {
     final q = _terms(query);

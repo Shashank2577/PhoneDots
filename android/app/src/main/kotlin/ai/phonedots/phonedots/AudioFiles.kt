@@ -16,15 +16,31 @@ class Pcm(val samples: FloatArray, val sampleRate: Double)
 object AudioFiles {
   fun decode(path: String): Pcm {
     val extractor = MediaExtractor()
-    extractor.setDataSource(path)
-    val track = (0 until extractor.trackCount).firstOrNull {
-      extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
-    } ?: throw IllegalArgumentException("No audio track in ${File(path).name}")
+    val track = try {
+      extractor.setDataSource(path)
+      (0 until extractor.trackCount).firstOrNull {
+        extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+      } ?: throw IllegalArgumentException("No audio track in ${File(path).name}")
+    } catch (e: Throwable) {
+      extractor.release()
+      throw e
+    }
     extractor.selectTrack(track)
     val format = extractor.getTrackFormat(track)
-    val codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
-    codec.configure(format, null, null, 0)
-    codec.start()
+    val codec = try {
+      MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!).also {
+        try {
+          it.configure(format, null, null, 0)
+          it.start()
+        } catch (e: Throwable) {
+          it.release()
+          throw e
+        }
+      }
+    } catch (e: Throwable) {
+      extractor.release()
+      throw e
+    }
 
     var sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
     var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)

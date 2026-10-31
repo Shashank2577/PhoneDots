@@ -40,6 +40,7 @@ List<Skill> textSkills() => [
   ),
   _gemmaText(
     id: 'rewrite',
+    examples: const ['Make this email sound friendlier'],
     name: 'Rewrite',
     description: 'Rewrite text in a different tone (friendly, formal, concise, confident, playful).',
     system: '',
@@ -58,12 +59,14 @@ List<Skill> textSkills() => [
   ),
   _gemmaText(
     id: 'proofread',
+    examples: const ['Fix the typos in this paragraph'],
     name: 'Proofread',
     description: 'Fix spelling, grammar and punctuation without changing the style.',
     system: 'Correct spelling, grammar and punctuation. Keep the style. Output only the corrected text.',
   ),
   _gemmaText(
     id: 'draft_reply',
+    examples: const ['Draft a reply to this message saying yes'],
     name: 'Draft a reply',
     description: 'Draft a reply to a message or email, following optional instructions.',
     system: '',
@@ -72,12 +75,14 @@ List<Skill> textSkills() => [
   ),
   _gemmaText(
     id: 'check_tone',
+    examples: const ['Does this message sound rude?'],
     name: 'Check tone',
     description: 'Judge how a message will come across (tone, clarity, risk of offence) and suggest fixes.',
     system: 'Assess the tone of the message in 2 sentences, then list up to 3 concrete improvements.',
   ),
   FnSkill(
     id: 'extract_fields',
+    examples: const ['Pull the date, total and vendor out of this receipt'],
     name: 'Extract fields',
     description: 'Pull structured fields (e.g. name, date, amount, address) out of text as JSON.',
     kind: SkillKind.text,
@@ -139,6 +144,7 @@ List<Skill> textSkills() => [
   ),
   FnSkill(
     id: 'detect_language',
+    examples: const ['What language is this text?'],
     name: 'Detect language',
     description: 'Identify the language of a short piece of text (84 languages, Tongue).',
     kind: SkillKind.model,
@@ -153,6 +159,7 @@ List<Skill> textSkills() => [
   ),
   FnSkill(
     id: 'suggest_emoji',
+    examples: const ['Suggest emoji for this caption'],
     name: 'Suggest emoji',
     description: 'Suggest emoji that fit a message (Emo).',
     kind: SkillKind.model,
@@ -173,6 +180,7 @@ List<Skill> textSkills() => [
   ),
   FnSkill(
     id: 'classify_topics',
+    examples: const ['What topics is this article about?'],
     name: 'Topics & tags',
     description: 'Tag text with topics from a 36-topic taxonomy (Gist).',
     kind: SkillKind.model,
@@ -193,6 +201,7 @@ List<Skill> textSkills() => [
   ),
   FnSkill(
     id: 'suggest_title',
+    examples: const ['Give this note a title'],
     name: 'Suggest a title',
     description: 'Write a short factual title and a one-sentence description for a passage.',
     kind: SkillKind.text,

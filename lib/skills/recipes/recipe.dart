@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../skill.dart';
 
 class RecipeStep {
@@ -62,7 +64,7 @@ class Recipe {
 
 /// Fills {{...}} placeholders from the run state.
 String fillTemplate(String template, String input, List<Map<String, dynamic>> results) {
-  return template.replaceAllMapped(RegExp(r'\{\{\s*([\w.]+)\s*\}\}'), (m) {
+  return template.replaceAllMapped(RegExp(r'\{\{\s*([\w.-]+)\s*\}\}'), (m) {
     final path = m.group(1)!.split('.');
     if (path.first == 'input') return input;
     Map<String, dynamic>? source;
@@ -108,8 +110,21 @@ class RecipeSkill extends Skill {
     _ => const [SkillParam('input', ParamType.string, 'The text to start from.')],
   };
 
+  /// Recipes may call other recipes, but not without end (a recipe that
+  /// calls itself, directly or through another).
+  static const maxNesting = 4;
+  static const _depthKey = #phonedotsRecipeDepth;
+
   @override
   Future<SkillResult> run(Map<String, dynamic> args, SkillContext ctx) async {
+    final depth = (Zone.current[_depthKey] as int?) ?? 0;
+    if (depth >= maxNesting || recipe.steps.any((s) => s.skillId == id) && depth > 0) {
+      return SkillResult.error('"${recipe.name}" calls itself (or nests recipes more than $maxNesting deep).');
+    }
+    return runZoned(() => _run(args, ctx), zoneValues: {_depthKey: depth + 1});
+  }
+
+  Future<SkillResult> _run(Map<String, dynamic> args, SkillContext ctx) async {
     final input = args.str('input');
     final results = <Map<String, dynamic>>[];
     final cards = <UiCard>[];

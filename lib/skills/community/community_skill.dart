@@ -25,11 +25,40 @@ class CommunitySkill extends Skill {
     if (j['name'] is! String || j['description'] is! String) {
       throw const FormatException('name and description are required');
     }
+    for (final key in const ['author', 'version']) {
+      if (j[key] != null && j[key] is! String) throw FormatException('"$key" must be text');
+    }
+    final examples = j['examples'];
+    if (examples != null && (examples is! List || examples.any((e) => e is! String))) {
+      throw const FormatException('"examples" must be a list of text');
+    }
     final hasPrompt = j['prompt'] is Map && (j['prompt'] as Map)['user'] is String;
     final hasSteps = j['steps'] is List;
     if (hasPrompt == hasSteps) throw const FormatException('Provide exactly one of "prompt" or "steps"');
-    for (final p in (j['params'] as List? ?? const [])) {
+    if (hasSteps) {
+      final steps = j['steps'] as List;
+      if (steps.isEmpty) throw const FormatException('"steps" needs at least one step');
+      for (final st in steps) {
+        if (st is! Map || st['skill'] is! String || (st['skill'] as String).isEmpty) {
+          throw const FormatException('Each step needs a "skill"');
+        }
+        if (st['args'] != null && st['args'] is! Map) throw const FormatException('A step\'s "args" must be an object');
+        // A chain that calls itself would never finish.
+        if (st['skill'] == 'c_$id') throw const FormatException('A chain cannot call itself');
+      }
+    }
+    final params = j['params'];
+    if (params != null && params is! List) throw const FormatException('"params" must be a list');
+    final names = <String>{};
+    for (final p in (params as List? ?? const [])) {
       if (p is! Map || p['name'] is! String) throw const FormatException('Each param needs a name');
+      if (!names.add(p['name'] as String)) throw FormatException('Param "${p['name']}" is listed twice');
+      if (p['description'] != null && p['description'] is! String) {
+        throw const FormatException('A param\'s "description" must be text');
+      }
+      if (p['required'] != null && p['required'] is! bool) {
+        throw const FormatException('A param\'s "required" must be true or false');
+      }
     }
     return CommunitySkill(j, sourceUrl: sourceUrl);
   }

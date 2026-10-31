@@ -34,9 +34,9 @@ class ToolCallParser {
 
     if (calls.isEmpty) {
       final trimmed = text.trim();
-      final py = RegExp(r'^\[\s*(\w+)\((.*)\)\s*\]$', dotAll: true).firstMatch(trimmed);
-      if (py != null && knownTools.contains(py.group(1))) {
-        calls.add(ToolCallRequest(id: _id(), name: py.group(1)!, arguments: _pythonArgs(py.group(2)!)));
+      final py = trimmed.startsWith('[') && trimmed.endsWith(']') ? _pythonCalls(trimmed, knownTools) : null;
+      if (py != null && py.isNotEmpty) {
+        calls.addAll(py);
         rest = '';
       } else if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         final bare = _fromJson(trimmed, knownTools);
@@ -47,6 +47,45 @@ class ToolCallParser {
       }
     }
     return (calls: calls, text: rest.trim());
+  }
+
+  /// `[a(x=1), b()]`: splits top-level calls, respecting quotes and brackets.
+  static List<ToolCallRequest>? _pythonCalls(String text, Set<String> known) {
+    final body = text.substring(1, text.length - 1);
+    final parts = <String>[];
+    var depth = 0;
+    String? quote;
+    var start = 0;
+    for (var i = 0; i < body.length; i++) {
+      final ch = body[i];
+      if (quote != null) {
+        if (ch == '\\') {
+          i++;
+        } else if (ch == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (ch == '"' || ch == "'") {
+        quote = ch;
+      } else if (ch == '(' || ch == '[' || ch == '{') {
+        depth++;
+      } else if (ch == ')' || ch == ']' || ch == '}') {
+        depth--;
+      } else if (ch == ',' && depth == 0) {
+        parts.add(body.substring(start, i));
+        start = i + 1;
+      }
+    }
+    parts.add(body.substring(start));
+    final out = <ToolCallRequest>[];
+    for (final p in parts) {
+      final m = RegExp(r'^\s*(\w+)\(([\s\S]*)\)\s*$').firstMatch(p);
+      if (m == null) return null;
+      if (!known.contains(m.group(1))) continue;
+      out.add(ToolCallRequest(id: _id(), name: m.group(1)!, arguments: _pythonArgs(m.group(2)!)));
+    }
+    return out;
   }
 
   static List<ToolCallRequest> _fromJson(String body, Set<String> known) {
@@ -71,7 +110,7 @@ class ToolCallParser {
           args = const {};
         }
       }
-      out.add(ToolCallRequest(id: _id(), name: name, arguments: Map<String, dynamic>.from(args as Map)));
+      out.add(ToolCallRequest(id: _id(), name: name, arguments: args is Map ? Map<String, dynamic>.from(args) : {}));
     }
     return out;
   }

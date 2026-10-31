@@ -101,11 +101,19 @@ class DemoLlmEngine implements LlmEngine {
   String _reply(GenerationRequest request, EngineTurn last) {
     final text = last.text.trim();
     final system = request.systemPrompt.toLowerCase();
+    final links = text.indexOf('[Link details read by PhoneDots]');
+    if (links >= 0) {
+      final details = text.substring(links).split('\n').skip(1).join('\n');
+      return 'Here is what that link is:\n$details';
+    }
     // Sub-calls from text skills (summarize, rewrite...) carry the task in the
-    // system prompt. Answer them extractively so pipelines still produce output.
-    if (system.contains('summar') || system.contains('minutes')) return _extractive(text, 3);
-    if (system.contains('json')) return '{"note": "Demo engine cannot extract fields. Load Gemma on a phone."}';
-    if (system.contains('rewrite') || system.contains('proofread') || system.contains('translate')) {
+    // system prompt; the main assistant prompt is not one of them.
+    final subCall = !system.startsWith('you are phonedots');
+    if (subCall && (system.contains('summar') || system.contains('minutes'))) return _extractive(text, 3);
+    if (subCall && system.contains('json')) {
+      return '{"note": "Demo engine cannot extract fields. Load Gemma on a phone."}';
+    }
+    if (subCall && (system.contains('rewrite') || system.contains('proofread') || system.contains('translate'))) {
       return text;
     }
     if (last.imagePaths.isNotEmpty) {
@@ -217,7 +225,11 @@ class LexicalEmbedder implements Embedder {
   @override
   Future<List<double>> embed(String text) async {
     final v = List<double>.filled(dimensions, 0);
-    final words = text.toLowerCase().split(RegExp(r'[^a-z0-9]+')).where((w) => w.length > 1);
+    final words = text
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .expand(_cjkGrams)
+        .where((w) => w.length > 1);
     for (final w in words) {
       final stem = w.length > 4 ? w.substring(0, w.length - (w.endsWith('s') ? 1 : 0)) : w;
       var h = 2166136261;
@@ -318,8 +330,10 @@ class DemoSpecialistEngine implements SpecialistEngine {
 
   static Map<String, dynamic> _regexRedact(String text) {
     final patterns = {
-      'EMAIL': RegExp(r'[\w.+-]+@[\w-]+\.[\w.]+'),
-      'PHONE': RegExp(r'\+?\d[\d\s().-]{7,}\d'),
+      // Bounded repeats keep these linear on long text (an unbounded run before
+      // "@" rescans the whole string from every position).
+      'EMAIL': RegExp(r'[\w.+-]{1,64}@[\w-]{1,63}\.[\w.]{1,63}'),
+      'PHONE': RegExp(r'\+?\d[\d\s().-]{7,20}\d'),
       'CARD': RegExp(r'\b(?:\d[ -]?){13,16}\b'),
     };
     final items = <Map<String, dynamic>>[];
@@ -364,5 +378,18 @@ class DemoDeviceActions implements DeviceActions {
       default:
         return {'ok': true, 'demo': true, 'message': 'Demo: would run "$action" on a phone.'};
     }
+  }
+}
+
+/// Scripts without spaces (Chinese, Japanese) are split into character pairs
+/// so keyword search still finds them; other words pass through.
+Iterable<String> _cjkGrams(String w) sync* {
+  final r = w.runes.toList();
+  if (r.length < 2 || !r.any((c) => c >= 0x2e80)) {
+    yield w;
+    return;
+  }
+  for (var i = 0; i < r.length - 1; i++) {
+    yield String.fromCharCodes(r.sublist(i, i + 2));
   }
 }

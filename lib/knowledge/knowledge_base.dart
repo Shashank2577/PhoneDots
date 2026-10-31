@@ -94,6 +94,7 @@ class KnowledgeBase extends ChangeNotifier {
 
   static List<String> chunk(String text, {int words = 120, int overlap = 20}) {
     final w = text.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (w.isEmpty) return const [];
     if (w.length <= words) return [w.join(' ')];
     final out = <String>[];
     for (var i = 0; i < w.length; i += words - overlap) {
@@ -104,6 +105,7 @@ class KnowledgeBase extends ChangeNotifier {
   }
 
   Future<int> add(String title, String text, {String source = 'chat'}) async {
+    if (text.trim().isEmpty) return 0;
     final e = await embedder();
     await _reindexIfNeeded(e);
     final id = DateTime.now().microsecondsSinceEpoch.toString();
@@ -160,7 +162,11 @@ class KnowledgeBase extends ChangeNotifier {
     final e = await embedder();
     await _reindexIfNeeded(e);
     final q = await e.embed(query);
-    final terms = query.toLowerCase().split(RegExp(r'[^a-z0-9]+')).where((t) => t.length > 3).toSet();
+    final terms = query
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .where((t) => t.length > 3 || t.runes.any((c) => c > 0x2e80))
+        .toSet();
     final scored =
         _chunks
             .map((c) {

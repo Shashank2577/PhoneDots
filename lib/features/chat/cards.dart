@@ -3,13 +3,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_state.dart';
+
 import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/local_image.dart';
-import '../../widgets/sketch.dart';
-import '../../theme/rough.dart';
+import '../../widgets/hand.dart';
 
 /// Renders a skill's [UiCard] in the chat.
 class ResultCard extends StatelessWidget {
@@ -31,25 +32,30 @@ class ResultCard extends StatelessWidget {
         child: localImage('${card.data['path']}', height: 220, width: double.infinity),
       ),
       'file' => _FileCard(card.data),
+      'link' => _LinkCard(card.data),
       _ => _TextBlock(card.data),
     };
+    // Results sit on the paper under a hand-lettered head, closed by a hairline.
     return Panel(
-      seed: seedOf(card.title ?? card.type),
-      shadow: 3,
       margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (card.title != null && card.title!.isNotEmpty) ...[
-            Row(
-              children: [
-                Expanded(child: Text(card.title!.toUpperCase(), style: context.text.labelSmall)),
-                if (card.data['demo'] == true) const Tag('Demo data'),
-              ],
+          if (card.title != null && card.title!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      card.title!.toLowerCase(),
+                      style: Hand.title.copyWith(fontSize: 25, color: context.pal.ink),
+                    ),
+                  ),
+                  if (card.data['demo'] == true) const HandTag('demo data'),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-          ],
           body,
         ],
       ),
@@ -71,13 +77,12 @@ class _TextBlock extends StatelessWidget {
         if (data['copy'] == true)
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () {
+            child: HandLink(
+              'copy',
+              onTap: () {
                 Clipboard.setData(ClipboardData(text: text));
-                toast(context, 'Copied');
+                toast(context, 'copied');
               },
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy'),
             ),
           ),
       ],
@@ -115,7 +120,9 @@ class _Table extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final columns = (data['columns'] as List? ?? const []).map((e) => '$e').toList();
-    final rows = (data['rows'] as List? ?? const []).map((r) => (r as List).map((e) => '$e').toList()).toList();
+    final rows = (data['rows'] as List? ?? const [])
+        .map((r) => r is List ? r.map((e) => '$e').toList() : ['$r'])
+        .toList();
     final width = max(columns.length, rows.isEmpty ? 0 : rows.map((r) => r.length).reduce(max));
     if (width == 0) return const SizedBox.shrink();
     return SingleChildScrollView(
@@ -184,20 +191,14 @@ class _ChecklistState extends State<_Checklist> {
                             padding: const EdgeInsets.all(6),
                             child: Dot(color: p.ink, size: 6),
                           )
-                        : SketchBox(
-                            seed: 500 + i,
-                            radius: 5,
-                            strokeWidth: 1.4,
-                            fill: done[i] ? p.note(2) : p.surface,
-                            child: SizedBox.square(
-                              dimension: 20,
-                              child: done[i]
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(2),
-                                      child: DrawnCheck(key: ValueKey('c$i'), size: 16, color: p.ink),
-                                    )
-                                  : null,
+                        : Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: p.ink, width: 1.6),
                             ),
+                            child: done[i] ? DrawnDoodle(Doodle.tick, key: ValueKey('c$i'), size: 18) : null,
                           ),
                   ),
                   const SizedBox(width: 10),
@@ -206,24 +207,18 @@ class _ChecklistState extends State<_Checklist> {
                       children: [
                         AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 250),
-                          style: context.text.bodyMedium!.copyWith(color: done[i] ? p.muted : p.ink),
+                          style: context.text.bodyMedium!.copyWith(color: done[i] ? p.pencil : p.ink),
                           child: Text(items[i]),
                         ),
                         // A pen line strikes the item through when ticked.
                         if (done[i])
                           Positioned.fill(
                             child: LayoutBuilder(
-                              builder: (_, c) => DrawnPath(
+                              builder: (_, c) => _StrikeThrough(
                                 key: ValueKey('s$i'),
-                                size: Size(c.maxWidth, c.maxHeight),
-                                color: p.danger.withValues(alpha: 0.8),
-                                width: 2,
-                                delay: const Duration(milliseconds: 150),
-                                builder: (sz) => Rough.line(
-                                  Offset(0, sz.height * 0.55),
-                                  Offset(min(sz.width, items[i].length * 8.5), sz.height * 0.5),
-                                  seed: i,
-                                ),
+                                width: min(c.maxWidth, items[i].length * 8.0),
+                                color: p.pencil,
+                                seed: i,
                               ),
                             ),
                           ),
@@ -272,9 +267,9 @@ class _Transcript extends StatelessWidget {
                       if (speakers > 1)
                         Row(
                           children: [
-                            Dot(color: shades[(s['speaker'] as int) % shades.length], size: 6),
+                            Dot(color: shades[_speaker(s) % shades.length], size: 6),
                             const SizedBox(width: 6),
-                            Text('Speaker ${(s['speaker'] as int) + 1}', style: context.text.labelMedium),
+                            Text('Speaker ${_speaker(s) + 1}', style: context.text.labelMedium),
                           ],
                         ),
                       SelectableText('${s['text']}', style: context.text.bodyMedium),
@@ -316,7 +311,9 @@ class _Bars extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final labels = (data['labels'] as List? ?? const []).map((e) => '$e').toList();
-    final values = (data['values'] as List? ?? const []).map((e) => (e as num).toDouble()).toList();
+    final values = (data['values'] as List? ?? const [])
+        .map((e) => e is num ? e.toDouble() : (double.tryParse('$e') ?? 0))
+        .toList();
     final n = min(labels.length, values.length);
     if (n == 0) return const SizedBox.shrink();
     final top = values.take(n).map((v) => v.abs()).reduce(max);
@@ -340,13 +337,13 @@ class _Bars extends StatelessWidget {
                         tween: Tween(begin: 0, end: top == 0 ? 0 : values[i].abs() / top),
                         duration: Duration(milliseconds: 500 + 80 * i),
                         curve: Curves.easeOutBack,
-                        builder: (_, f, _) => SketchBox(
-                          seed: 600 + i,
-                          radius: 4,
-                          strokeWidth: 1.3,
-                          fill: p.note(i),
-                          hatch: p.ink.withValues(alpha: 0.35),
-                          child: SizedBox(height: 16, width: max(6, c.maxWidth * f)),
+                        builder: (_, f, _) => Container(
+                          height: 12,
+                          width: max(4, c.maxWidth * f),
+                          decoration: BoxDecoration(
+                            color: i == values.indexOf(values.reduce(max)) ? p.marker : p.ink,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
                       ),
                     ),
@@ -432,11 +429,7 @@ class _FileCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              data['kind'] == 'audio' ? Icons.graphic_eq_rounded : Icons.description_outlined,
-              size: 18,
-              color: p.muted,
-            ),
+            DoodleIcon(data['kind'] == 'audio' ? Doodle.wave : Doodle.doc, size: 18, color: p.pencil),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -453,7 +446,7 @@ class _FileCard extends StatelessWidget {
             width: double.infinity,
             constraints: const BoxConstraints(maxHeight: 140),
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: p.smudge, borderRadius: BorderRadius.circular(radius)),
             child: SingleChildScrollView(
               child: Text(
                 preview,
@@ -463,17 +456,117 @@ class _FileCard extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () {
+            child: HandLink(
+              'copy',
+              onTap: () {
                 Clipboard.setData(ClipboardData(text: preview));
-                toast(context, 'Copied');
+                toast(context, 'copied');
               },
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy'),
             ),
           ),
         ],
       ],
     );
   }
+}
+
+/// A pencil line that draws itself through a ticked item.
+class _StrikeThrough extends StatelessWidget {
+  const _StrikeThrough({super.key, required this.width, required this.color, required this.seed});
+  final double width;
+  final Color color;
+  final int seed;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: const Duration(milliseconds: 320),
+    curve: Curves.easeOutCubic,
+    builder: (_, t, _) => CustomPaint(painter: _StrikePainter(width * t, color, seed)),
+  );
+}
+
+class _StrikePainter extends CustomPainter {
+  _StrikePainter(this.width, this.color, this.seed);
+  final double width;
+  final Color color;
+  final int seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (width <= 0) return;
+    final y = size.height * 0.55;
+    canvas.drawPath(
+      handLinePath(Offset(0, y), Offset(width, y - 1), seed),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_StrikePainter o) => o.width != width;
+}
+
+/// A shared link as PhoneDots read it: platform, title, author, description.
+class _LinkCard extends StatelessWidget {
+  const _LinkCard(this.data);
+  final Map<String, dynamic> data;
+
+  static Doodle _doodle(String platform) => switch (platform) {
+    'youtube' || 'tiktok' => Doodle.play,
+    'instagram' => Doodle.camera,
+    'github' => Doodle.curl,
+    'medium' => Doodle.book,
+    'linkedin' => Doodle.person,
+    'threads' || 'x' => Doodle.bubble,
+    _ => Doodle.share,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final rich = data['rich'] == true;
+    final desc = '${data['description'] ?? ''}'.trim();
+    final services = AppScope.services(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            DoodleIcon(_doodle('${data['platform']}'), size: 18, color: p.pencil),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Meta(
+                '${data['platform']} · ${data['kind']}${data['author'] != null ? ' · ${data['author']}' : ''}',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${data['title']}',
+          style: Hand.label.copyWith(fontSize: 23, color: p.ink),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (desc.isNotEmpty) Meta(desc, maxLines: 4),
+        if (!rich)
+          const Meta(
+            'The site shared no details, so this name comes from the link. A screenshot lets PhoneDots read it.',
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: HandLink('open', onTap: () => services.device.invoke('url.open', {'url': '${data['url']}'})),
+        ),
+      ],
+    );
+  }
+}
+
+int _speaker(Map s) {
+  final v = s['speaker'];
+  return v is int ? v.abs() : (int.tryParse('$v') ?? 0).abs();
 }

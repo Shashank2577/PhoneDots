@@ -1,7 +1,7 @@
 name: phonedots
 description: "PhoneDots: an AI assistant that runs entirely on your phone."
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.6.0+11
 
 environment:
   sdk: ^3.13.7
@@ -34,11 +34,30 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Bundled so the hand-drawn look works offline (SIL Open Font License).
+  # Burrow's type, bundled so it works offline (SIL Open Font License, see assets/fonts/OFL-*).
   fonts:
-    - family: PatrickHand
-      fonts:
-        - asset: assets/fonts/PatrickHand-Regular.ttf
     - family: Caveat
       fonts:
-        - asset: assets/fonts/Caveat.ttf
+        - asset: assets/fonts/caveat_regular.ttf
+        - asset: assets/fonts/caveat_semibold.ttf
+          weight: 600
+        - asset: assets/fonts/caveat_bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/inter_regular.ttf
+        - asset: assets/fonts/inter_medium.ttf
+          weight: 500
+        - asset: assets/fonts/inter_semibold.ttf
+          weight: 600
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/nunito_regular.ttf
+        - asset: assets/fonts/nunito_semibold.ttf
+          weight: 600
+    - family: ShantellSans
+      fonts:
+        - asset: assets/fonts/shantell_variable.ttf
+    - family: PatrickHand
+      fonts:
+        - asset: assets/fonts/patrickhand_regular.ttf

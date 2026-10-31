@@ -1,11 +1,13 @@
 String formatBytes(int bytes) {
-  if (bytes >= 1000 * 1000 * 1000) return '${(bytes / 1e9).toStringAsFixed(1)} GB';
-  if (bytes >= 1000 * 1000) return '${(bytes / 1e6).round()} MB';
+  // Thresholds sit where rounding would print "1000 KB", so it moves up a unit.
+  if (bytes >= 999500 * 1000) return '${(bytes / 1e9).toStringAsFixed(1)} GB';
+  if (bytes >= 999500) return '${(bytes / 1e6).round()} MB';
   if (bytes >= 1000) return '${(bytes / 1e3).round()} KB';
   return '$bytes B';
 }
 
 String formatDuration(double seconds) {
+  if (!seconds.isFinite || seconds < 0) seconds = 0;
   final s = seconds.round();
   final m = s ~/ 60;
   final r = s % 60;

@@ -38,3 +38,21 @@ int fileLength(String path) {
   final f = File(path);
   return f.existsSync() ? f.lengthSync() : 0;
 }
+
+Future<String?> writeBytesFile(String? dir, String name, List<int> bytes) async {
+  if (dir == null) return null;
+  final path = _unique(dir, name);
+  await File(path).writeAsBytes(bytes);
+  return path;
+}
+
+Future<void> appendTextFile(String path, String text) async {
+  await File(path).writeAsString(text, mode: FileMode.append, flush: false);
+}
+
+Future<void> deleteFileAt(String path) async {
+  final f = File(path);
+  if (f.existsSync()) await f.delete();
+}
+
+bool fileExists(String path) => File(path).existsSync();

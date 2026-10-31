@@ -8,7 +8,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.StatFs
@@ -19,6 +24,7 @@ import android.provider.Settings
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeParseException
@@ -34,6 +40,18 @@ class DeviceBridge(private val activity: Activity, messenger: BinaryMessenger) :
     if (call.method != "invoke") return result.notImplemented()
     val action = call.argument<String>("action")!!
     val args = call.argument<Map<String, Any?>>("args") ?: emptyMap()
+    if (action == "video.frames") {
+      // Decoding frames takes a moment; keep it off the UI thread.
+      Thread {
+        val out = try {
+          videoSheet(args.str("path"), args.int("frames", 6))
+        } catch (e: Throwable) {
+          mapOf("error" to (e.message ?: e.javaClass.simpleName))
+        }
+        activity.runOnUiThread { result.success(out) }
+      }.start()
+      return
+    }
     val out = try {
       invoke(action, args)
     } catch (e: ActivityNotFoundException) {
@@ -169,6 +187,49 @@ class DeviceBridge(private val activity: Activity, messenger: BinaryMessenger) :
     else -> mapOf("error" to "Unknown action $action")
   }
 
+  /** Grabs evenly spaced frames from a video and lays them out in one contact-sheet JPEG for Gemma. */
+  private fun videoSheet(path: String, count: Int): Map<String, Any?> {
+    val r = MediaMetadataRetriever()
+    try {
+      r.setDataSource(path)
+      if (r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) != "yes") return mapOf("error" to "No video track")
+      val durationMs = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+      val n = count.coerceIn(1, 9)
+      val frames = (0 until n).mapNotNull { i ->
+        val t = (durationMs * (i + 0.5) / n).toLong() * 1000
+        // Scaled frames keep six 4K frames from exhausting memory.
+        if (android.os.Build.VERSION.SDK_INT >= 27) {
+          r.getScaledFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 768, 768)
+        } else {
+          r.getFrameAtTime(t, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        }
+      }
+      if (frames.isEmpty()) return mapOf("error" to "Could not read frames")
+      val cols = if (frames.size <= 4) 2 else 3
+      val rows = (frames.size + cols - 1) / cols
+      val cell = 1024 / cols
+      val first = frames.first()
+      val cellH = (cell * first.height.toFloat() / first.width).toInt().coerceIn(cell / 2, cell * 2)
+      val sheet = Bitmap.createBitmap(cell * cols, cellH * rows, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(sheet)
+      canvas.drawColor(Color.BLACK)
+      frames.forEachIndexed { i, f ->
+        val x = (i % cols) * cell
+        val y = (i / cols) * cellH
+        canvas.drawBitmap(f, null, Rect(x, y, x + cell, y + cellH), null)
+        f.recycle()
+      }
+      // Kept with the app's files (not the cache) because saved items show it as their preview.
+      val dir = File(activity.filesDir, "frames").apply { mkdirs() }
+      val out = File(dir, "frames-${System.currentTimeMillis()}.jpg")
+      out.outputStream().use { sheet.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+      sheet.recycle()
+      return mapOf("path" to out.path, "frames" to frames.size, "duration" to durationMs / 1000.0)
+    } finally {
+      r.release()
+    }
+  }
+
   private fun listEvents(days: Int): Map<String, Any?> {
     val now = System.currentTimeMillis()
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
@@ -203,9 +264,32 @@ class DeviceBridge(private val activity: Activity, messenger: BinaryMessenger) :
       arrayOf("%$name%"),
       null,
     )?.use { c ->
-      while (c.moveToNext() && found.size < 10) found.getOrPut(c.getString(0)) { mutableListOf() }.add(c.getString(1))
+      while (c.moveToNext() && found.size < 10) {
+        val who = c.getString(0) ?: continue
+        val number = c.getString(1) ?: continue
+        found.getOrPut(who) { mutableListOf() }.add(number)
+      }
     }
-    return mapOf("contacts" to found.map { mapOf("name" to it.key, "phones" to it.value.distinct()) })
+    val emails = linkedMapOf<String, MutableList<String>>()
+    activity.contentResolver.query(
+      ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+      arrayOf(ContactsContract.CommonDataKinds.Email.DISPLAY_NAME_PRIMARY, ContactsContract.CommonDataKinds.Email.ADDRESS),
+      "${ContactsContract.CommonDataKinds.Email.DISPLAY_NAME_PRIMARY} LIKE ?",
+      arrayOf("%$name%"),
+      null,
+    )?.use { c ->
+      while (c.moveToNext() && emails.size < 10) {
+        val who = c.getString(0) ?: continue
+        val address = c.getString(1) ?: continue
+        emails.getOrPut(who) { mutableListOf() }.add(address)
+      }
+    }
+    val names = (found.keys + emails.keys).distinct().take(10)
+    return mapOf(
+      "contacts" to names.map {
+        mapOf("name" to it, "phones" to (found[it] ?: emptyList<String>()).distinct(), "emails" to (emails[it] ?: emptyList<String>()).distinct())
+      }
+    )
   }
 
   private fun openApp(name: String): Map<String, Any?> {

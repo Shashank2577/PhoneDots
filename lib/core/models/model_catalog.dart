@@ -60,6 +60,7 @@ const gemmaModels = <ModelSpec>[
     fileName: 'mobile_actions_q8_ekv1024.litertlm',
     sha256: '33e295cbd996b419bb1de8f3f85c5b6b01ee058a2c89bdb2173cf3e6ff4ce9d0',
     recommended: true,
+    gated: true,
   ),
   ModelSpec(
     id: 'gemma-3-270m',
@@ -74,6 +75,7 @@ const gemmaModels = <ModelSpec>[
     hfRepo: 'litert-community/gemma-3-270m-it',
     fileName: 'gemma3-270m-it-q8.litertlm',
     sha256: '757e9119fa5bd667a2774fb470ac4afcd3190a21c677f8e69a5d6bc908abdd63',
+    gated: true,
   ),
   ModelSpec(
     id: 'embeddinggemma-2-text-270m',
@@ -143,7 +145,8 @@ final desertAntModels = <ModelSpec>[
   _da('title', 'Title', 'Titles and short descriptions for any text.', {ModelCapability.text}, 290, android: false),
   _da('eye', 'Eye', 'Photo understanding: scenes, quality, faces, best crop.', {ModelCapability.vision}, 66),
   _da('moderator', 'Moderator', 'NSFW image detection.', {ModelCapability.vision}, 9),
-  _da('shapes', 'Shapes', 'Turns rough strokes into clean shapes.', {ModelCapability.vision}, 1),
+  // Not in the Android SDK yet (desert-ant-core 4.2.1 ships it for iOS only).
+  _da('shapes', 'Shapes', 'Turns rough strokes into clean shapes.', {ModelCapability.vision}, 1, android: false),
   _da('clips', 'Clips', 'Best moments of talking video for shorts.', {ModelCapability.speech}, 560, android: false),
 ];
 

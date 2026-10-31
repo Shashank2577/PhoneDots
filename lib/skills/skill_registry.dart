@@ -7,6 +7,7 @@ import '../core/settings.dart';
 import '../core/storage/json_store.dart';
 import 'builtin/audio_skills.dart';
 import 'builtin/knowledge_skills.dart';
+import 'builtin/link_skills.dart';
 import 'builtin/output_skills.dart';
 import 'builtin/phone_skills.dart';
 import 'builtin/text_skills.dart';
@@ -28,6 +29,7 @@ class SkillRegistry extends ChangeNotifier {
     ...textSkills(),
     ...phoneSkills(),
     ...knowledgeSkills(),
+    ...linkSkills(),
     ...outputSkills(),
   ];
   final List<Recipe> recipes = [];
@@ -37,15 +39,24 @@ class SkillRegistry extends ChangeNotifier {
   static const _communityKey = 'community-skills';
 
   Future<void> load() async {
-    final saved = (await store.read(_recipesKey) as List?) ?? const [];
+    // A damaged or outdated entry is skipped; it must never stop the app from starting.
+    final saved = await store.read(_recipesKey);
     recipes
       ..clear()
-      ..addAll(builtInRecipes)
-      ..addAll(saved.map((r) => Recipe.fromJson(Map<String, dynamic>.from(r as Map))));
-    final c = (await store.read(_communityKey) as List?) ?? const [];
-    community
-      ..clear()
-      ..addAll(c.map((m) => CommunitySkill.parse(Map<String, dynamic>.from(m as Map))));
+      ..addAll(builtInRecipes);
+    for (final r in saved is List ? saved : const []) {
+      try {
+        final recipe = Recipe.fromJson(Map<String, dynamic>.from(r as Map));
+        if (!recipes.any((x) => x.id == recipe.id)) recipes.add(recipe);
+      } catch (_) {}
+    }
+    final c = await store.read(_communityKey);
+    community.clear();
+    for (final m in c is List ? c : const []) {
+      try {
+        community.add(CommunitySkill.parse(Map<String, dynamic>.from(m as Map)));
+      } catch (_) {}
+    }
     notifyListeners();
   }
 
@@ -69,10 +80,20 @@ class SkillRegistry extends ChangeNotifier {
 
   // Recipes
 
-  Future<void> saveRecipe(Recipe r) async {
+  /// Saves a user recipe. One whose id clashes with a built-in gets a new id,
+  /// so the built-in is never replaced and ids stay unique after a restart.
+  Future<Recipe> saveRecipe(Recipe r) async {
+    if (!r.builtIn && builtInRecipes.any((b) => b.id == r.id)) {
+      var n = 2;
+      while (recipes.any((x) => x.id == '${r.id}_$n')) {
+        n++;
+      }
+      r = Recipe(id: '${r.id}_$n', name: r.name, description: r.description, input: r.input, steps: r.steps);
+    }
     recipes.removeWhere((x) => x.id == r.id);
     recipes.add(r);
     await _persistRecipes();
+    return r;
   }
 
   Future<void> deleteRecipe(Recipe r) async {

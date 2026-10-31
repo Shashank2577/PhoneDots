@@ -1,0 +1,434 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
+
+import '../core/ledger.dart';
+import '../core/settings.dart';
+import '../core/util/files.dart';
+import 'deep_reader.dart';
+import 'link_preview.dart';
+import 'saved_store.dart';
+import 'web_reader.dart';
+
+typedef AskModel = Future<String> Function({required String system, required String prompt, List<String> imagePaths});
+
+/// Thrown by [AskModel] when no Gemma model is downloaded yet.
+class NoModelError implements Exception {
+  const NoModelError(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// Turns a share into a saved, summarised item.
+///
+/// Gathering is free and cheapest-first: the text the sharing app sent, the
+/// site's official embed or preview tags, the cover image (looked at by Gemma
+/// on the phone), an optional free web reader, and a transcript for shared
+/// audio or video files. The summary itself is always written on the phone.
+class Summarizer {
+  Summarizer({
+    required this.store,
+    required this.links,
+    required this.reader,
+    required this.settings,
+    required this.ledger,
+    required this.ask,
+    required this.canSee,
+    this.transcribe,
+    this.videoSheet,
+    DeepReader? deep,
+    this.filesDir,
+    http.Client? client,
+  }) : _client = client ?? http.Client(),
+       deep = deep ?? DeepReader(client: client);
+
+  final SavedStore store;
+  final LinkPreviewer links;
+  final WebReader reader;
+  final AppSettings settings;
+  final Ledger ledger;
+  final AskModel ask;
+
+  /// Whether the loaded Gemma can look at images (false in the demo engine).
+  final bool Function() canSee;
+  final Future<String?> Function(String path)? transcribe;
+
+  /// Makes one contact-sheet image of a few frames from a shared video, so
+  /// Gemma can see what happens in a screen-recorded reel.
+  final Future<String?> Function(String path)? videoSheet;
+  final DeepReader deep;
+  final String? filesDir;
+  final http.Client _client;
+
+  static const _uuid = Uuid();
+  Future<void> _queue = Future.value();
+
+  /// One item at a time, so summaries never fight the chat for the model.
+  Future<void> _enqueue(SavedItem item) {
+    final next = _queue.then((_) => process(item)).catchError((_) {});
+    _queue = next;
+    return next;
+  }
+
+  /// Saves what another app shared and starts reading it. Returns at once.
+  Future<SavedItem> addShare({
+    String text = '',
+    String? subject,
+    List<Map<String, String>> files = const [],
+    String? url,
+  }) async {
+    final urls = LinkPreviewer.findUrls('$text ${subject ?? ''}', max: 1);
+    url ??= urls.isEmpty ? null : urls.first;
+    // Only the saved link leaves the caption; any other link stays in the text.
+    var caption = text;
+    for (final m in LinkPreviewer.urlPattern.allMatches(text)) {
+      String? found;
+      try {
+        found = LinkPreviewer.clean(LinkPreviewer.trimUrl(m.group(0)!)).toString();
+      } catch (_) {}
+      if (found == url) {
+        caption = caption.replaceRange(m.start, m.start + LinkPreviewer.trimUrl(m.group(0)!).length, '');
+        break;
+      }
+    }
+    caption = caption.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final image = files.where((f) => f['kind'] == 'image').map((f) => f['path']).firstOrNull;
+    final item = SavedItem(
+      id: _uuid.v4(),
+      created: DateTime.now(),
+      sharedText: caption,
+      subject: subject?.trim().isEmpty ?? true ? null : subject!.trim(),
+      url: url,
+      platform: url == null ? (image != null ? 'screenshot' : 'file') : LinkPreviewer.platformOf(Uri.parse(url)),
+      kind: url == null
+          ? (image != null ? 'image' : (files.isNotEmpty ? files.first['kind'] ?? 'file' : 'note'))
+          : 'link',
+      imagePath: image,
+      files: files,
+    );
+    await store.add(item);
+    if (settings.autoSummarise) {
+      unawaited(_enqueue(item));
+    } else {
+      item.status = SavedStatus.needsModel;
+      await store.save();
+    }
+    return item;
+  }
+
+  Future<void> resummarise(SavedItem item) => _enqueue(item);
+
+  /// Never leaves an item spinning: anything unexpected ends as "failed".
+  Future<void> process(SavedItem item) async {
+    try {
+      await _process(item);
+    } catch (e) {
+      item
+        ..status = SavedStatus.failed
+        ..error = 'Something went wrong while reading this: $e';
+      await store.save();
+    }
+  }
+
+  Future<void> _process(SavedItem item) async {
+    item
+      ..status = SavedStatus.reading
+      ..error = null
+      ..body = null
+      ..sources = [];
+    await store.save();
+    if (item.sharedText.isNotEmpty) item.sources.add('caption');
+    if (item.subject != null) item.sources.add('share title');
+
+    String? pageText;
+    final url = item.url;
+    if (url != null && settings.readLinks) {
+      final host = Uri.tryParse(url)?.host ?? url;
+      final p = await links.preview(url);
+      for (final h in p.hosts) {
+        unawaited(ledger.record('link', 'Read the preview from $h', network: true));
+      }
+      item
+        ..url = p.url
+        ..platform = p.platform
+        ..kind = p.kind
+        ..author = p.author ?? item.author
+        ..description = p.description ?? item.description
+        ..imageUrl = p.imageUrl ?? item.imageUrl;
+      if (p.rich || item.title == null) item.title = p.rich ? p.title : (item.subject ?? p.title);
+      if (p.rich) {
+        item.sources.add(switch (p.via) {
+          'oembed' => 'official embed',
+          'api' => 'GitHub API',
+          _ => 'page preview',
+        });
+      }
+      // The whole thing, from each site's own free channel.
+      final before = {...p.hosts};
+      final contacted = await deep.read(p, youtubeKey: settings.youtubeKey);
+      // Decided after the full-text read: a refusal or bot check there counts too.
+      final servedOpenly = p.servedOpenly;
+      for (final h in contacted.toSet().difference(before)) {
+        unawaited(ledger.record('link', 'Read the full text from $h', network: true));
+      }
+      if (p.body != null) {
+        pageText = p.body;
+        item.sources.add(p.bodyFrom ?? 'full text');
+        item
+          ..title = p.title ?? item.title
+          ..author = p.author ?? item.author
+          ..description = p.description ?? item.description
+          ..imageUrl = p.imageUrl ?? item.imageUrl;
+      }
+      // Only for pages the site served openly but described thinly. A refusal,
+      // bot check or login wall is the site's answer; the reader is not a way round it.
+      if (pageText == null && settings.webReader && servedOpenly && (item.description ?? '').length < 200) {
+        pageText = await reader.read(p.url, apiKey: settings.jinaKey);
+        unawaited(ledger.record('link', 'Asked ${WebReader.name} to read $host', network: true));
+        if (pageText != null) item.sources.add(WebReader.name);
+      }
+      item.body = pageText;
+    } else if (url != null) {
+      item.title ??= item.subject;
+    }
+    // Show what was read straight away; the summary follows.
+    await store.save();
+
+    // The cover is kept for the preview even when the model can't look at it.
+    if (item.imagePath == null && item.imageUrl != null) {
+      item.imagePath = await _downloadCover(item);
+      if (item.imagePath != null && canSee()) item.sources.add('cover image');
+    } else if (item.imagePath != null && item.url == null) {
+      final fromVideo = !item.files.any((f) => f['kind'] == 'image');
+      item.sources.add(fromVideo ? 'video frames' : 'screenshot');
+    }
+
+    final transcripts = <String>[];
+    for (final f in item.files.where((f) => f['kind'] == 'audio')) {
+      if (item.imagePath == null && item.url == null && videoSheet != null) {
+        String? sheet;
+        try {
+          sheet = await videoSheet!(f['path']!);
+        } catch (_) {}
+        if (sheet != null) {
+          item.imagePath = sheet;
+          item.sources.add('video frames');
+        }
+      }
+      String? t;
+      try {
+        t = await transcribe?.call(f['path']!);
+      } catch (_) {}
+      if (t != null && t.trim().isNotEmpty) transcripts.add(t.trim());
+    }
+    if (transcripts.isNotEmpty) {
+      item.sources.add('transcript');
+      item.body = [?item.body, 'Transcript:\n${transcripts.join('\n')}'].join('\n\n');
+    }
+
+    // Screenshots: copy out every word first, so the text is there to read
+    // and search even before the summary arrives.
+    final shot = item.files.where((f) => f['kind'] == 'image').map((f) => f['path']!).toList();
+    if (shot.isNotEmpty && canSee()) {
+      final texts = <String>[];
+      for (final path in shot.take(4)) {
+        try {
+          final t = await ask(system: ocrPrompt, prompt: 'Transcribe all the text in this image.', imagePaths: [path]);
+          if (t.trim().isNotEmpty && !t.toLowerCase().contains('no text')) texts.add(t.trim());
+        } on NoModelError {
+          break;
+        } catch (_) {}
+      }
+      if (texts.isNotEmpty) {
+        item.sources.add('text in image');
+        item.body = [?item.body, texts.join('\n\n')].join('\n\n');
+        await store.save();
+      }
+    }
+
+    item.status = SavedStatus.summarising;
+    await store.save();
+    try {
+      final see = canSee() && item.imagePath != null;
+      final raw = await ask(
+        system: systemPrompt({...store.collections, ...SavedStore.defaultCollections}.take(16).toList()),
+        prompt: material(item, pageText: item.body, image: see),
+        imagePaths: see ? [item.imagePath!] : const [],
+      );
+      apply(item, raw);
+      if (item.summary == null) {
+        item
+          ..status = SavedStatus.failed
+          ..error = 'Gemma didn\'t write a summary this time. Try "summarise again".';
+        await store.save();
+        return;
+      }
+      item.status = SavedStatus.done;
+      unawaited(ledger.record('saved', 'Summarised "${item.displayTitle}" on this phone'));
+    } on NoModelError catch (e) {
+      item
+        ..status = SavedStatus.needsModel
+        ..error = e.message;
+    } catch (e) {
+      item
+        ..status = SavedStatus.failed
+        ..error = '$e';
+    }
+    await store.save();
+  }
+
+  Future<String?> _downloadCover(SavedItem item) async {
+    try {
+      final uri = Uri.parse(item.imageUrl!);
+      if (uri.scheme != 'https') return null;
+      unawaited(ledger.record('link', 'Downloaded the cover image from ${uri.host}', network: true));
+      final res = await _client.get(uri).timeout(const Duration(seconds: 15));
+      final type = res.headers['content-type'] ?? '';
+      if (res.statusCode != 200 || !type.startsWith('image/') || res.bodyBytes.length > 6 * 1024 * 1024) return null;
+      final ext = type.contains('png') ? 'png' : (type.contains('webp') ? 'webp' : 'jpg');
+      return await writeBytesFile(filesDir, 'cover-${item.id}.$ext', res.bodyBytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── prompt ───────────────────────────────────────────────────────────────
+
+  static String systemPrompt(List<String> collections) =>
+      'You file things the user saved from other apps. Write a detailed summary of the saved item from the material '
+      'given, and reply with JSON only, no other text:\n'
+      '{"title": "short title, max 8 words", '
+      '"summary": "a detailed summary in 3 to 6 sentences: what it is, who made it, the main idea, and why it is useful", '
+      '"points": ["up to 8 key takeaways, steps, ingredients, facts or numbers, in order"], '
+      '"collection": "one word", "tags": ["up to 5 lowercase tags"]}\n'
+      'Pick the collection from: ${collections.join(', ')}; invent a better one-word name only if none fits.\n'
+      'Use only the material. For a video or reel without a transcript or frames you only have its caption, cover and '
+      'creator: summarise those and do not describe scenes you cannot see. If the material is thin, say plainly what it is. Never invent details.';
+
+  static const ocrPrompt =
+      'Transcribe all text in the image exactly, preserving line breaks and reading order. '
+      'Output only the text. If there is no text, output: no text';
+
+  static String material(SavedItem i, {String? pageText, String transcript = '', bool image = false}) {
+    String clip(String s, int n) => s.length <= n ? s : '${s.substring(0, n)}…';
+    final b = StringBuffer();
+    if (i.url != null) b.writeln('Link: ${i.url} (${i.platform} ${i.kind})');
+    if (i.title != null) b.writeln('Title: ${i.title}');
+    if (i.subject != null && i.subject != i.title) b.writeln('Shared with the title: ${i.subject}');
+    if (i.author != null) b.writeln('Creator: ${i.author}');
+    if (i.sharedText.isNotEmpty) b.writeln('Text shared with it: ${clip(i.sharedText, 1500)}');
+    if ((i.description ?? '').isNotEmpty) b.writeln('Caption / description: ${clip(i.description!, 2000)}');
+    if (pageText != null) b.writeln('Full text:\n${clip(pageText, 4500)}');
+    if (transcript.isNotEmpty) b.writeln('Transcript:\n${clip(transcript, 3000)}');
+    for (final f in i.files.where((f) => f['kind'] != 'image')) {
+      b.writeln('Shared file: ${f['name']}');
+    }
+    if (image) {
+      b.writeln(switch (i.sources) {
+        final s when s.contains('video frames') => 'The attached image shows frames from the shared video, in order.',
+        _ when i.url == null => 'The attached image is the screenshot the user saved.',
+        _ => 'The attached image is the post\'s cover.',
+      });
+    }
+    if (b.isEmpty) b.writeln('(Nothing but the share itself.)');
+    return b.toString().trim();
+  }
+
+  /// Fills the item from the model's reply, tolerating non-JSON answers.
+  static void apply(SavedItem item, String raw) {
+    final j = parseJson(raw);
+    if (j != null) {
+      final title = _text(j['title']);
+      if (title.isNotEmpty && (item.title == null || item.url == null || item.sources.isEmpty)) item.title = title;
+      final summary = _text(j['summary']);
+      item
+        ..summary = summary.isEmpty ? null : summary
+        ..points = _strings(j['points'], 8)
+        ..tags = _strings(j['tags'], 5).map((t) => t.toLowerCase().replaceFirst('#', '')).toList()
+        ..collection = _collection(_text(j['collection']));
+      return;
+    }
+    final cleaned = raw.replaceAll(RegExp(r'```[a-zA-Z]*'), '').trim();
+    // Cut-off JSON (the answer hit its length limit): rescue the fields that made it.
+    if (cleaned.startsWith('{')) {
+      String? field(String key) {
+        final m = RegExp('"$key"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)').firstMatch(cleaned);
+        if (m == null) return null;
+        try {
+          return (jsonDecode('"${m.group(1)}"') as String).trim();
+        } catch (_) {
+          return m.group(1)!.trim();
+        }
+      }
+
+      final summary = field('summary');
+      final title = field('title');
+      if (title != null && title.isNotEmpty && item.title == null) item.title = title;
+      item
+        ..summary = summary == null || summary.isEmpty ? null : summary
+        ..collection = _collection(field('collection') ?? '');
+      return;
+    }
+    final lines = cleaned.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final bullet = RegExp(r'^([-*•]|\d+[.)])\s+');
+    final bullets = lines.where(bullet.hasMatch).map((l) => l.replaceFirst(bullet, '')).toList();
+    final prose = lines.where((l) => !bullet.hasMatch(l)).join(' ');
+    item
+      ..summary = prose.isNotEmpty ? prose : (bullets.isNotEmpty ? bullets.first : null)
+      ..points = bullets.take(8).toList()
+      ..collection ??= 'other';
+  }
+
+  /// The first complete JSON object in the reply (strings and nesting respected).
+  static Map<String, dynamic>? parseJson(String raw) {
+    var start = raw.indexOf('{');
+    while (start >= 0) {
+      var depth = 0;
+      var inString = false;
+      for (var k = start; k < raw.length; k++) {
+        final ch = raw[k];
+        if (inString) {
+          if (ch == '\\') {
+            k++;
+          } else if (ch == '"') {
+            inString = false;
+          }
+          continue;
+        }
+        if (ch == '"') {
+          inString = true;
+        } else if (ch == '{') {
+          depth++;
+        } else if (ch == '}') {
+          depth--;
+          if (depth == 0) {
+            try {
+              final j = jsonDecode(raw.substring(start, k + 1));
+              if (j is Map) return Map<String, dynamic>.from(j);
+            } catch (_) {}
+            break;
+          }
+        }
+      }
+      start = raw.indexOf('{', start + 1);
+    }
+    return null;
+  }
+
+  static String _text(Object? v) => v == null ? '' : '$v'.trim();
+
+  static List<String> _strings(Object? v, int max) => v is List
+      ? v.where((e) => e != null).map((e) => '$e'.trim()).where((e) => e.isNotEmpty).take(max).toList()
+      : (v is String && v.trim().isNotEmpty ? [v.trim()] : <String>[]);
+
+  static String _collection(String c) {
+    final s = c.toLowerCase().replaceAll(RegExp(r'[^a-z0-9 &-]'), '').trim();
+    if (s.isEmpty) return 'other';
+    return s.length > 20 ? s.substring(0, 20) : s;
+  }
+
+  void close() => _client.close();
+}

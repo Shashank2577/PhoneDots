@@ -153,6 +153,9 @@ abstract class SkillContext {
 
   Future<String?> saveTextFile(String name, String content);
 
+  /// Reads a link's public preview (title, author, description). Logged as network use.
+  Future<Map<String, dynamic>> previewLink(String url);
+
   void progress(String message);
 }
 
@@ -196,7 +199,28 @@ class FnSkill extends Skill {
   final Future<SkillResult> Function(Map<String, dynamic> args, SkillContext ctx) handler;
 
   @override
-  Future<SkillResult> run(Map<String, dynamic> args, SkillContext ctx) => handler(args, ctx);
+  Future<SkillResult> run(Map<String, dynamic> args, SkillContext ctx) async => withSummary(await handler(args, ctx));
+
+  /// Every successful result carries a one-line "summary", so "try it" and
+  /// recipe steps ({{prev.summary}}) always have something to show.
+  static SkillResult withSummary(SkillResult r) {
+    if (r.isError || r.data.containsKey('summary')) return r;
+    String? line;
+    for (final key in const ['answer', 'text', 'result', 'language', 'message', 'description']) {
+      final v = r.data[key];
+      if (v is String && v.trim().isNotEmpty) {
+        line = v.trim();
+        break;
+      }
+    }
+    line ??= r.data.entries
+        .where((e) => e.value is String || e.value is num)
+        .take(4)
+        .map((e) => '${e.key.replaceAll('_', ' ')}: ${e.value}')
+        .join(' · ');
+    if (line.isEmpty) line = r.cards.isEmpty ? 'Done.' : 'Shown below.';
+    return SkillResult({...r.data, 'summary': line.length > 600 ? '${line.substring(0, 600)}…' : line}, cards: r.cards);
+  }
 }
 
 extension ArgReaders on Map<String, dynamic> {

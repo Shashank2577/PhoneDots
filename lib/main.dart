@@ -1,4 +1,5 @@
-import 'dart:ui' show PlatformDispatcher;
+import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -7,32 +8,35 @@ import 'app_state.dart';
 import 'core/app_log.dart';
 import 'features/shell/shell.dart';
 import 'theme/theme.dart';
-import 'widgets/sketch.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final services = await AppServices.create();
-  _logErrors(services.log);
-  runApp(PhoneDotsApp(state: AppState(services)));
-}
-
-/// Errors Flutter catches also go to Settings → Logs (tests don't call main).
-void _logErrors(AppLog log) {
-  final previous = FlutterError.onError;
-  FlutterError.onError = (details) {
-    log.add('error', details.exceptionAsString());
-    previous?.call(details);
-  };
-  final platform = PlatformDispatcher.instance.onError;
-  PlatformDispatcher.instance.onError = (error, stack) {
-    log.add('error', '$error');
-    return platform?.call(error, stack) ?? false;
-  };
+  // Every error, anywhere, lands in the diagnostics log instead of vanishing.
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    FlutterError.onError = (d) {
+      FlutterError.presentError(d);
+      appLog.error(
+        'flutter',
+        d.exceptionAsString().split('\n').first,
+        {if (d.library != null) 'library': d.library},
+        d.exception,
+        d.stack,
+      );
+    };
+    PlatformDispatcher.instance.onError = (e, s) {
+      appLog.error('app', 'uncaught error', null, e, s);
+      return true;
+    };
+    final services = await AppServices.create();
+    runApp(PhoneDotsApp(state: AppState(services)));
+  }, (e, s) => appLog.error('app', 'uncaught async error', null, e, s));
 }
 
 class PhoneDotsApp extends StatelessWidget {
   const PhoneDotsApp({super.key, required this.state});
   final AppState state;
+
+  Voice get _voice => Voice.values.firstWhere((v) => v.name == state.services.settings.voice, orElse: () => Voice.neat);
 
   @override
   Widget build(BuildContext context) => AppScope(
@@ -42,11 +46,9 @@ class PhoneDotsApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
         title: 'PhoneDots',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
+        theme: buildTheme(Brightness.light, voice: _voice),
+        darkTheme: buildTheme(Brightness.dark, voice: _voice),
         themeMode: state.services.settings.themeMode,
-        // Dotted paper under every route; scaffolds are transparent.
-        builder: (context, child) => PaperBackground(child: child!),
         home: const Shell(),
       ),
     ),
