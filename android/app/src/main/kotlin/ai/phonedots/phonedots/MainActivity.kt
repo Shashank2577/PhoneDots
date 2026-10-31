@@ -33,8 +33,39 @@ class MainActivity : FlutterActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    installCrashHandler()
     super.onCreate(savedInstanceState)
     handleShare(intent)
+  }
+
+  /**
+   * Writes an uncaught Android crash to the app's files folder before the
+   * process dies; the Dart side reads it on the next launch and adds it to the
+   * diagnostics log (and sends it only if the user turned crash reports on).
+   */
+  private fun installCrashHandler() {
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    if (previous is CrashWriter) return
+    Thread.setDefaultUncaughtExceptionHandler(CrashWriter(File(filesDir, "files"), previous))
+  }
+
+  private class CrashWriter(
+    private val dir: File,
+    private val next: Thread.UncaughtExceptionHandler?,
+  ) : Thread.UncaughtExceptionHandler {
+    override fun uncaughtException(t: Thread, e: Throwable) {
+      try {
+        dir.mkdirs()
+        val trace = android.util.Log.getStackTraceString(e).take(12000)
+        File(dir, "native-crash.txt").writeText(
+          "time: ${java.time.Instant.now()}\nthread: ${t.name}\n" +
+            "device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (Android ${android.os.Build.VERSION.RELEASE})\n\n$trace"
+        )
+      } catch (_: Throwable) {
+        // Never let the crash writer itself get in the way.
+      }
+      next?.uncaughtException(t, e)
+    }
   }
 
   override fun onNewIntent(intent: Intent) {

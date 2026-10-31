@@ -4,9 +4,11 @@ import '../../app_state.dart';
 import '../../core/models/model_catalog.dart';
 import '../../theme/theme.dart';
 import '../../widgets/hand.dart';
+import '../../core/app_log.dart';
 import '../lab/lab_screen.dart';
 import '../memory/memory_screen.dart';
 import '../privacy/privacy_screen.dart';
+import 'diagnostics_screen.dart';
 
 /// The "you" tab: everything that is not chat, skills or models.
 class YouScreen extends StatelessWidget {
@@ -17,7 +19,7 @@ class YouScreen extends StatelessWidget {
     final s = AppScope.services(context);
     void push(Widget w) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => w));
     return ListenableBuilder(
-      listenable: Listenable.merge([s.memory, s.knowledge, s.ledger]),
+      listenable: Listenable.merge([s.memory, s.knowledge, s.ledger, appLog]),
       builder: (context, _) => HandPage(
         wordmark: true,
         children: [
@@ -46,6 +48,14 @@ class YouScreen extends StatelessWidget {
               () => push(const PrivacyScreen()),
             ),
             (Doodle.flask, 'lab', 'try prompts, measure speed', () => push(const LabScreen())),
+            (
+              Doodle.search,
+              'diagnostics',
+              appLog.errorCount == 0
+                  ? 'what it did, step by step'
+                  : '${appLog.errorCount} problems logged · share the log',
+              () => push(const DiagnosticsScreen()),
+            ),
             (
               Doodle.gear,
               'settings',

@@ -45,3 +45,14 @@ Future<String?> writeBytesFile(String? dir, String name, List<int> bytes) async 
   await File(path).writeAsBytes(bytes);
   return path;
 }
+
+Future<void> appendTextFile(String path, String text) async {
+  await File(path).writeAsString(text, mode: FileMode.append, flush: false);
+}
+
+Future<void> deleteFileAt(String path) async {
+  final f = File(path);
+  if (f.existsSync()) await f.delete();
+}
+
+bool fileExists(String path) => File(path).existsSync();

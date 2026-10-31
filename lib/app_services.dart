@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import 'agent/conversation.dart';
+import 'core/app_log.dart';
+import 'core/crash_reporter.dart';
 import 'core/ledger.dart';
 import 'core/models/model_catalog.dart';
 import 'core/models/model_manager.dart';
@@ -62,6 +64,7 @@ class AppServices {
   final ValueNotifier<SharedIntake?> intake = ValueNotifier(null);
   late final LinkPreviewer links;
   late final SavedStore saved;
+  late final CrashReporter crashes;
   late final Summarizer summarizer;
 
   /// Set to a saved item's id when a share lands in "saved", so the UI can show it.
@@ -78,9 +81,16 @@ class AppServices {
     };
   }
 
-  static Future<AppServices> create({JsonStore? store, String? platform, http.Client? linkClient}) async {
+  static Future<AppServices> create({
+    JsonStore? store,
+    String? platform,
+    http.Client? linkClient,
+    @visibleForTesting LlmEngine? llm,
+  }) async {
     final p = platform ?? detectPlatform();
     final s = store ?? await JsonStore.open();
+    await appLog.open(s.filesDir);
+    appLog.info('app', 'started', {'platform': p});
     final settings = AppSettings(s);
     await settings.load();
     final ledger = Ledger(s);
@@ -93,12 +103,13 @@ class AppServices {
       ledger: ledger,
       // LiteRT-LM's Kotlin API exposes dynamic OpenAPI tools; the Swift API
       // only has compile-time tools, so iOS parses calls from text.
-      llm: native ? PlatformLlmEngine(nativeTools: p == 'android') : DemoLlmEngine(),
+      llm: llm ?? (native ? PlatformLlmEngine(nativeTools: p == 'android') : DemoLlmEngine()),
       nativeEmbedder: native ? PlatformEmbedder() : LexicalEmbedder(),
       specialists: native ? PlatformSpecialistEngine() : DemoSpecialistEngine(),
       device: DartDeviceActions(native ? PlatformDeviceActions() : DemoDeviceActions()),
     );
     services.links = LinkPreviewer(client: linkClient);
+    services.crashes = CrashReporter(settings: settings, ledger: ledger);
     services.saved = SavedStore(s);
     services.models = ModelManager(
       store: s,
@@ -135,6 +146,10 @@ class AppServices {
       services.conversations.load(),
     ]);
     if (native) services._listenForShares();
+    final crash = appLog.lastCrash;
+    if (crash != null && services.crashes.enabled) {
+      unawaited(services.crashes.send(crash, device: {'platform': p, 'ramMb': services.models.device.totalRamMb}));
+    }
     return services;
   }
 
@@ -154,18 +169,35 @@ class AppServices {
     final session = 'sub-${_uuid.v4()}';
     final out = StringBuffer();
     String? error;
-    await for (final e in llm.generate(
-      GenerationRequest(
-        modelId: settings.plannerId,
-        sessionId: session,
-        systemPrompt: system,
-        history: [EngineTurn(role: TurnRole.user, text: prompt, imagePaths: imagePaths, audioPaths: audioPaths)],
-        sampler: SamplerSettings(temperature: 0.3, maxTokens: maxTokens),
-      ),
-    )) {
+    final started = DateTime.now();
+    appLog.info('model', 'side task', {'promptChars': system.length + prompt.length, 'images': imagePaths.length});
+    await appLog.busy('working on a side task with ${modelById(settings.plannerId)?.name ?? 'Gemma'}');
+    // A stuck model is cancelled (which ends its stream) after 150 s of silence.
+    var stalled = false;
+    Timer arm() => Timer(const Duration(seconds: 150), () {
+      stalled = true;
+      unawaited(llm.cancel());
+    });
+    var watchdog = arm();
+    final request = GenerationRequest(
+      modelId: settings.plannerId,
+      sessionId: session,
+      systemPrompt: system,
+      history: [EngineTurn(role: TurnRole.user, text: prompt, imagePaths: imagePaths, audioPaths: audioPaths)],
+      sampler: SamplerSettings(temperature: 0.3, maxTokens: maxTokens),
+    );
+    await for (final e in llm.generate(request)) {
+      watchdog.cancel();
+      watchdog = arm();
       if (e is TokenEvent) out.write(e.text);
       if (e is ErrorEvent) error = e.message;
     }
+    watchdog.cancel();
+    if (stalled) error ??= 'The model stopped responding (no output for 150 seconds).';
+    await appLog.idle();
+    error == null
+        ? appLog.info('model', 'side task done', {'ms': DateTime.now().difference(started).inMilliseconds})
+        : appLog.error('model', 'side task failed', {'message': error});
     await llm.resetSession(session);
     if (error != null) throw StateError(error);
     return out.toString().trim();
@@ -192,6 +224,11 @@ class AppServices {
   /// Links, screenshots and clips go to "saved" and get summarised; plain
   /// text (nothing to save) still opens a chat.
   Future<void> receiveShare({String text = '', String? subject, List<Attachment> attachments = const []}) async {
+    appLog.info('share', 'received', {
+      'textChars': text.length,
+      'hasSubject': subject != null,
+      'files': [for (final a in attachments) a.kind],
+    });
     var url = LinkPreviewer.findUrls('$text ${subject ?? ''}', max: 1).firstOrNull;
     // A lone bare domain ("example.com/article") is a link too, e.g. typed into "save a link".
     final lone = text.trim();

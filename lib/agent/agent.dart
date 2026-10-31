@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../app_services.dart';
+import '../core/app_log.dart';
 import '../core/models/model_catalog.dart';
 import '../core/models/model_spec.dart';
 import '../core/runtime/engine_types.dart';
@@ -71,6 +73,11 @@ class ChatController extends ChangeNotifier {
 
   Future<void> send(String text, {List<Attachment> attachments = const []}) async {
     if (busy || (text.trim().isEmpty && attachments.isEmpty)) return;
+    appLog.info('agent', 'message sent', {
+      'chars': text.trim().length,
+      'attachments': attachments.map((a) => a.kind).toList(),
+      'chat': conversation.id.substring(0, 8),
+    });
     busy = true;
     _stopRequested = false;
     final user = ChatMessage(id: _uuid.v4(), isUser: true, text: text.trim(), attachments: attachments);
@@ -91,11 +98,14 @@ class ChatController extends ChangeNotifier {
       // Messages with links always go to the planner, which can talk about them.
       final routed = user.linkContext.isEmpty && await _tryRouter(user, reply);
       if (!routed) await _runPlanner(user, reply);
-    } catch (e) {
+    } catch (e, st) {
+      appLog.error('agent', 'send failed', null, e, st);
       reply.error = '$e';
     } finally {
       reply.streaming = false;
+      reply.phase = null;
       busy = false;
+      if (reply.error != null) appLog.warn('agent', 'reply ended with an error', {'error': reply.error});
       await services.conversations.save(conversation);
       notifyListeners();
     }
@@ -186,14 +196,25 @@ class ChatController extends ChangeNotifier {
     );
     final calls = <ToolCallRequest>[];
     var text = '';
-    await for (final e in services.llm.generate(req)) {
+    reply.phase = 'quick check with FunctionGemma…';
+    notifyListeners();
+    final dog = _watchdog('answering with FunctionGemma');
+    await for (final e in _logged(req, 'answering with FunctionGemma', dog)) {
       if (e is ToolCallsEvent) calls.addAll(e.calls);
       if (e is TokenEvent) text += e.text;
-      if (e is ErrorEvent) return false;
+      if (e is ErrorEvent) {
+        dog.stop();
+        unawaited(appLog.idle());
+        return false;
+      }
     }
+    dog.stop();
+    unawaited(appLog.idle());
+    if (dog.fired) return false;
     if (calls.isEmpty) {
       calls.addAll(ToolCallParser.parse(text, tools.map((t) => t.id).toSet()).calls);
     }
+    appLog.info('agent', 'fast path', {'calls': calls.map((c) => c.name).toList()});
     if (calls.length != 1) return false;
     final step = await _execute(calls.single, reply, via: 'router');
     if (step.status == StepStatus.done) {
@@ -292,8 +313,60 @@ class ChatController extends ChangeNotifier {
     return out;
   }
 
+  /// The model's event stream with time limits, so a stuck generation ends
+  /// with a clear error instead of dots that spin forever. Also marks the
+  /// work as risky so an out-of-memory kill is noticed on the next launch.
+  /// How long the model may go without any output (including the first)
+  /// before the answer is stopped with an error.
+  static Duration outputLimit = const Duration(seconds: 150);
+
+  /// The model's events, logged. Pair with [_Watchdog] so a stuck generation
+  /// ends with a clear error instead of dots that spin forever.
+  Stream<GenEvent> _logged(GenerationRequest req, String what, _Watchdog dog) {
+    final started = DateTime.now();
+    unawaited(appLog.busy(what));
+    return services.llm.generate(req).map((e) {
+      if (!dog.sawOutput) {
+        appLog.info('model', 'first output', {'ms': DateTime.now().difference(started).inMilliseconds});
+      }
+      dog.feed();
+      switch (e) {
+        case DoneEvent(:final stats):
+          appLog.info('model', 'done', {
+            'ms': DateTime.now().difference(started).inMilliseconds,
+            'ttftMs': stats.timeToFirstTokenMs,
+            'tokens': stats.outputTokens,
+            if (stats.prefillTokensPerSec != null) 'prefillTps': stats.prefillTokensPerSec!.round(),
+            if (stats.decodeTokensPerSec != null) 'decodeTps': stats.decodeTokensPerSec!.round(),
+          });
+        case ErrorEvent(:final message):
+          appLog.error('model', 'generation failed', {'message': message});
+        case ToolCallsEvent(:final calls):
+          appLog.info('model', 'tool calls', {'names': calls.map((c) => c.name).toList()});
+        default:
+          break;
+      }
+      return e;
+    });
+  }
+
+  _Watchdog _watchdog(String what) => _Watchdog(outputLimit, () {
+    appLog.error('model', 'no output for ${outputLimit.inSeconds}s while $what');
+    unawaited(services.llm.cancel());
+  });
+
+  /// The error to show after the watchdog stopped a generation.
+  static String _stalled(_Watchdog dog) => dog.sawOutput
+      ? 'The model stopped responding. Details are in You → diagnostics.'
+      : 'The model did not start answering within ${outputLimit.inSeconds} seconds. '
+            'Try again, or a smaller model. Details are in You → diagnostics.';
+
   Future<void> _runPlanner(ChatMessage user, ChatMessage reply) async {
     final s = services.settings;
+    if (!services.isDemo && services.models.loadedPlanner != s.plannerId) {
+      reply.phase = 'loading ${modelById(s.plannerId)?.name ?? 'the model'}… (the first time takes a little while)';
+      notifyListeners();
+    }
     final ready = services.isDemo || await services.models.ensurePlanner();
     if (!ready) {
       reply.error = services.models.isReady(s.plannerId)
@@ -302,7 +375,8 @@ class ChatController extends ChangeNotifier {
       return;
     }
     reply.modelId = s.plannerId;
-    final skills = services.skills.selectFor(user.text, attachments: allAttachments);
+    // A short list keeps the prompt well inside a small model's 4k context.
+    final skills = services.skills.selectFor(user.text, attachments: allAttachments, max: 8);
     final tools = skills.map((k) => k.toToolSpec()).toList();
     final toolNames = tools.map((t) => t.name).toSet();
     final system = Prompts.system(
@@ -328,7 +402,33 @@ class ChatController extends ChangeNotifier {
       final roundText = StringBuffer();
       final calls = <ToolCallRequest>[];
       final textBefore = reply.text;
-      await for (final e in services.llm.generate(req)) {
+      final promptChars =
+          system.length +
+          req.history.fold<int>(
+            0,
+            (n, t) => n + t.text.length + jsonEncode(t.toolResponses.map((r) => r.response).toList()).length,
+          );
+      final toolChars = jsonEncode(req.tools.map((t) => t.toJson()).toList()).length;
+      appLog.info('agent', 'planner round ${round + 1}', {
+        'model': s.plannerId,
+        'tools': req.tools.map((t) => t.name).toList(),
+        'promptChars': promptChars,
+        'toolChars': toolChars,
+        'estTokens': (promptChars + toolChars) ~/ 4,
+        'turns': req.history.length,
+      });
+      if ((promptChars + toolChars) ~/ 4 > 3000) {
+        appLog.warn('agent', 'prompt is close to the 4k context; answers may be slow or cut', {
+          'estTokens': (promptChars + toolChars) ~/ 4,
+        });
+      }
+      if (reply.steps.isEmpty) {
+        reply.phase = req.tools.isEmpty ? 'thinking…' : 'reading your message with ${req.tools.length} skills ready…';
+        notifyListeners();
+      }
+      final what = 'answering with ${modelById(s.plannerId)?.name ?? 'Gemma'}';
+      final dog = _watchdog(what);
+      await for (final e in _logged(req, what, dog)) {
         switch (e) {
           case TokenEvent(:final text):
             roundText.write(text);
@@ -345,6 +445,9 @@ class ChatController extends ChangeNotifier {
             reply.error = message;
         }
       }
+      dog.stop();
+      unawaited(appLog.idle());
+      if (dog.fired) reply.error ??= _stalled(dog);
       if (reply.error != null || _stopRequested) break;
 
       var text = roundText.toString();
@@ -358,6 +461,11 @@ class ChatController extends ChangeNotifier {
         reply.turns.add(EngineTurn(role: TurnRole.model, text: text));
         break;
       }
+      appLog.info('agent', 'model asked for skills', {
+        'calls': [
+          for (final c in calls) {'skill': c.name, 'args': c.arguments.keys.toList()},
+        ],
+      });
       reply.turns.add(EngineTurn(role: TurnRole.model, text: text, toolCalls: calls));
       final responses = <ToolResponse>[];
       for (final call in calls) {
@@ -411,19 +519,35 @@ class ChatController extends ChangeNotifier {
         return step;
       }
       if (!await _approve(skill, call.arguments)) {
+        appLog.info('skill', '${skill.id} declined by the user');
         step
           ..status = StepStatus.declined
           ..result = {'error': 'The user declined this action.'};
         return step;
       }
-      final r = await skill.run(call.arguments, _RunContext(this, step));
+      appLog.info('skill', '${skill.id} started', {'via': via, 'args': call.arguments.keys.toList()});
+      // Phone actions answer in seconds; model and audio work can take minutes.
+      final limit = skill.kind == SkillKind.device ? const Duration(seconds: 30) : const Duration(minutes: 10);
+      final r = await skill
+          .run(call.arguments, _RunContext(this, step))
+          .timeout(
+            limit,
+            onTimeout: () => SkillResult.error(
+              '${skill.name} did not answer within ${limit.inSeconds >= 120 ? '${limit.inMinutes} minutes' : '${limit.inSeconds} seconds'}.',
+            ),
+          );
+      final ms = DateTime.now().difference(started).inMilliseconds;
+      r.isError
+          ? appLog.warn('skill', '${skill.id} failed', {'ms': ms, 'error': '${r.data['error']}'})
+          : appLog.info('skill', '${skill.id} done', {'ms': ms, 'cards': r.cards.length});
       step
         ..status = r.isError ? StepStatus.failed : StepStatus.done
         ..result = r.data
         ..cards = r.cards;
       unawaited(services.ledger.record('skill', '${skill.name}${r.isError ? ' (failed)' : ''}'));
       return step;
-    } catch (e) {
+    } catch (e, st) {
+      appLog.error('skill', '${call.name} threw', null, e, st);
       step
         ..status = StepStatus.failed
         ..result = {'error': '$e'};
@@ -444,7 +568,9 @@ class ChatController extends ChangeNotifier {
       ConfirmPolicy.always => true,
     };
     if (!needs) return true;
+    if (onConfirm == null) appLog.warn('skill', 'no permission prompt available for ${skill.id}; declined');
     final ok = await (onConfirm?.call(skill, args) ?? Future.value(false));
+    appLog.info('skill', 'permission for ${skill.id}: ${ok ? 'allowed' : 'declined'}');
     if (ok && skill.confirm == ConfirmPolicy.firstTime) {
       await settings.update((s) => s.grantedSkills.add(skill.id));
     }
@@ -536,4 +662,32 @@ class _RunContext implements SkillContext {
     step.progress = message;
     c.refresh();
   }
+}
+
+/// Fires once if it is not fed within [limit]; feeding restarts the wait.
+class _Watchdog {
+  _Watchdog(this.limit, this.onFire) {
+    _arm();
+  }
+
+  final Duration limit;
+  final void Function() onFire;
+  Timer? _timer;
+  bool fired = false;
+  bool sawOutput = false;
+
+  void _arm() {
+    _timer?.cancel();
+    _timer = Timer(limit, () {
+      fired = true;
+      onFire();
+    });
+  }
+
+  void feed() {
+    sawOutput = true;
+    if (!fired) _arm();
+  }
+
+  void stop() => _timer?.cancel();
 }

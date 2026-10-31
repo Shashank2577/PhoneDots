@@ -136,7 +136,13 @@ class _AssistantMessage extends StatelessWidget {
         children: [
           if (m.thinking.isNotEmpty) _Thinking(m.thinking),
           for (final s in m.steps) StepTile(s),
-          if (waiting) const HoppingDots(),
+          if (waiting)
+            Row(
+              children: [
+                const HoppingDots(),
+                if (m.phase != null) ...[const SizedBox(width: 10), Expanded(child: Meta(m.phase!, maxLines: 2))],
+              ],
+            ),
           if (m.text.isNotEmpty)
             Padding(
               padding: EdgeInsets.only(top: m.steps.isEmpty ? 0 : 8),

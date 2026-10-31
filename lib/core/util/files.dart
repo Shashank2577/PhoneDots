@@ -12,3 +12,9 @@ int fileLength(String path) => impl.fileLength(path);
 
 /// Writes raw bytes (e.g. a downloaded cover image) and returns the path.
 Future<String?> writeBytesFile(String? dir, String name, List<int> bytes) => impl.writeBytesFile(dir, name, bytes);
+
+Future<void> appendTextFile(String path, String text) => impl.appendTextFile(path, text);
+
+Future<void> deleteFileAt(String path) => impl.deleteFileAt(path);
+
+bool fileExists(String path) => impl.fileExists(path);

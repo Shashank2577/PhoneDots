@@ -77,6 +77,10 @@ class ChatMessage {
   final bool isUser;
   String text;
   String thinking;
+
+  /// What's happening right now while nothing else shows ("loading Gemma…").
+  /// Not saved.
+  String? phase;
   final List<Attachment> attachments;
   final List<AgentStep> steps;
 

@@ -33,6 +33,11 @@ class AppSettings extends ChangeNotifier {
   /// units a day, one per video). Jina: higher reader limits.
   String youtubeKey = '';
   String jinaKey = '';
+
+  /// Send a crash report (no chats, no personal data) to [crashReportUrl]
+  /// after the app crashed. Off by default; nothing is sent without a URL.
+  bool crashReports = false;
+  String crashReportUrl = '';
   bool useGpu = true;
   int maxSteps = 6;
   double temperature = 0.7;
@@ -58,6 +63,8 @@ class AppSettings extends ChangeNotifier {
     webReader = j['webReader'] as bool? ?? webReader;
     youtubeKey = j['youtubeKey'] as String? ?? '';
     jinaKey = j['jinaKey'] as String? ?? '';
+    crashReports = j['crashReports'] as bool? ?? false;
+    crashReportUrl = j['crashReportUrl'] as String? ?? '';
     useGpu = j['useGpu'] as bool? ?? useGpu;
     maxSteps = (j['maxSteps'] as int? ?? maxSteps).clamp(1, 12);
     temperature = ((j['temperature'] as num?)?.toDouble() ?? temperature).clamp(0.0, 1.2);
@@ -83,6 +90,8 @@ class AppSettings extends ChangeNotifier {
       'webReader': webReader,
       'youtubeKey': youtubeKey,
       'jinaKey': jinaKey,
+      'crashReports': crashReports,
+      'crashReportUrl': crashReportUrl,
       'useGpu': useGpu,
       'maxSteps': maxSteps,
       'temperature': temperature,

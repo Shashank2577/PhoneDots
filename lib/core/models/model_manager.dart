@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../app_log.dart';
 import '../ledger.dart';
 import '../runtime/engine_types.dart';
 import '../runtime/engines.dart';
@@ -237,6 +238,12 @@ class ModelManager extends ChangeNotifier {
         loadedRouter = null;
       }
       final started = DateTime.now();
+      appLog.info('model', 'loading ${m.name}', {
+        'gpu': settings.useGpu,
+        'ramMb': device.totalRamMb,
+        'router': isRouter,
+      });
+      await appLog.busy('loading ${m.name}');
       await llm.load(
         modelId: id,
         path: pathFor(m) ?? id,
@@ -253,8 +260,12 @@ class ModelManager extends ChangeNotifier {
       unawaited(
         ledger.record('model', 'Loaded ${m.name} in ${formatMs(DateTime.now().difference(started).inMilliseconds)}'),
       );
+      appLog.info('model', 'loaded ${m.name}', {'ms': DateTime.now().difference(started).inMilliseconds});
+      await appLog.idle();
       return true;
-    } catch (e) {
+    } catch (e, st) {
+      await appLog.idle();
+      appLog.error('model', 'could not load ${m.name}', {'gpu': settings.useGpu}, e, st);
       loadError = 'Could not load ${m.name}: $e';
       return false;
     } finally {

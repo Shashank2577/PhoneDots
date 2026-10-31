@@ -112,7 +112,15 @@ class PlatformLlmEngine implements LlmEngine {
   Future<void> cancel() async {
     final id = _activeRequest;
     if (id == null) return;
-    await Channels.llm.invokeMethod('cancel', {'requestId': id});
+    try {
+      await Channels.llm.invokeMethod('cancel', {'requestId': id}).timeout(const Duration(seconds: 5));
+    } catch (_) {}
+    // End the stream here too: a stuck native generation may never answer.
+    final c = _requests[id];
+    if (c != null && !c.isClosed) {
+      c.add(const DoneEvent(GenerationStats()));
+      _close(id);
+    }
   }
 
   @override

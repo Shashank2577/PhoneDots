@@ -13,6 +13,8 @@ import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hand.dart';
+import '../../core/app_log.dart';
+import '../settings/diagnostics_screen.dart';
 import '../voice/voice_screen.dart';
 import 'attach.dart';
 import 'message_view.dart';
@@ -39,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _services = state.services;
       _services!.intake.addListener(_onIntake);
       WidgetsBinding.instance.addPostFrameCallback((_) => _onIntake());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _crashNotice());
     }
     if (_bound != state.chat) {
       _bound?.removeListener(_onChat);
@@ -54,6 +57,23 @@ class _ChatScreenState extends State<ChatScreen> {
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// After a crash, say so once, with a way to the details.
+  void _crashNotice() {
+    if (!mounted || appLog.lastCrash == null || appLog.crashNoticeShown) return;
+    appLog.crashNoticeShown = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: const Text('PhoneDots closed unexpectedly last time.'),
+        action: SnackBarAction(
+          label: 'details',
+          onPressed: () =>
+              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DiagnosticsScreen())),
+        ),
+      ),
+    );
   }
 
   void _onIntake() {
