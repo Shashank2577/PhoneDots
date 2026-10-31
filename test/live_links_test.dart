@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 // End-to-end link handling through the real chat pipeline with live network.
 // Skipped by default; run with:  LIVE=1 flutter test test/live_links_test.dart
 // (The demo engine stands in for Gemma, so this checks everything up to the
