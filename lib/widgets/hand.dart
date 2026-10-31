@@ -696,7 +696,14 @@ class PillButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (leading != null) ...[DoodleIcon(leading!, size: 18, color: c), const SizedBox(width: 8)],
-              Text(text, style: Hand.label.copyWith(color: c), maxLines: 1),
+              Flexible(
+                child: Text(
+                  text,
+                  style: Hand.label.copyWith(color: c),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),

@@ -225,7 +225,11 @@ class LexicalEmbedder implements Embedder {
   @override
   Future<List<double>> embed(String text) async {
     final v = List<double>.filled(dimensions, 0);
-    final words = text.toLowerCase().split(RegExp(r'[^a-z0-9]+')).where((w) => w.length > 1);
+    final words = text
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .expand(_cjkGrams)
+        .where((w) => w.length > 1);
     for (final w in words) {
       final stem = w.length > 4 ? w.substring(0, w.length - (w.endsWith('s') ? 1 : 0)) : w;
       var h = 2166136261;
@@ -372,5 +376,18 @@ class DemoDeviceActions implements DeviceActions {
       default:
         return {'ok': true, 'demo': true, 'message': 'Demo: would run "$action" on a phone.'};
     }
+  }
+}
+
+/// Scripts without spaces (Chinese, Japanese) are split into character pairs
+/// so keyword search still finds them; other words pass through.
+Iterable<String> _cjkGrams(String w) sync* {
+  final r = w.runes.toList();
+  if (r.length < 2 || !r.any((c) => c >= 0x2e80)) {
+    yield w;
+    return;
+  }
+  for (var i = 0; i < r.length - 1; i++) {
+    yield String.fromCharCodes(r.sublist(i, i + 2));
   }
 }

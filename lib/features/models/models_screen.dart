@@ -24,7 +24,10 @@ class ModelsScreen extends StatelessWidget {
           final visible = m.visibleModels;
           final brains = visible.where((x) => x.provider == ModelProvider.gemma).toList();
           final specialists = visible.where((x) => x.provider == ModelProvider.desertAnt).toList();
-          final missing = visible.where((x) => !m.isReady(x.id) && x.recommended && m.canTryDownload(x)).toList();
+          // Only the ones this phone has the memory for, so the count matches what starts.
+          final missing = visible
+              .where((x) => !m.isReady(x.id) && x.recommended && m.canTryDownload(x) && m.fits(x))
+              .toList();
           final used = formatBytes(m.storageUsed);
           return ListView(
             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -41,8 +44,9 @@ class ModelsScreen extends StatelessWidget {
               Column0(
                 child: Row(
                   children: [
-                    MarkedText('$used on this phone', mark: used, style: Hand.label.copyWith(fontSize: 22)),
-                    const Spacer(),
+                    Expanded(
+                      child: MarkedText('$used on this phone', mark: used, style: Hand.label.copyWith(fontSize: 22)),
+                    ),
                     if (m.device.totalRamMb > 0) Meta('${(m.device.totalRamMb / 1024).toStringAsFixed(0)} GB memory'),
                   ],
                 ),
@@ -58,7 +62,7 @@ class ModelsScreen extends StatelessWidget {
                         leading: Doodle.arrow,
                         onTap: () {
                           for (final x in missing) {
-                            if (m.fits(x)) m.download(x.id);
+                            m.download(x.id);
                           }
                         },
                       ),

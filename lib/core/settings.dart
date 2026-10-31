@@ -45,7 +45,7 @@ class AppSettings extends ChangeNotifier {
   Future<void> load() async {
     final j = await _store.read(_key) as Map?;
     if (j == null) return;
-    themeMode = ThemeMode.values.byName(j['themeMode'] as String? ?? 'system');
+    themeMode = ThemeMode.values.asNameMap()[j['themeMode']] ?? ThemeMode.system;
     voice = j['voice'] as String? ?? voice;
     hfToken = j['hfToken'] as String? ?? '';
     plannerId = j['plannerId'] as String? ?? plannerId;
@@ -59,8 +59,8 @@ class AppSettings extends ChangeNotifier {
     youtubeKey = j['youtubeKey'] as String? ?? '';
     jinaKey = j['jinaKey'] as String? ?? '';
     useGpu = j['useGpu'] as bool? ?? useGpu;
-    maxSteps = j['maxSteps'] as int? ?? maxSteps;
-    temperature = (j['temperature'] as num?)?.toDouble() ?? temperature;
+    maxSteps = (j['maxSteps'] as int? ?? maxSteps).clamp(1, 12);
+    temperature = ((j['temperature'] as num?)?.toDouble() ?? temperature).clamp(0.0, 1.2);
     onboarded = j['onboarded'] as bool? ?? false;
     disabledSkills = {...(j['disabledSkills'] as List? ?? const []).cast<String>()};
     grantedSkills = {...(j['grantedSkills'] as List? ?? const []).cast<String>()};

@@ -147,7 +147,7 @@ class _OnboardingState extends State<Onboarding> {
                     children: [
                       DrawnDoodle(Doodle.tick, size: 22),
                       SizedBox(width: 8),
-                      Body('downloading, carry on while it runs'),
+                      Expanded(child: Body('downloading, carry on while it runs')),
                     ],
                   )
                 : PillButton('download the models', leading: Doodle.plus, onTap: _download),
