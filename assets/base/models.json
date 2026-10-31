@@ -515,16 +515,13 @@
       "family": "desertant",
       "runtime": "desertant-sdk",
       "role": "specialist",
-      "summary": "Turns rough strokes into clean shapes.",
+      "summary": "Turns rough strokes into clean shapes. Not wired into the native bridges yet.",
       "capabilities": [
         "vision"
       ],
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
-      "platforms": [
-        "android",
-        "ios"
-      ],
+      "platforms": [],
       "recommended": false,
       "source": "sdk",
       "sdk": {
