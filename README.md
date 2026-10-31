@@ -117,7 +117,7 @@ flutter run -d <android-device> --release
 
 **Test builds (APK).** Every push builds one: Actions → the run → Artifacts → `phonedots-apk`. Tagged builds (`v*`) go to Releases. Every build, debug and release, is signed with the vendor's public test key (`android/app/phonedots-test.jks`, the same key Burrow uses and baseApp keeps as `signing/showcase-test.jks`), so a new build updates in place over an older one and PhoneDots and Burrow share downloaded models. Earlier PhoneDots test builds used this same key, so they update in place too. Publishing to a store needs your own key: see baseApp `signing/README.md` (no developer account needed to make one); CI uses it once the `ANDROID_KEYSTORE_*` secrets exist.
 
-**Reporting a problem.** You → Logs shows each step with your models (download or copy from another app, HTTP status, checksum, load time) and every error. Tap **Copy all** and paste it into the report.
+**Reporting a problem.** You → diagnostics shows each step with your models (download or copy from another app, HTTP status, checksum, load time), model and skill timings, and every error or crash. Tap **copy** (or **share the log**) and paste it into the report.
 
 **iOS** (iOS 18+, Xcode 26): add the Swift packages once, as described in [docs/IOS_SETUP.md](docs/IOS_SETUP.md), then:
 
