@@ -75,7 +75,7 @@ jobs:
 
             **Install:** download the APK on your phone, open it and allow installs from your browser. Later builds update in place (the vendor's test signing key, shared with Burrow, so the two apps also share downloaded models).
 
-            **Something wrong?** You → Logs → Copy all, and paste it into your report.
+            **Something wrong?** You → diagnostics → copy (or share the log), and paste it into your report.
 
             **First run:** choose "Download starter set" (about 3.6 GB over Wi-Fi). Gemma files come from Hugging Face and are SHA-256 verified.
 
