@@ -265,8 +265,7 @@
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
       "platforms": [
-        "android",
-        "ios"
+        "android"
       ],
       "recommended": false,
       "source": "sdk",
@@ -284,15 +283,13 @@
       "family": "desertant",
       "runtime": "desertant-sdk",
       "role": "specialist",
-      "summary": "Filler-word detection.",
+      "summary": "Filler-word detection. iOS SDK fetches it on first use, which the shared store cannot track yet.",
       "capabilities": [
         "speech"
       ],
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
-      "platforms": [
-        "ios"
-      ],
+      "platforms": [],
       "recommended": false,
       "source": "sdk",
       "sdk": {
@@ -497,8 +494,7 @@
       "license": "Desert Ant: free up to 100k monthly active devices",
       "minRamMb": 0,
       "platforms": [
-        "android",
-        "ios"
+        "android"
       ],
       "recommended": false,
       "source": "sdk",
