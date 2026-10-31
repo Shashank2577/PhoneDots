@@ -1,3 +1,4 @@
+import '../app_log.dart';
 import 'dart:async';
 
 import 'package:base_models/base_models.dart' as bm;
@@ -47,11 +48,17 @@ class ModelManager extends ChangeNotifier {
     required this.settings,
     required this.ledger,
     this.shared,
+    this.log,
   }) {
     shared?.addListener(_mirrorShared);
   }
 
   final JsonStore store;
+
+  /// Step-by-step log for Settings → Logs.
+  final AppLog? log;
+
+  void _log(String message) => log?.add('models', message);
   final LlmEngine llm;
   final Embedder embedder;
   final SpecialistEngine specialists;
@@ -175,6 +182,7 @@ class ModelManager extends ChangeNotifier {
     // A copy from a sibling app is not a download: no network in the ledger.
     final copy = state(id).inSibling;
     _set(id, const ModelState(ModelStatus.downloading));
+    _log('${m.id}: ${copy ? 'copy from another app' : 'download'} started (${formatBytes(m.approxBytes)})');
     unawaited(ledger.record('download', '${copy ? 'Copying' : 'Started'} ${m.name} (${formatBytes(m.approxBytes)})', network: !copy));
     try {
       if (isDemo) {
@@ -212,16 +220,20 @@ class ModelManager extends ChangeNotifier {
       }
       _set(id, const ModelState(ModelStatus.ready));
       final source = _inStore(m) ? shared!.sourceOf(id) : 'network';
+      _log('${m.id}: ready (${source ?? 'installed'})');
       if (source == 'sibling') {
         unawaited(ledger.record('download', 'Copied ${m.name} from another app on this phone, no download'));
       } else {
         unawaited(ledger.record('download', 'Finished ${m.name}', network: true));
       }
     } on DownloadCancelled {
+      _log('${m.id}: cancelled');
       _set(id, const ModelState(ModelStatus.absent));
     } on bm.DownloadCancelled {
+      _log('${m.id}: cancelled');
       _set(id, const ModelState(ModelStatus.absent));
     } catch (e) {
+      _log('${m.id}: FAILED: ${_friendly(e)} ($e)');
       _set(id, ModelState(ModelStatus.failed, error: _friendly(e)));
       unawaited(ledger.record('download', 'Failed ${m.name}: ${_friendly(e)}', network: true));
     } finally {
@@ -258,6 +270,7 @@ class ModelManager extends ChangeNotifier {
     }
     _set(id, const ModelState(ModelStatus.absent));
     _mirrorShared();
+    _log('${m.id}: deleted');
     unawaited(ledger.record('model', 'Deleted ${m.name}'));
   }
 
@@ -271,9 +284,13 @@ class ModelManager extends ChangeNotifier {
     final m = modelById(settings.embedderId);
     if (m == null || !isReady(m.id)) return false;
     try {
+      final started = DateTime.now();
+      _log('${m.id}: loading embedder');
       await embedder.load(modelId: m.id, path: pathFor(m) ?? m.id);
+      _log('${m.id}: embedder loaded in ${formatMs(DateTime.now().difference(started).inMilliseconds)}');
       return true;
     } catch (e) {
+      _log('${m.id}: embedder FAILED to load: $e');
       loadError = '$e';
       notifyListeners();
       return false;
@@ -296,6 +313,7 @@ class ModelManager extends ChangeNotifier {
         loadedRouter = null;
       }
       final started = DateTime.now();
+      _log('$id: loading (${settings.useGpu ? 'GPU' : 'CPU'})');
       await llm.load(
         modelId: id,
         path: pathFor(m) ?? id,
@@ -309,12 +327,14 @@ class ModelManager extends ChangeNotifier {
       } else {
         loadedPlanner = id;
       }
+      _log('$id: loaded in ${formatMs(DateTime.now().difference(started).inMilliseconds)}');
       unawaited(
         ledger.record('model', 'Loaded ${m.name} in ${formatMs(DateTime.now().difference(started).inMilliseconds)}'),
       );
       return true;
     } catch (e) {
       loadError = 'Could not load ${m.name}: $e';
+      _log('$id: FAILED to load: $e');
       return false;
     } finally {
       loadingModel = null;

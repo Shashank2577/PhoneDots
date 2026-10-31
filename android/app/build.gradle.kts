@@ -48,19 +48,37 @@ android {
     }
 
     signingConfigs {
-        // Public test key so sideloaded builds from GitHub Releases update in place.
-        // Not secret and not for Play Store: replace with a private key before publishing.
-        create("test") {
+        // Every app of the vendor signs with the same key, so they share models
+        // (the shared store's Android permission is signature-level) and builds
+        // update in place: baseApp signing/README.md. This is the vendor's public
+        // test key (PhoneDots' old test key, so existing installs update); baseApp
+        // keeps it as signing/showcase-test.jks (byte-identical). Not secret: never
+        // publish to a store with it.
+        create("vendorTest") {
             storeFile = file("phonedots-test.jks")
             storePassword = "phonedots-test"
             keyAlias = "phonedots-test"
             keyPassword = "phonedots-test"
         }
+        // Your real release key, from CI secrets (ANDROID_KEYSTORE_BASE64 and friends).
+        System.getenv("ANDROID_KEYSTORE_PATH")?.let { keystore ->
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
+        // If the test key file is ever missing, fall back to the machine's debug key.
+        val vendorTest = signingConfigs.getByName("vendorTest").takeIf { it.storeFile?.exists() == true }
+        debug {
+            signingConfig = vendorTest ?: signingConfigs.getByName("debug")
+        }
         release {
-            signingConfig = signingConfigs.getByName("test")
+            signingConfig = signingConfigs.findByName("release") ?: vendorTest ?: signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

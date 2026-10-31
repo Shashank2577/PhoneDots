@@ -64,6 +64,7 @@ class ChatController extends ChangeNotifier {
       if (!routed) await _runPlanner(user, reply);
     } catch (e) {
       reply.error = '$e';
+      services.log.add('chat', 'reply FAILED: $e');
     } finally {
       reply.streaming = false;
       busy = false;
@@ -353,8 +354,10 @@ class ChatController extends ChangeNotifier {
         ..result = r.data
         ..cards = r.cards;
       unawaited(services.ledger.record('skill', '${skill.name}${r.isError ? ' (failed)' : ''}'));
+      if (r.isError) services.log.add('skill', '${skill.name} failed: ${r.data}');
       return step;
     } catch (e) {
+      services.log.add('skill', '${call.name} FAILED: $e');
       step
         ..status = StepStatus.failed
         ..result = {'error': '$e'};

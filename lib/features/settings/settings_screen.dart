@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../app_state.dart';
 import '../../core/models/model_catalog.dart';
+import '../../core/version.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/sketch.dart';
 import '../lab/lab_screen.dart';
 import '../memory/memory_screen.dart';
 import '../privacy/privacy_screen.dart';
+import 'logs_screen.dart';
 
 /// The "You" tab: everything that is not chat, skills or models.
 class YouScreen extends StatelessWidget {
@@ -20,7 +22,7 @@ class YouScreen extends StatelessWidget {
     return DoodlePage(
       title: 'You',
       body: ListenableBuilder(
-        listenable: Listenable.merge([s.memory, s.knowledge, s.ledger]),
+        listenable: Listenable.merge([s.memory, s.knowledge, s.ledger, s.log]),
         builder: (context, _) => ListView(
           children: [
             const SectionLabel('Your data'),
@@ -54,6 +56,12 @@ class YouScreen extends StatelessWidget {
               'Settings',
               'Models, behaviour, appearance',
               () => push(const SettingsScreen()),
+            ),
+            _NavTile(
+              Icons.receipt_long_rounded,
+              'Logs',
+              'Each step and error, to copy into a bug report',
+              () => push(const LogsScreen()),
             ),
             _NavTile(
               Icons.info_outline_rounded,
@@ -254,7 +262,7 @@ class AboutScreen extends StatelessWidget {
                 const SizedBox(width: 6),
                 Dot(size: 12, color: p.dot),
                 const SizedBox(width: 12),
-                Text('PhoneDots 0.1', style: context.text.titleLarge),
+                Text('PhoneDots $appVersion', style: context.text.titleLarge),
               ],
             ),
           ),

@@ -39,7 +39,19 @@ jobs:
       - run: flutter test
 
       - name: Build APK (arm64)
-        run: flutter build apk --release --target-platform android-arm64
+        # Signed with your release key when the ANDROID_KEYSTORE_* secrets exist,
+        # else with the vendor's public test key (baseApp signing/README.md).
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          fi
+          flutter build apk --release --target-platform android-arm64
 
       - name: Name the APK
         id: apk
@@ -61,7 +73,9 @@ jobs:
           body: |
             Test build for arm64 Android phones (Android 8.0+, 8 GB RAM recommended for Gemma 4 E2B).
 
-            **Install:** download the APK on your phone, open it and allow installs from your browser. Later builds update in place (same test signing key).
+            **Install:** download the APK on your phone, open it and allow installs from your browser. Later builds update in place (the vendor's test signing key, shared with Burrow, so the two apps also share downloaded models).
+
+            **Something wrong?** You → Logs → Copy all, and paste it into your report.
 
             **First run:** choose "Download starter set" (about 3.6 GB over Wi-Fi). Gemma files come from Hugging Face and are SHA-256 verified.
 

@@ -4,6 +4,7 @@ import 'package:base_models/base_models.dart' as bm;
 import 'package:flutter/foundation.dart';
 
 import 'agent/conversation.dart';
+import 'core/app_log.dart';
 import 'core/ledger.dart';
 import 'core/models/model_manager.dart';
 import 'core/runtime/dart_device_actions.dart';
@@ -12,6 +13,7 @@ import 'core/runtime/engines.dart';
 import 'core/runtime/platform_engines.dart';
 import 'core/settings.dart';
 import 'core/storage/json_store.dart';
+import 'core/version.dart';
 import 'knowledge/knowledge_base.dart';
 import 'knowledge/memory_store.dart';
 import 'skills/skill.dart';
@@ -35,12 +37,16 @@ class AppServices {
     required this.nativeEmbedder,
     required this.specialists,
     required this.device,
+    required this.log,
   });
 
   final String platform;
   final JsonStore store;
   final AppSettings settings;
   final Ledger ledger;
+
+  /// Step-by-step log for Settings → Logs (models, loads, errors).
+  final AppLog log;
   final LlmEngine llm;
   final Embedder nativeEmbedder;
   final Embedder lexicalEmbedder = LexicalEmbedder();
@@ -71,6 +77,9 @@ class AppServices {
     await settings.load();
     final ledger = Ledger(s);
     await ledger.load();
+    final log = AppLog(s);
+    await log.load();
+    log.add('app', 'PhoneDots $appVersion started on $p');
     final native = p != 'demo';
     final services = AppServices._(
       platform: p,
@@ -83,6 +92,7 @@ class AppServices {
       nativeEmbedder: native ? PlatformEmbedder() : LexicalEmbedder(),
       specialists: native ? PlatformSpecialistEngine() : DemoSpecialistEngine(),
       device: DartDeviceActions(native ? PlatformDeviceActions() : DemoDeviceActions()),
+      log: log,
     );
     services.models = ModelManager(
       store: s,
@@ -91,7 +101,8 @@ class AppServices {
       specialists: services.specialists,
       settings: settings,
       ledger: ledger,
-      shared: native ? await _openSharedModels(settings, services.specialists) : null,
+      shared: native ? await _openSharedModels(settings, services.specialists, log) : null,
+      log: log,
     );
     services.skills = SkillRegistry(store: s, settings: settings, platform: p);
     services.knowledge = KnowledgeBase(store: s, embedder: services.bestEmbedder);
@@ -110,7 +121,7 @@ class AppServices {
 
   /// The base platform's shared model store: models PhoneDots downloads are
   /// usable by the vendor's other apps on this device, and theirs by PhoneDots.
-  static Future<bm.ModelStore> _openSharedModels(AppSettings settings, SpecialistEngine specialists) async {
+  static Future<bm.ModelStore> _openSharedModels(AppSettings settings, SpecialistEngine specialists, AppLog log) async {
     final shared = await bm.ModelStore.open(
       bm.StoreOptions(
         appId: sharedModelsAppId,
@@ -122,6 +133,7 @@ class AppServices {
               ? {'Authorization': 'Bearer ${settings.hfToken}'}
               : const {};
         },
+        onLog: (line) => log.add('models', line),
         sdkInstaller: (id, key, dir, progress) async {
           await for (final p in specialists.download(id)) {
             progress(p);
@@ -129,6 +141,7 @@ class AppServices {
         },
       ),
     );
+    log.add('models', 'shared store: ${shared.location.path} (${shared.location.description})');
     if (specialists is PlatformSpecialistEngine) await specialists.attachStore(shared.location.path);
     // Tell sibling apps PhoneDots is still installed; forget apps unseen for half a year.
     await shared.touchClaims();

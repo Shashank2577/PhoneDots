@@ -1,7 +1,10 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 
 import 'app_services.dart';
 import 'app_state.dart';
+import 'core/app_log.dart';
 import 'features/shell/shell.dart';
 import 'theme/theme.dart';
 import 'widgets/sketch.dart';
@@ -9,7 +12,22 @@ import 'widgets/sketch.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final services = await AppServices.create();
+  _logErrors(services.log);
   runApp(PhoneDotsApp(state: AppState(services)));
+}
+
+/// Errors Flutter catches also go to Settings → Logs (tests don't call main).
+void _logErrors(AppLog log) {
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    log.add('error', details.exceptionAsString());
+    previous?.call(details);
+  };
+  final platform = PlatformDispatcher.instance.onError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    log.add('error', '$error');
+    return platform?.call(error, stack) ?? false;
+  };
 }
 
 class PhoneDotsApp extends StatelessWidget {

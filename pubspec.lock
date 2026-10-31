@@ -30,7 +30,7 @@ packages:
     description:
       path: "packages/base_models"
       ref: ccr-81ba2f7d-qkqv1h
-      resolved-ref: "27a042a6251f6539484ccf062f3a8658358d949e"
+      resolved-ref: fabb546c472fe1d1c849ef83008038918282cc90
       url: "https://github.com/Shashank2577/baseApp.git"
     source: git
     version: "1.0.0"
