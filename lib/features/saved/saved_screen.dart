@@ -71,34 +71,12 @@ class _SavedScreenState extends State<SavedScreen> {
     final s = AppScope.services(context);
     final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
     if (!mounted) return;
-    final c = TextEditingController(text: clip.contains('http') ? clip.trim() : '');
-    final ok = await showModalBottomSheet<bool>(
+    final text = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 20 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('save a link', style: Hand.title.copyWith(color: ctx.pal.ink)),
-            const Meta('Or share it to PhoneDots from any app.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: c,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: 'https://…'),
-            ),
-            const SizedBox(height: 16),
-            InkButton('save & summarise', expand: true, onTap: () => Navigator.pop(ctx, true)),
-          ],
-        ),
-      ),
+      builder: (_) => _AddLinkSheet(initial: clip.contains('http') ? clip.trim() : ''),
     );
-    if (ok == true && c.text.trim().isNotEmpty) {
-      await s.receiveShare(text: c.text.trim());
-    }
-    c.dispose();
+    if (text != null && text.trim().isNotEmpty) await s.receiveShare(text: text.trim());
   }
 
   @override
@@ -108,8 +86,10 @@ class _SavedScreenState extends State<SavedScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([s.saved, _query]),
       builder: (context, _) {
-        final items = s.saved.search(_query.text, collection: _collection);
         final collections = s.saved.collections;
+        // A filter whose collection has gone (its last item deleted) no longer applies.
+        if (_collection != null && !collections.contains(_collection)) _collection = null;
+        final items = s.saved.search(_query.text, collection: _collection);
         return HandPage(
           wordmark: true,
           actions: [DoodleButton(Doodle.plus, tooltip: 'Save a link', onTap: _addLink)],
@@ -486,4 +466,46 @@ class _FullTextState extends State<FullText> {
       ],
     );
   }
+}
+
+/// "save a link": owns its text controller, so closing never touches a disposed one.
+class _AddLinkSheet extends StatefulWidget {
+  const _AddLinkSheet({required this.initial});
+  final String initial;
+
+  @override
+  State<_AddLinkSheet> createState() => _AddLinkSheetState();
+}
+
+class _AddLinkSheetState extends State<_AddLinkSheet> {
+  late final _c = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 20 + MediaQuery.of(context).viewInsets.bottom),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('save a link', style: Hand.title.copyWith(color: context.pal.ink)),
+        const Meta('Or share it to PhoneDots from any app.'),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _c,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(hintText: 'https://…'),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        const SizedBox(height: 16),
+        InkButton('save & summarise', expand: true, onTap: () => Navigator.pop(context, _c.text)),
+      ],
+    ),
+  );
 }

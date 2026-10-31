@@ -74,12 +74,25 @@ class Summarizer {
   }
 
   /// Saves what another app shared and starts reading it. Returns at once.
-  Future<SavedItem> addShare({String text = '', String? subject, List<Map<String, String>> files = const []}) async {
+  Future<SavedItem> addShare({
+    String text = '',
+    String? subject,
+    List<Map<String, String>> files = const [],
+    String? url,
+  }) async {
     final urls = LinkPreviewer.findUrls('$text ${subject ?? ''}', max: 1);
-    final url = urls.isEmpty ? null : urls.first;
+    url ??= urls.isEmpty ? null : urls.first;
+    // Only the saved link leaves the caption; any other link stays in the text.
     var caption = text;
-    for (final m in LinkPreviewer.urlPattern.allMatches(text).toList().reversed) {
-      caption = caption.replaceRange(m.start, m.end, '');
+    for (final m in LinkPreviewer.urlPattern.allMatches(text)) {
+      String? found;
+      try {
+        found = LinkPreviewer.clean(LinkPreviewer.trimUrl(m.group(0)!)).toString();
+      } catch (_) {}
+      if (found == url) {
+        caption = caption.replaceRange(m.start, m.start + LinkPreviewer.trimUrl(m.group(0)!).length, '');
+        break;
+      }
     }
     caption = caption.replaceAll(RegExp(r'\s+'), ' ').trim();
     final image = files.where((f) => f['kind'] == 'image').map((f) => f['path']).firstOrNull;
@@ -108,10 +121,23 @@ class Summarizer {
 
   Future<void> resummarise(SavedItem item) => _enqueue(item);
 
+  /// Never leaves an item spinning: anything unexpected ends as "failed".
   Future<void> process(SavedItem item) async {
+    try {
+      await _process(item);
+    } catch (e) {
+      item
+        ..status = SavedStatus.failed
+        ..error = 'Something went wrong while reading this: $e';
+      await store.save();
+    }
+  }
+
+  Future<void> _process(SavedItem item) async {
     item
       ..status = SavedStatus.reading
       ..error = null
+      ..body = null
       ..sources = [];
     await store.save();
     if (item.sharedText.isNotEmpty) item.sources.add('caption');
@@ -122,7 +148,9 @@ class Summarizer {
     if (url != null && settings.readLinks) {
       final host = Uri.tryParse(url)?.host ?? url;
       final p = await links.preview(url);
-      unawaited(ledger.record('link', 'Read the preview of $host', network: true));
+      for (final h in p.hosts) {
+        unawaited(ledger.record('link', 'Read the preview from $h', network: true));
+      }
       item
         ..url = p.url
         ..platform = p.platform
@@ -139,9 +167,11 @@ class Summarizer {
         });
       }
       // The whole thing, from each site's own free channel.
-      final servedOpenly = p.servedOpenly;
+      final before = {...p.hosts};
       final contacted = await deep.read(p, youtubeKey: settings.youtubeKey);
-      for (final h in contacted.toSet()) {
+      // Decided after the full-text read: a refusal or bot check there counts too.
+      final servedOpenly = p.servedOpenly;
+      for (final h in contacted.toSet().difference(before)) {
         unawaited(ledger.record('link', 'Read the full text from $h', network: true));
       }
       if (p.body != null) {
@@ -179,13 +209,19 @@ class Summarizer {
     final transcripts = <String>[];
     for (final f in item.files.where((f) => f['kind'] == 'audio')) {
       if (item.imagePath == null && item.url == null && videoSheet != null) {
-        final sheet = await videoSheet!(f['path']!);
+        String? sheet;
+        try {
+          sheet = await videoSheet!(f['path']!);
+        } catch (_) {}
         if (sheet != null) {
           item.imagePath = sheet;
           item.sources.add('video frames');
         }
       }
-      final t = await transcribe?.call(f['path']!);
+      String? t;
+      try {
+        t = await transcribe?.call(f['path']!);
+      } catch (_) {}
       if (t != null && t.trim().isNotEmpty) transcripts.add(t.trim());
     }
     if (transcripts.isNotEmpty) {
@@ -223,6 +259,13 @@ class Summarizer {
         imagePaths: see ? [item.imagePath!] : const [],
       );
       apply(item, raw);
+      if (item.summary == null) {
+        item
+          ..status = SavedStatus.failed
+          ..error = 'Gemma didn\'t write a summary this time. Try "summarise again".';
+        await store.save();
+        return;
+      }
       item.status = SavedStatus.done;
       unawaited(ledger.record('saved', 'Summarised "${item.displayTitle}" on this phone'));
     } on NoModelError catch (e) {
@@ -241,8 +284,8 @@ class Summarizer {
     try {
       final uri = Uri.parse(item.imageUrl!);
       if (uri.scheme != 'https') return null;
-      final res = await _client.get(uri).timeout(const Duration(seconds: 15));
       unawaited(ledger.record('link', 'Downloaded the cover image from ${uri.host}', network: true));
+      final res = await _client.get(uri).timeout(const Duration(seconds: 15));
       final type = res.headers['content-type'] ?? '';
       if (res.statusCode != 200 || !type.startsWith('image/') || res.bodyBytes.length > 6 * 1024 * 1024) return null;
       final ext = type.contains('png') ? 'png' : (type.contains('webp') ? 'webp' : 'jpg');
@@ -298,42 +341,87 @@ class Summarizer {
   static void apply(SavedItem item, String raw) {
     final j = parseJson(raw);
     if (j != null) {
-      final title = '${j['title'] ?? ''}'.trim();
+      final title = _text(j['title']);
       if (title.isNotEmpty && (item.title == null || item.url == null || item.sources.isEmpty)) item.title = title;
+      final summary = _text(j['summary']);
       item
-        ..summary = '${j['summary'] ?? ''}'.trim()
+        ..summary = summary.isEmpty ? null : summary
         ..points = _strings(j['points'], 8)
         ..tags = _strings(j['tags'], 5).map((t) => t.toLowerCase().replaceFirst('#', '')).toList()
-        ..collection = _collection('${j['collection'] ?? ''}');
-      if (item.summary!.isEmpty) item.summary = null;
+        ..collection = _collection(_text(j['collection']));
       return;
     }
-    final lines = raw.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
-    final bullets = lines
-        .where((l) => RegExp(r'^([-*•]|\d+[.)])\s+').hasMatch(l))
-        .map((l) => l.replaceFirst(RegExp(r'^([-*•]|\d+[.)])\s+'), ''))
-        .toList();
-    final prose = lines.where((l) => !RegExp(r'^([-*•]|\d+[.)])\s+').hasMatch(l)).join(' ');
+    final cleaned = raw.replaceAll(RegExp(r'```[a-zA-Z]*'), '').trim();
+    // Cut-off JSON (the answer hit its length limit): rescue the fields that made it.
+    if (cleaned.startsWith('{')) {
+      String? field(String key) {
+        final m = RegExp('"$key"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)').firstMatch(cleaned);
+        if (m == null) return null;
+        try {
+          return (jsonDecode('"${m.group(1)}"') as String).trim();
+        } catch (_) {
+          return m.group(1)!.trim();
+        }
+      }
+
+      final summary = field('summary');
+      final title = field('title');
+      if (title != null && title.isNotEmpty && item.title == null) item.title = title;
+      item
+        ..summary = summary == null || summary.isEmpty ? null : summary
+        ..collection = _collection(field('collection') ?? '');
+      return;
+    }
+    final lines = cleaned.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final bullet = RegExp(r'^([-*•]|\d+[.)])\s+');
+    final bullets = lines.where(bullet.hasMatch).map((l) => l.replaceFirst(bullet, '')).toList();
+    final prose = lines.where((l) => !bullet.hasMatch(l)).join(' ');
     item
       ..summary = prose.isNotEmpty ? prose : (bullets.isNotEmpty ? bullets.first : null)
       ..points = bullets.take(8).toList()
       ..collection ??= 'other';
   }
 
+  /// The first complete JSON object in the reply (strings and nesting respected).
   static Map<String, dynamic>? parseJson(String raw) {
-    final a = raw.indexOf('{');
-    final b = raw.lastIndexOf('}');
-    if (a < 0 || b <= a) return null;
-    try {
-      final j = jsonDecode(raw.substring(a, b + 1));
-      return j is Map ? Map<String, dynamic>.from(j) : null;
-    } catch (_) {
-      return null;
+    var start = raw.indexOf('{');
+    while (start >= 0) {
+      var depth = 0;
+      var inString = false;
+      for (var k = start; k < raw.length; k++) {
+        final ch = raw[k];
+        if (inString) {
+          if (ch == '\\') {
+            k++;
+          } else if (ch == '"') {
+            inString = false;
+          }
+          continue;
+        }
+        if (ch == '"') {
+          inString = true;
+        } else if (ch == '{') {
+          depth++;
+        } else if (ch == '}') {
+          depth--;
+          if (depth == 0) {
+            try {
+              final j = jsonDecode(raw.substring(start, k + 1));
+              if (j is Map) return Map<String, dynamic>.from(j);
+            } catch (_) {}
+            break;
+          }
+        }
+      }
+      start = raw.indexOf('{', start + 1);
     }
+    return null;
   }
 
+  static String _text(Object? v) => v == null ? '' : '$v'.trim();
+
   static List<String> _strings(Object? v, int max) => v is List
-      ? v.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).take(max).toList()
+      ? v.where((e) => e != null).map((e) => '$e'.trim()).where((e) => e.isNotEmpty).take(max).toList()
       : (v is String && v.trim().isNotEmpty ? [v.trim()] : <String>[]);
 
   static String _collection(String c) {

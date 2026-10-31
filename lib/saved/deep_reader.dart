@@ -31,6 +31,8 @@ class DeepReader {
     final contacted = <String>[];
     final uri = Uri.parse(p.url);
     try {
+      // A rate limit on the preview means back off from that site entirely.
+      if (p.status == 429) return contacted;
       switch (p.platform) {
         case 'youtube':
           final id = youtubeId(uri);
@@ -43,7 +45,8 @@ class DeepReader {
             contacted.add('www.youtube.com');
             await _youtubePage(p, id);
           }
-        case 'github':
+        // The API already refused the repo details (rate limit): don't ask it again.
+        case 'github' when !LinkPreviewer.isRefusal(p.status):
           contacted.add('api.github.com');
           await _readme(p, uri);
         case 'medium':
@@ -66,17 +69,21 @@ class DeepReader {
       // Whatever was found before the error stays; the preview is still saved.
     }
     if (p.body != null && p.body!.length > maxBody) p.body = '${p.body!.substring(0, maxBody)}…';
+    p.hosts.addAll(contacted);
     return contacted;
   }
 
   // ── YouTube ──────────────────────────────────────────────────────────────
 
+  static bool isBotCheck(String html) => RegExp(r'"playabilityStatus":\{"status":"LOGIN_REQUIRED"').hasMatch(html);
+
   static String? youtubeId(Uri u) {
-    if (u.host.endsWith('youtu.be')) return u.pathSegments.firstOrNull;
-    final v = u.queryParameters['v'];
-    if (v != null && v.isNotEmpty) return v;
+    String? nonEmpty(String? s) => s == null || s.isEmpty ? null : s;
+    if (u.host.endsWith('youtu.be')) return nonEmpty(u.pathSegments.firstOrNull);
+    final v = nonEmpty(u.queryParameters['v']);
+    if (v != null) return v;
     final seg = u.pathSegments;
-    if (seg.length >= 2 && const {'shorts', 'live', 'embed'}.contains(seg[0])) return seg[1];
+    if (seg.length >= 2 && const {'shorts', 'live', 'embed'}.contains(seg[0])) return nonEmpty(seg[1]);
     return null;
   }
 
@@ -90,6 +97,7 @@ class DeepReader {
           }),
         )
         .timeout(timeout);
+    if (LinkPreviewer.isRefusal(res.statusCode)) p.refused = true;
     if (res.statusCode != 200) return;
     final items = (jsonDecode(utf8.decode(res.bodyBytes))['items'] as List?) ?? const [];
     if (items.isEmpty) return;
@@ -118,8 +126,14 @@ class DeepReader {
           headers: {'User-Agent': _ua, 'Accept-Language': 'en'},
         )
         .timeout(timeout);
+    if (LinkPreviewer.isRefusal(res.statusCode)) p.refused = true;
     if (res.statusCode != 200) return;
     final html = utf8.decode(res.bodyBytes, allowMalformed: true);
+    // A bot check or sign-in wall is YouTube's answer: nothing else may read past it.
+    if (isBotCheck(html)) {
+      p.refused = true;
+      return;
+    }
     final body = youtubePageDetails(html);
     if (body == null) return;
     p
@@ -133,7 +147,7 @@ class DeepReader {
 
   static ({String text, String description})? youtubePageDetails(String html) {
     // A bot check or sign-in wall is YouTube's answer; don't read past it.
-    if (RegExp(r'"playabilityStatus":\{"status":"LOGIN_REQUIRED"').hasMatch(html)) return null;
+    if (isBotCheck(html)) return null;
     String? jsonString(String key) {
       final m = RegExp('"$key":"((?:[^"\\\\]|\\\\.)*)"').firstMatch(html);
       if (m == null) return null;
@@ -180,6 +194,7 @@ class DeepReader {
           headers: {'Accept': 'application/vnd.github.raw', 'User-Agent': _ua},
         )
         .timeout(timeout);
+    if (LinkPreviewer.isRefusal(res.statusCode)) p.refused = true;
     if (res.statusCode != 200) return;
     final md = cleanMarkdown(utf8.decode(res.bodyBytes, allowMalformed: true));
     if (md.isEmpty) return;
@@ -226,6 +241,7 @@ class DeepReader {
     final res = await _client
         .get(feed, headers: {'User-Agent': _ua, 'Accept': 'application/rss+xml, application/xml'})
         .timeout(timeout);
+    if (LinkPreviewer.isRefusal(res.statusCode)) p.refused = true;
     if (res.statusCode != 200) return;
     final story = mediumStory(utf8.decode(res.bodyBytes, allowMalformed: true), id);
     if (story == null) return;

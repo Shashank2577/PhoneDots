@@ -42,13 +42,20 @@ class LinkPreview {
   /// Where [body] came from, e.g. "YouTube page", "README", "Medium RSS".
   String? bodyFrom;
 
+  /// An official endpoint refused (401/403/429) or showed a bot check while
+  /// reading the full text. Reading more of it any other way is not allowed.
+  bool refused = false;
+
+  /// Every host PhoneDots contacted for this link, for the privacy log.
+  final Set<String> hosts = {};
+
   /// The site answered with a login wall or bot check instead of the page.
   bool walled = false;
 
   /// The site itself served the page or its official embed normally, so
   /// reading more of it respects the site's choice. False after a refusal
   /// (401/403/429), a bot check or a login wall.
-  bool get servedOpenly => status == 200 && !walled;
+  bool get servedOpenly => status == 200 && !walled && !refused;
 
   /// True when we got real metadata, not just the URL-derived fallback.
   bool get rich => via != 'url';
@@ -95,51 +102,167 @@ class LinkPreviewer {
   };
 
   static final urlPattern = RegExp(
-    r'''(?:https?://|www\.)[^\s<>"']+|\b(?:youtu\.be|(?:[a-z]+\.)?(?:youtube|tiktok|instagram|threads|linkedin|github|medium|x|twitter)\.(?:com|net))/[^\s<>"']*''',
+    r'''(?<![\w./:@-])(?:https?://|www\.)[^\s<>"']+|\b(?:youtu\.be|(?:[a-z]+\.)?(?:youtube|tiktok|instagram|threads|linkedin|github|medium|x|twitter)\.(?:com|net))/[^\s<>"']*''',
     caseSensitive: false,
   );
 
-  /// Every link in [text], cleaned and de-duplicated, in order.
-  static List<String> findUrls(String text, {int max = 3}) => urlPattern
-      .allMatches(text)
-      .map((m) => clean(m.group(0)!.replaceAll(RegExp(r'[).,!?]+$'), '')).toString())
-      .toSet()
-      .take(max)
-      .toList();
+  static const _trailing = '.,!?;:]}"\'”’»«。、…';
+  static final _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);
 
-  /// Removes tracking parameters and fragments; keeps what identifies the content (e.g. YouTube's v).
+  /// Drops punctuation, closing quotes and emoji glued to the end of a link.
+  /// A closing parenthesis stays when the link itself opened one (Wikipedia).
+  static String trimUrl(String s) {
+    var u = s;
+    while (u.isNotEmpty) {
+      final last = String.fromCharCode(u.runes.last);
+      final cut = u.substring(0, u.length - last.length);
+      if (_trailing.contains(last)) {
+        u = cut;
+      } else if (last == ')') {
+        if ('('.allMatches(u).length >= ')'.allMatches(u).length) break;
+        u = cut;
+      } else if (u.runes.last > 0x7f && !_letterOrDigit.hasMatch(last)) {
+        u = cut; // emoji, variation selectors, symbols
+      } else {
+        break;
+      }
+    }
+    return u;
+  }
+
+  /// Every link in [text], cleaned and de-duplicated, in order. Never throws.
+  static List<String> findUrls(String text, {int max = 3}) {
+    final out = <String>{};
+    for (final m in urlPattern.allMatches(text)) {
+      try {
+        final u = clean(trimUrl(m.group(0)!));
+        if (u.host.isEmpty || !u.host.contains('.') && u.host != 'localhost') continue;
+        out.add(u.toString());
+      } catch (_) {
+        // A malformed link is just text.
+      }
+      if (out.length >= max) break;
+    }
+    return out.toList();
+  }
+
+  /// Removes tracking parameters, credentials and fragments; keeps what
+  /// identifies the content (YouTube's v, t and list; repeated keys).
   static Uri clean(String raw) {
-    var u = Uri.parse(raw.trim());
-    if (!u.hasScheme) u = Uri.parse('https://${raw.trim()}');
-    final q = Map.of(u.queryParameters)..removeWhere((k, _) => _tracking.contains(k.toLowerCase()));
-    // Uri.replace(queryParameters: null) keeps the old query, so rebuild instead.
-    return Uri(
-      scheme: u.scheme,
-      host: u.host,
-      port: u.hasPort ? u.port : null,
-      path: u.path,
-      queryParameters: q.isEmpty ? null : q,
+    var s = raw.trim();
+    if (!RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(s)) s = 'https://$s';
+    // Unicode hosts go out as punycode, which is what DNS understands.
+    final hostMatch = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.-]*://)(?:[^/?#@]*@)?([^/?#:]*)').firstMatch(s);
+    if (hostMatch != null && hostMatch.group(2)!.runes.any((c) => c > 0x7f)) {
+      final host = hostMatch.group(2)!.toLowerCase().split('.').map(_punycode).join('.');
+      s = '${hostMatch.group(1)}$host${s.substring(hostMatch.end)}';
+    }
+    final u = Uri.parse(s);
+    final query = [
+      for (final part in u.query.split('&'))
+        if (part.isNotEmpty && !_tracking.contains(_queryKey(part).toLowerCase())) part,
+    ];
+    return Uri.parse(
+      '${u.scheme}://${u.host}${u.hasPort ? ':${u.port}' : ''}${u.path}${query.isEmpty ? '' : '?${query.join('&')}'}',
     );
+  }
+
+  static String _queryKey(String part) {
+    final k = part.split('=').first;
+    try {
+      return Uri.decodeQueryComponent(k);
+    } catch (_) {
+      return k;
+    }
+  }
+
+  /// RFC 3492 punycode for one host label ("münchen" → "xn--mnchen-3ya").
+  static String _punycode(String label) {
+    final input = label.runes.toList();
+    if (input.every((c) => c < 0x80)) return label;
+    const base = 36, tmin = 1, tmax = 26, skew = 38, damp = 700;
+    final out = StringBuffer();
+    for (final c in input.where((c) => c < 0x80)) {
+      out.writeCharCode(c);
+    }
+    final b = out.length;
+    var h = b;
+    if (b > 0) out.write('-');
+    var n = 128, delta = 0, bias = 72;
+    int adapt(int d, int points, bool first) {
+      d = first ? d ~/ damp : d ~/ 2;
+      d += d ~/ points;
+      var k = 0;
+      while (d > ((base - tmin) * tmax) ~/ 2) {
+        d ~/= base - tmin;
+        k += base;
+      }
+      return k + ((base - tmin + 1) * d) ~/ (d + skew);
+    }
+
+    String digit(int d) => String.fromCharCode(d < 26 ? 97 + d : 22 + d);
+    while (h < input.length) {
+      final m = input.where((c) => c >= n).reduce((a, c) => a < c ? a : c);
+      delta += (m - n) * (h + 1);
+      n = m;
+      for (final c in input) {
+        if (c < n) delta++;
+        if (c == n) {
+          var q = delta;
+          for (var k = base; ; k += base) {
+            final t = k <= bias ? tmin : (k >= bias + tmax ? tmax : k - bias);
+            if (q < t) break;
+            out.write(digit(t + (q - t) % (base - t)));
+            q = (q - t) ~/ (base - t);
+          }
+          out.write(digit(q));
+          bias = adapt(delta, h + 1, h == b);
+          delta = 0;
+          h++;
+        }
+      }
+      delta++;
+      n++;
+    }
+    return 'xn--$out';
   }
 
   static String platformOf(Uri u) {
     final h = u.host.toLowerCase().replaceFirst(RegExp(r'^(www|m|mobile)\.'), '');
-    if (h == 'youtu.be' || h.endsWith('youtube.com')) return 'youtube';
-    if (h.endsWith('tiktok.com')) return 'tiktok';
-    if (h.endsWith('instagram.com')) return 'instagram';
-    if (h.endsWith('threads.net') || h.endsWith('threads.com')) return 'threads';
-    if (h.endsWith('linkedin.com') || h == 'lnkd.in') return 'linkedin';
+    // A real subdomain or the domain itself; "notyoutube.com" is just a website.
+    bool on(String d) => h == d || h.endsWith('.$d');
+    if (h == 'youtu.be' || on('youtube.com')) return 'youtube';
+    if (on('tiktok.com')) return 'tiktok';
+    if (on('instagram.com')) return 'instagram';
+    if (on('threads.net') || on('threads.com')) return 'threads';
+    if (on('linkedin.com') || h == 'lnkd.in') return 'linkedin';
     if (h == 'github.com') return 'github';
-    if (h == 'medium.com' || h.endsWith('.medium.com')) return 'medium';
+    if (on('medium.com')) return 'medium';
     if (h == 'x.com' || h == 'twitter.com') return 'x';
     return 'web';
   }
 
+  /// Answers that mean "stop asking": back off rather than try another way.
+  static bool isRefusal(int? status) => status == 401 || status == 403 || status == 429;
+
   Future<LinkPreview> preview(String raw) async {
-    var uri = clean(raw);
-    if (_isShortLink(uri)) uri = await _expand(uri);
+    Uri uri;
+    try {
+      uri = clean(raw);
+    } catch (_) {
+      return LinkPreview(url: raw.trim(), platform: 'web', title: raw.trim());
+    }
+    final hosts = <String>{};
+    if (_isShortLink(uri)) {
+      try {
+        uri = await _expand(uri, hosts);
+      } catch (_) {
+        // Offline or timed out: keep the short link.
+      }
+    }
     final platform = platformOf(uri);
     final p = LinkPreview(url: uri.toString(), platform: platform, kind: _kindFromPath(platform, uri));
+    p.hosts.addAll(hosts);
     try {
       switch (platform) {
         case 'youtube':
@@ -157,7 +280,8 @@ class LinkPreviewer {
             'X embed',
           );
       }
-      if (!p.rich) await _meta(p, uri);
+      // A refusal from the site's own endpoint means back off, not try the page.
+      if (!p.rich && !isRefusal(p.status)) await _meta(p, uri);
     } catch (_) {
       // Network or parse problems fall through to the URL-derived title below.
     }
@@ -170,19 +294,37 @@ class LinkPreviewer {
     return p;
   }
 
+  Future<http.Response> _get(LinkPreview p, Uri uri, Map<String, String> headers) {
+    p.hosts.add(uri.host);
+    return _client.get(uri, headers: headers).timeout(timeout);
+  }
+
+  /// Decodes a JSON object leniently (bad bytes are replaced, not fatal).
+  static Map<String, dynamic>? _jsonObject(http.Response res) {
+    try {
+      final j = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
+      return j is Map ? Map<String, dynamic>.from(j) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _str(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+
   // ── sources ──────────────────────────────────────────────────────────────
 
   Future<void> _oembed(LinkPreview p, Uri endpoint) async {
-    final res = await _client.get(endpoint, headers: {'User-Agent': _ua}).timeout(timeout);
+    final res = await _get(p, endpoint, {'User-Agent': _ua});
     p.status = res.statusCode;
     if (res.statusCode != 200) return;
-    final j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final j = _jsonObject(res);
+    if (j == null) return;
     p
-      ..author = j['author_name'] as String? ?? p.author
-      ..imageUrl = j['thumbnail_url'] as String? ?? p.imageUrl;
+      ..author = _str(j['author_name']) ?? p.author
+      ..imageUrl = _str(j['thumbnail_url']) ?? p.imageUrl;
     // Some embeds answer without a title (e.g. TikTok videos with embedding limited).
-    final title = (j['title'] as String?)?.trim();
-    if (title != null && title.isNotEmpty) {
+    final title = _str(j['title']);
+    if (title != null) {
       p
         ..title = title
         ..via = 'oembed';
@@ -192,10 +334,11 @@ class LinkPreviewer {
   /// Meta's tokenless oEmbed (Threads) and X's publish oEmbed return the post
   /// as an HTML blockquote; its text is the post.
   Future<void> _htmlOembed(LinkPreview p, Uri endpoint, String from) async {
-    final res = await _client.get(endpoint, headers: {'User-Agent': _ua}).timeout(timeout);
+    final res = await _get(p, endpoint, {'User-Agent': _ua});
     p.status = res.statusCode;
     if (res.statusCode != 200) return;
-    final j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final j = _jsonObject(res);
+    if (j == null) return;
     final html = '${j['html'] ?? ''}';
     final para = RegExp(r'<p\b[^>]*>([\s\S]*?)</p>', caseSensitive: false).allMatches(html).map((m) => m.group(1)!);
     var text = htmlToText(para.isEmpty ? html : para.join('\n'))
@@ -207,7 +350,7 @@ class LinkPreviewer {
         .join('\n')
         .trim();
     if (text.isEmpty) return;
-    final author = j['author_name'] as String?;
+    final author = _str(j['author_name']);
     p
       ..author = author ?? p.author
       ..body = text
@@ -236,66 +379,118 @@ class LinkPreviewer {
   Future<void> _github(LinkPreview p, Uri uri) async {
     final seg = uri.pathSegments.where((s) => s.isNotEmpty).toList();
     if (seg.length < 2) return;
-    final res = await _client
-        .get(
-          Uri.https('api.github.com', '/repos/${seg[0]}/${seg[1]}'),
-          headers: {'Accept': 'application/vnd.github+json', 'User-Agent': _ua},
-        )
-        .timeout(timeout);
+    final res = await _get(p, Uri.https('api.github.com', '/repos/${seg[0]}/${seg[1]}'), {
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': _ua,
+    });
     p.status = res.statusCode;
     if (res.statusCode != 200) return;
-    final j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final j = _jsonObject(res);
+    if (j == null) return;
     final stars = j['stargazers_count'];
     p
-      ..title = j['full_name'] as String?
+      ..title = _str(j['full_name']) ?? '${seg[0]}/${seg[1]}'
       ..description = [
-        j['description'],
-        if (j['language'] != null) j['language'],
-        if (stars != null) '★ $stars',
-      ].whereType<Object>().join(' · ')
-      ..author = (j['owner'] as Map?)?['login'] as String?
+        _str(j['description']),
+        _str(j['language']),
+        if (stars is num) '★ $stars',
+      ].whereType<String>().join(' · ')
+      ..author = j['owner'] is Map ? _str((j['owner'] as Map)['login']) : null
       ..imageUrl = 'https://opengraph.githubassets.com/1/${seg[0]}/${seg[1]}'
       ..kind = 'repo'
       ..via = 'api';
   }
 
   Future<void> _meta(LinkPreview p, Uri uri) async {
-    final res = await _client
-        .get(uri, headers: {'User-Agent': _ua, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'en'})
-        .timeout(timeout);
+    final res = await _get(p, uri, {
+      'User-Agent': _ua,
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en',
+    });
     p.status = res.statusCode;
     if (res.statusCode != 200) return;
     final bytes = res.bodyBytes.length > 2000000 ? res.bodyBytes.sublist(0, 2000000) : res.bodyBytes;
-    final m = parseMeta(utf8.decode(bytes, allowMalformed: true));
+    final charset = RegExp(
+      r'charset=([\w-]+)',
+      caseSensitive: false,
+    ).firstMatch(res.headers['content-type'] ?? '')?.group(1)?.toLowerCase();
+    final text = const {'iso-8859-1', 'latin1', 'latin-1', 'windows-1252', 'us-ascii'}.contains(charset)
+        ? latin1.decode(bytes, allowInvalid: true)
+        : utf8.decode(bytes, allowMalformed: true);
+    final m = parseMeta(text);
     final title = m['og:title'] ?? m['twitter:title'] ?? m['title'];
-    if (title == null || _isGenericTitle(title, p.platform)) {
+    if (title == null || isGenericTitle(title)) {
       p.walled = true;
       return;
     }
+    final image = m['og:image'] ?? m['twitter:image'];
     p
       ..title = title
       ..description = m['og:description'] ?? m['twitter:description'] ?? m['description']
-      ..imageUrl = m['og:image'] ?? m['twitter:image']
+      ..imageUrl = image == null ? null : _absolute(uri, image)
       ..author = p.author ?? m['author'] ?? m['article:author']
       ..via = 'meta';
   }
 
+  /// og:image is often relative ("/img/cover.png"); resolve it against the page.
+  static String? _absolute(Uri page, String src) {
+    try {
+      final u = page.resolve(src.trim());
+      return u.scheme == 'https' || u.scheme == 'http' ? u.toString() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── parsing ──────────────────────────────────────────────────────────────
 
-  /// Pulls Open Graph, Twitter and basic meta tags out of HTML.
+  /// Pulls Open Graph, Twitter and basic meta tags out of HTML. Scans in
+  /// linear time (quotes respected, each tag bounded), so a hostile or broken
+  /// page can't freeze the app.
   static Map<String, String> parseMeta(String html) {
     final out = <String, String>{};
     final head = html.length > 400000 ? html.substring(0, 400000) : html;
-    for (final tag in RegExp(r'<meta\b[^>]*>', caseSensitive: false).allMatches(head)) {
-      final t = tag.group(0)!;
-      String? attr(String name) => RegExp(
-        '$name\\s*=\\s*("([^"]*)"|\'([^\']*)\')',
-        caseSensitive: false,
-      ).firstMatch(t)?.let((m) => m.group(2) ?? m.group(3));
-      final key = (attr('property') ?? attr('name') ?? attr('itemprop'))?.toLowerCase();
-      final value = attr('content');
-      if (key == null || value == null || value.trim().isEmpty) continue;
-      out.putIfAbsent(key, () => decodeEntities(value.trim()));
+    final lower = head.toLowerCase();
+    final attrRe = RegExp('([a-zA-Z:_-]+)\\s*=\\s*("([^"]*)"|\'([^\']*)\')');
+    var i = 0;
+    while (true) {
+      final start = lower.indexOf('<meta', i);
+      if (start < 0) break;
+      final after = start + 5;
+      if (after < lower.length && RegExp(r'[\w-]').hasMatch(lower[after])) {
+        i = after;
+        continue;
+      }
+      String? quote;
+      var end = -1;
+      final limit = (after + 4000).clamp(0, head.length);
+      for (var k = after; k < limit; k++) {
+        final ch = head[k];
+        if (quote != null) {
+          if (ch == quote) quote = null;
+        } else if (ch == '"' || ch == "'") {
+          quote = ch;
+        } else if (ch == '>') {
+          end = k;
+          break;
+        } else if (ch == '<') {
+          break; // a new tag began: this one was never closed
+        }
+      }
+      if (end < 0) {
+        i = after;
+        continue;
+      }
+      final attrs = <String, String>{};
+      for (final a in attrRe.allMatches(head.substring(after, end))) {
+        attrs.putIfAbsent(a.group(1)!.toLowerCase(), () => a.group(3) ?? a.group(4) ?? '');
+      }
+      final key = (attrs['property'] ?? attrs['name'] ?? attrs['itemprop'])?.toLowerCase();
+      final value = attrs['content'];
+      if (key != null && value != null && value.trim().isNotEmpty) {
+        out.putIfAbsent(key, () => decodeEntities(value.trim()));
+      }
+      i = end + 1;
     }
     final title = RegExp(r'<title[^>]*>([\s\S]*?)</title>', caseSensitive: false).firstMatch(head)?.group(1);
     if (title != null && title.trim().isNotEmpty) out.putIfAbsent('title', () => decodeEntities(title.trim()));
@@ -308,8 +503,8 @@ class LinkPreviewer {
   }
 
   static String _decode(String s) => s
-      .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)))
-      .replaceAllMapped(RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m.group(1)!)))
+      .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]{1,8});'), (m) => _char(int.parse(m.group(1)!, radix: 16)))
+      .replaceAllMapped(RegExp(r'&#(\d{1,9});'), (m) => _char(int.parse(m.group(1)!)))
       .replaceAll('&quot;', '"')
       .replaceAll('&#39;', "'")
       .replaceAll('&apos;', "'")
@@ -318,9 +513,13 @@ class LinkPreviewer {
       .replaceAll('&nbsp;', ' ')
       .replaceAll('&amp;', '&');
 
+  /// An out-of-range entity becomes the replacement character, not a crash.
+  static String _char(int code) =>
+      code <= 0 || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF) ? '\uFFFD' : String.fromCharCode(code);
+
   /// Login walls and error pages return a title but not a useful one.
-  static bool _isGenericTitle(String t, String platform) {
-    final l = t.toLowerCase().trim();
+  static bool isGenericTitle(String t) {
+    final l = t.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
     const generic = {
       'instagram',
       'login • instagram',
@@ -335,12 +534,28 @@ class LinkPreviewer {
       'x',
       'access denied',
       'page not found',
+      'not found',
+      'forbidden',
+      'too many requests',
+      'verify you are human',
+      'are you a robot?',
+      'log in',
+      'login',
+      'sign in',
+      'sign up',
+      'error',
     };
-    return generic.contains(l) ||
-        l.startsWith('log in') ||
-        l.startsWith('sign in') ||
-        l.endsWith('• log in') ||
-        l.endsWith('| log in');
+    if (generic.contains(l)) return true;
+    // "Threads • Log in", "Log in • Instagram", "LinkedIn Login, Sign in | LinkedIn"
+    if (RegExp(r'(^|[•|,·-] ?)(log ?in|sign ?in|sign ?up)( ?[•|,·-]|$)').hasMatch(l)) return true;
+    if (RegExp(r'^(log ?in|sign ?in|sign ?up)\b').hasMatch(l) &&
+        RegExp(r'\b(instagram|threads|facebook|linkedin|tiktok|twitter|x|medium|youtube|your account|continue)\b')
+            .hasMatch(l) &&
+        l.length < 40) {
+      return true;
+    }
+    // Soft error pages served with HTTP 200.
+    return RegExp(r'^(4\d\d|5\d\d)\b').hasMatch(l) || RegExp(r'^error \d{3}\b').hasMatch(l);
   }
 
   static String _tidyTitle(String t, String platform) {
@@ -363,9 +578,10 @@ class LinkPreviewer {
   }.contains(u.host.toLowerCase());
 
   /// Follows a short link's redirects without downloading the page.
-  Future<Uri> _expand(Uri u) async {
+  Future<Uri> _expand(Uri u, Set<String> hosts) async {
     var current = u;
     for (var i = 0; i < 5; i++) {
+      hosts.add(current.host);
       final req = http.Request('HEAD', current)
         ..followRedirects = false
         ..headers['User-Agent'] = _ua;
@@ -379,10 +595,21 @@ class LinkPreviewer {
 
   static String _kindFromPath(String platform, Uri u) {
     final path = u.path.toLowerCase();
+    final seg = u.pathSegments.where((s) => s.isNotEmpty).map((s) => s.toLowerCase()).toList();
     return switch (platform) {
-      'youtube' || 'tiktok' => path.contains('/@') && !path.contains('/video/') ? 'profile' : 'video',
-      'instagram' => path.contains('/reel') ? 'video' : (path.contains('/p/') ? 'post' : 'profile'),
-      'threads' => path.contains('/post/') ? 'post' : 'profile',
+      'youtube' when u.host.toLowerCase() == 'youtu.be' => 'video',
+      'youtube' when seg.isNotEmpty && seg.first.startsWith('@') => 'profile',
+      'youtube' when seg.isNotEmpty && const {'channel', 'c', 'user'}.contains(seg.first) => 'profile',
+      'youtube' when seg.isNotEmpty && seg.first == 'playlist' => 'playlist',
+      'youtube' => 'video',
+      'tiktok' when seg.contains('video') => 'video',
+      'tiktok' when seg.contains('photo') => 'post',
+      'tiktok' => path.contains('/@') ? 'profile' : 'video',
+      'instagram' when seg.isNotEmpty && seg.first == 'stories' => 'story',
+      'instagram' when seg.any((s) => const {'reel', 'reels', 'tv'}.contains(s)) => 'video',
+      'instagram' when seg.contains('p') => 'post',
+      'instagram' => 'profile',
+      'threads' => seg.contains('post') || (seg.isNotEmpty && seg.first == 't') ? 'post' : 'profile',
       'linkedin' =>
         path.contains('/posts/') || path.contains('/feed/update/')
             ? 'post'
@@ -399,14 +626,27 @@ class LinkPreviewer {
     final host = u.host.replaceFirst(RegExp(r'^www\.'), '');
     if (seg.isEmpty) return host;
     final handle = seg.firstWhere((s) => s.startsWith('@'), orElse: () => '');
+    if (platform == 'github' && seg.length >= 2) {
+      final repo = '${seg[0]}/${seg[1]}';
+      if (seg.length >= 4 && const {'issues', 'pull'}.contains(seg[2])) return '$repo #${seg[3]}';
+      if (seg.length >= 3 && const {'blob', 'tree'}.contains(seg[2])) return '$repo · ${seg.last}';
+      return repo;
+    }
+    if (platform == 'youtube') {
+      if (handle.isNotEmpty) return '$handle on YouTube';
+      final id = u.queryParameters['v'] ?? (seg.length >= 2 ? seg[1] : (u.host == 'youtu.be' ? seg.first : null));
+      return id == null || id.isEmpty ? 'YouTube $kind' : 'YouTube $kind $id';
+    }
     // Social posts have opaque ids; name them by kind and author instead.
     if (const {'tiktok', 'instagram', 'threads', 'x'}.contains(platform)) {
-      final name = handle.isNotEmpty ? handle : (kind == 'profile' ? '@${seg.first}' : '');
       final label = const {'tiktok': 'TikTok', 'instagram': 'Instagram', 'threads': 'Threads', 'x': 'X'}[platform]!;
+      if (kind == 'story') return seg.length >= 2 ? '$label story by @${seg[1]}' : '$label story';
+      final name = handle.isNotEmpty ? handle : (kind == 'profile' ? '@${seg.first}' : '');
       if (kind == 'profile') return '$name on $label';
       return name.isEmpty ? '$label $kind' : '$label $kind by $name';
     }
-    var last = Uri.decodeComponent(seg.last).replaceAll(RegExp(r'\.(html?|php)$'), '');
+    // pathSegments are already decoded; decoding again breaks on "100%".
+    var last = seg.last.replaceAll(RegExp(r'\.(html?|php)$'), '');
     // Medium-style slugs end in a hex id: "software-2-0-a64152b37c35".
     last = last.replaceFirst(RegExp(r'-[0-9a-f]{8,12}$'), '');
     if (seg.length >= 2 && RegExp(r'^[A-Za-z0-9_-]{6,}$').hasMatch(last) && !last.contains('-')) {
@@ -416,12 +656,8 @@ class LinkPreviewer {
     if (words.isEmpty) return host;
     final title = words.join(' ');
     final pretty = '${title[0].toUpperCase()}${title.substring(1)}';
-    return handle.isEmpty ? pretty : '$pretty · $handle';
+    return handle.isEmpty || pretty == handle ? pretty : '$pretty · $handle';
   }
 
   void close() => _client.close();
-}
-
-extension _Let<T> on T {
-  R let<R>(R Function(T) f) => f(this);
 }

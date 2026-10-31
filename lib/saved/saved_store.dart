@@ -149,10 +149,14 @@ class SavedStore extends ChangeNotifier {
   ];
 
   Future<void> load() async {
-    final list = (await _store.read(_key) as List?) ?? const [];
-    items
-      ..clear()
-      ..addAll(list.map((m) => SavedItem.fromJson(Map<String, dynamic>.from(m as Map))));
+    final stored = await _store.read(_key);
+    items.clear();
+    // One damaged record must not lose the rest or stop the app from starting.
+    for (final m in stored is List ? stored : const []) {
+      try {
+        items.add(SavedItem.fromJson(Map<String, dynamic>.from(m as Map)));
+      } catch (_) {}
+    }
     notifyListeners();
   }
 
@@ -174,7 +178,7 @@ class SavedStore extends ChangeNotifier {
   }
 
   List<SavedItem> search(String query, {String? collection}) {
-    final q = query.trim().toLowerCase();
+    final q = fold(query.trim());
     return items.where((i) {
       if (collection != null && i.collection != collection) return false;
       if (q.isEmpty) return true;
@@ -185,12 +189,50 @@ class SavedStore extends ChangeNotifier {
         i.body,
         i.author,
         i.sharedText,
+        i.subject,
         i.url,
+        i.collection,
+        i.platform,
         ...i.points,
         ...i.tags,
-      ].whereType<String>().join(' ').toLowerCase();
-      return q.split(RegExp(r'\s+')).every(hay.contains);
+        ...i.files.map((f) => f['name']),
+      ].whereType<String>().join(' ');
+      final folded = fold(hay);
+      return q.split(RegExp(r'\s+')).every(folded.contains);
     }).toList();
+  }
+
+  static const _accents = {
+    'a': 'àáâãäåāăą',
+    'c': 'çćč',
+    'd': 'ď',
+    'e': 'èéêëēėęě',
+    'g': 'ğ',
+    'i': 'ìíîïīįı',
+    'l': 'ł',
+    'n': 'ñńň',
+    'o': 'òóôõöøō',
+    'r': 'ř',
+    's': 'śşš',
+    't': 'ť',
+    'u': 'ùúûüūů',
+    'y': 'ýÿ',
+    'z': 'źżž',
+  };
+  static final _fold = {
+    for (final e in _accents.entries)
+      for (final ch in e.value.split('')) ch: e.key,
+  };
+
+  /// Lower-cases and strips accents, so "cafe" finds "Café" and "istanbul" finds "İstanbul".
+  static String fold(String s) {
+    final b = StringBuffer();
+    for (final r in s.toLowerCase().runes) {
+      if (r >= 0x300 && r <= 0x36f) continue; // combining marks
+      final ch = String.fromCharCode(r);
+      b.write(ch == 'ß' ? 'ss' : (_fold[ch] ?? ch));
+    }
+    return b.toString();
   }
 
   Future<void> add(SavedItem item) async {

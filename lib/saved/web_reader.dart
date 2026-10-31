@@ -56,13 +56,26 @@ class WebReader {
 
   /// Login walls and bot checks come back as short pages about signing in.
   static bool looksBlocked(String text) {
-    final head = (text.length > 600 ? text.substring(0, 600) : text).toLowerCase();
-    return text.length < 900 &&
-        (head.contains('log in') ||
-            head.contains('sign in') ||
-            head.contains('just a moment') ||
-            head.contains('verify you are human') ||
-            head.contains('enable javascript'));
+    final head = (text.length > 1500 ? text.substring(0, 1500) : text).toLowerCase();
+    // Bot checks and block pages that the reader relays with HTTP 200.
+    const blocks = [
+      'just a moment',
+      'verify you are human',
+      'enable javascript',
+      'access denied',
+      'you have been blocked',
+      'returned error 403',
+      'returned error 401',
+      'returned error 429',
+      'security check',
+      'checking your browser',
+      'cloudflare ray id',
+      'unusual traffic',
+      'captcha',
+      'are you a robot',
+    ];
+    if (text.length < 2500 && blocks.any(head.contains)) return true;
+    return text.length < 900 && (head.contains('log in') || head.contains('sign in'));
   }
 
   void close() => _client.close();

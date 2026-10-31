@@ -192,14 +192,25 @@ class AppServices {
   /// Links, screenshots and clips go to "saved" and get summarised; plain
   /// text (nothing to save) still opens a chat.
   Future<void> receiveShare({String text = '', String? subject, List<Attachment> attachments = const []}) async {
-    final hasLink = LinkPreviewer.findUrls('$text ${subject ?? ''}', max: 1).isNotEmpty;
-    if (!hasLink && attachments.isEmpty) {
-      intake.value = SharedIntake(text: text, attachments: attachments);
+    var url = LinkPreviewer.findUrls('$text ${subject ?? ''}', max: 1).firstOrNull;
+    // A lone bare domain ("example.com/article") is a link too, e.g. typed into "save a link".
+    final lone = text.trim();
+    if (url == null && RegExp(r'^[\w-]+(\.[\w-]+)*\.[a-zA-Z]{2,}(/\S*)?$').hasMatch(lone)) {
+      try {
+        url = LinkPreviewer.clean(lone).toString();
+      } catch (_) {}
+    }
+    if (url == null && attachments.isEmpty) {
+      intake.value = SharedIntake(
+        text: [subject?.trim() ?? '', text.trim()].where((t) => t.isNotEmpty).join('\n'),
+        attachments: attachments,
+      );
       return;
     }
     final item = await summarizer.addShare(
       text: text,
       subject: subject,
+      url: url,
       files: [
         for (final a in attachments) {'path': a.path, 'name': a.name, 'kind': a.kind},
       ],
