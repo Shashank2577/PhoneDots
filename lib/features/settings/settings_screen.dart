@@ -42,7 +42,7 @@ class YouScreen extends StatelessWidget {
             (
               Doodle.lock,
               'privacy',
-              '${s.ledger.networkEvents} network events, all model downloads',
+              '${s.ledger.networkEvents} network events, each one listed',
               () => push(const PrivacyScreen()),
             ),
             (Doodle.flask, 'lab', 'try prompts, measure speed', () => push(const LabScreen())),
@@ -164,6 +164,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: st.readLinks,
             onChanged: (v) => st.update((x) => x.readLinks = v),
           ),
+          const SectionHead('saved posts'),
+          SwitchRow(
+            title: 'summarise when shared',
+            body: 'Gemma summarises each post, reel or screenshot as soon as it arrives. Free, and on this phone.',
+            value: st.autoSummarise,
+            onChanged: (v) => st.update((x) => x.autoSummarise = v),
+          ),
+          SwitchRow(
+            title: 'free web reader',
+            body: 'When an open page only shares a line or two, ask Jina Reader for its full text. Free, but the link is sent to Jina. Never used on pages that ask you to log in. Logged under privacy.',
+            value: st.webReader,
+            onChanged: (v) => st.update((x) => x.webReader = v),
+          ),
+          const SectionHead('more'),
           SwitchRow(
             title: 'think first',
             body: 'Reason step by step before answering. Slower, better for hard questions.',
@@ -223,7 +237,7 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => HandPage(
     children: [
-      const PageIntro('about', 'PhoneDots 0.3. An assistant that lives on your phone.', doodle: Doodle.book),
+      const PageIntro('about', 'PhoneDots 0.4. An assistant that lives on your phone.', doodle: Doodle.book),
       for (final (title, body) in [
         (
           'gemma',

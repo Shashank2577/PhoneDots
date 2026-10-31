@@ -23,6 +23,10 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('record a meeting'), findsOneWidget);
 
+    await tester.tap(find.text('saved').last);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('nothing saved yet'), findsOneWidget);
+
     await tester.tap(find.text('skills').last);
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('transcribe audio'), findsOneWidget);

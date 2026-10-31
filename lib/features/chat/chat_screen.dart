@@ -168,7 +168,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               message: m,
                               isLast: i == chat.messages.length - 1,
                               onRetry: chat.busy ? null : chat.retry,
-                              onOpenModels: () => state.goTo(2),
+                              onOpenModels: () => state.goTo(AppState.modelsTab),
                             ),
                           ),
                         );
@@ -314,7 +314,7 @@ class _ModelChip extends StatelessWidget {
                     leading: Doodle.chip,
                     onTap: () {
                       Navigator.pop(c);
-                      state.goTo(2);
+                      state.goTo(AppState.modelsTab);
                     },
                   ),
                 ],

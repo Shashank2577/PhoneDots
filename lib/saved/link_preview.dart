@@ -35,6 +35,14 @@ class LinkPreview {
   /// HTTP status of the last request, for diagnostics.
   int? status;
 
+  /// The site answered with a login wall or bot check instead of the page.
+  bool walled = false;
+
+  /// The site itself served the page or its official embed normally, so
+  /// reading more of it respects the site's choice. False after a refusal
+  /// (401/403/429), a bot check or a login wall.
+  bool get servedOpenly => status == 200 && !walled;
+
   /// True when we got real metadata, not just the URL-derived fallback.
   bool get rich => via != 'url';
 
@@ -76,6 +84,19 @@ class LinkPreviewer {
     'sender_device',
     'mibextid',
   };
+
+  static final urlPattern = RegExp(
+    r'''(?:https?://|www\.)[^\s<>"']+|\b(?:youtu\.be|(?:[a-z]+\.)?(?:youtube|tiktok|instagram|threads|linkedin|github|medium|x|twitter)\.(?:com|net))/[^\s<>"']*''',
+    caseSensitive: false,
+  );
+
+  /// Every link in [text], cleaned and de-duplicated, in order.
+  static List<String> findUrls(String text, {int max = 3}) => urlPattern
+      .allMatches(text)
+      .map((m) => clean(m.group(0)!.replaceAll(RegExp(r'[).,!?]+$'), '')).toString())
+      .toSet()
+      .take(max)
+      .toList();
 
   /// Removes tracking parameters and fragments; keeps what identifies the content (e.g. YouTube's v).
   static Uri clean(String raw) {
@@ -186,7 +207,10 @@ class LinkPreviewer {
     final bytes = res.bodyBytes.length > 2000000 ? res.bodyBytes.sublist(0, 2000000) : res.bodyBytes;
     final m = parseMeta(utf8.decode(bytes, allowMalformed: true));
     final title = m['og:title'] ?? m['twitter:title'] ?? m['title'];
-    if (title == null || _isGenericTitle(title, p.platform)) return;
+    if (title == null || _isGenericTitle(title, p.platform)) {
+      p.walled = true;
+      return;
+    }
     p
       ..title = title
       ..description = m['og:description'] ?? m['twitter:description'] ?? m['description']

@@ -38,3 +38,10 @@ int fileLength(String path) {
   final f = File(path);
   return f.existsSync() ? f.lengthSync() : 0;
 }
+
+Future<String?> writeBytesFile(String? dir, String name, List<int> bytes) async {
+  if (dir == null) return null;
+  final path = _unique(dir, name);
+  await File(path).writeAsBytes(bytes);
+  return path;
+}

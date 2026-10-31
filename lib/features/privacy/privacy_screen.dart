@@ -14,22 +14,24 @@ class PrivacyScreen extends StatelessWidget {
     final s = AppScope.services(context);
     final p = context.pal;
     return ListenableBuilder(
-      listenable: Listenable.merge([s.ledger, s.conversations, s.memory, s.knowledge]),
+      listenable: Listenable.merge([s.ledger, s.conversations, s.memory, s.knowledge, s.saved]),
       builder: (context, _) {
         final entries = s.ledger.entries;
         return HandPage(
           children: [
-            const MarkedText('nothing of yours left this phone.', mark: 'nothing', style: Hand.headline),
+            const MarkedText('what you keep stays on this phone.', mark: 'stays', style: Hand.headline),
             const SizedBox(height: 8),
             Body(
-              'PhoneDots has made ${s.ledger.networkEvents} network requests, all of them model or skill downloads. '
-              'Chats, recordings, photos, memory and files are only ever processed here. No account, no analytics.',
+              'PhoneDots has made ${s.ledger.networkEvents} network requests: model downloads and the links you shared, '
+              'each listed below. Chats, recordings, photos, memory, saved posts and summaries are only ever processed here. '
+              'No account, no analytics.',
               color: p.pencil,
             ),
             const SectionHead('kept on this phone'),
             Row(
               children: [
                 _Count('${s.conversations.summaries.length}', 'chats'),
+                _Count('${s.saved.items.length}', 'saved'),
                 _Count('${s.memory.facts.length}', 'memories'),
                 _Count('${s.knowledge.docs.length}', 'files'),
                 _Count('${entries.length}', 'log lines'),
@@ -38,6 +40,7 @@ class PrivacyScreen extends StatelessWidget {
             const HandDivider(padding: EdgeInsets.symmetric(vertical: 16)),
             const SectionHead('forget', padding: EdgeInsets.zero),
             _EraseTile(label: 'all chats', onConfirm: s.conversations.deleteAll),
+            _EraseTile(label: 'saved posts', onConfirm: s.saved.clear),
             _EraseTile(label: 'memory', onConfirm: s.memory.clear),
             _EraseTile(label: 'my files index', onConfirm: s.knowledge.clear),
             _EraseTile(label: 'activity log', onConfirm: s.ledger.clear),

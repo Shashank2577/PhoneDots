@@ -4,6 +4,7 @@ import '../../app_state.dart';
 import '../../widgets/hand.dart';
 import '../chat/chat_screen.dart';
 import '../models/models_screen.dart';
+import '../saved/saved_screen.dart';
 import '../settings/settings_screen.dart';
 import '../skills/skills_screen.dart';
 import 'onboarding.dart';
@@ -24,13 +25,13 @@ class Shell extends StatelessWidget {
             index: state.tab,
             child: IndexedStack(
               index: state.tab,
-              children: const [ChatScreen(), SkillsScreen(), ModelsScreen(), YouScreen()],
+              children: const [ChatScreen(), SavedScreen(), SkillsScreen(), ModelsScreen(), YouScreen()],
             ),
           ),
           bottomNavigationBar: HandNav(
             index: state.tab,
             onTap: state.goTo,
-            labels: const ['chat', 'skills', 'models', 'you'],
+            labels: const ['chat', 'saved', 'skills', 'models', 'you'],
           ),
         );
       },

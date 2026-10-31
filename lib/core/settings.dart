@@ -21,6 +21,13 @@ class AppSettings extends ChangeNotifier {
 
   /// Read the public preview of links you paste or share (one request per link, logged).
   bool readLinks = true;
+
+  /// Summarise shared posts with Gemma as soon as they arrive.
+  bool autoSummarise = true;
+
+  /// Free fallback: ask Jina Reader for a page's text when its preview says too
+  /// little. Sends the link to Jina, so it is off unless the user turns it on.
+  bool webReader = false;
   bool useGpu = true;
   int maxSteps = 6;
   double temperature = 0.7;
@@ -42,6 +49,8 @@ class AppSettings extends ChangeNotifier {
     thinking = j['thinking'] as bool? ?? thinking;
     useRouter = j['useRouter'] as bool? ?? useRouter;
     readLinks = j['readLinks'] as bool? ?? readLinks;
+    autoSummarise = j['autoSummarise'] as bool? ?? autoSummarise;
+    webReader = j['webReader'] as bool? ?? webReader;
     useGpu = j['useGpu'] as bool? ?? useGpu;
     maxSteps = j['maxSteps'] as int? ?? maxSteps;
     temperature = (j['temperature'] as num?)?.toDouble() ?? temperature;
@@ -63,6 +72,8 @@ class AppSettings extends ChangeNotifier {
       'thinking': thinking,
       'useRouter': useRouter,
       'readLinks': readLinks,
+      'autoSummarise': autoSummarise,
+      'webReader': webReader,
       'useGpu': useGpu,
       'maxSteps': maxSteps,
       'temperature': temperature,

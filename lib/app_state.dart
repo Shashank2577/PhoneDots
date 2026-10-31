@@ -5,7 +5,17 @@ import 'app_services.dart';
 
 /// App-wide UI state: the active chat and tab.
 class AppState extends ChangeNotifier {
-  AppState(this.services) : chat = ChatController(services);
+  AppState(this.services) : chat = ChatController(services) {
+    services.savedArrived.addListener(_showSaved);
+  }
+
+  static const savedTab = 1;
+  static const modelsTab = 3;
+
+  void _showSaved() {
+    if (services.savedArrived.value == null) return;
+    goTo(savedTab);
+  }
 
   final AppServices services;
   ChatController chat;

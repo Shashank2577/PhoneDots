@@ -45,8 +45,9 @@ Tokens, fonts and components live in `lib/theme/theme.dart` and `lib/widgets/han
 | **Memory** | Facts you explicitly ask it to remember, fully visible and editable |
 | **Model hub** | Downloads with resume and SHA-256 verification, RAM-fit warnings, choice of brain/router/embedder |
 | **Lab** | Prompt Lab and an on-device benchmark (tok/s, time to first token) |
-| **Privacy** | A ledger of every action. The only network events are model and skill downloads. |
-| **Share sheet** | "Share to PhoneDots" from any app on Android (text, images, audio, video) |
+| **Saved** | Share a post, reel, video, link or screenshot from any app. PhoneDots files it and Gemma summarises it on the phone (summary, key points, collection, tags). It reads the text the sharing app sends, the official embed or the page's preview tags, and the cover image (looked at by Gemma). Shared audio or video files get a Voz transcript. There is an optional free fallback, off by default: Jina Reader for open pages that describe themselves too briefly. It is never used on login walls or refusals. No per-post cost, no daily cap. |
+| **Privacy** | A ledger of every action, including every link that was read and where it was sent |
+| **Share sheet** | "Share to PhoneDots" from any app on Android. Links, images and clips go to Saved; plain text opens a chat. |
 
 ## Architecture
 

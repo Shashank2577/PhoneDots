@@ -192,20 +192,11 @@ class ChatController extends ChangeNotifier {
   // Planner loop --------------------------------------------------------------
 
   // Full URLs, www. links, and bare links on the platforms people share most.
-  static final _urlPattern = RegExp(
-    r'''(?:https?://|www\.)[^\s<>"']+|\b(?:youtu\.be|(?:[a-z]+\.)?(?:youtube|tiktok|instagram|threads|linkedin|github|medium|x|twitter)\.(?:com|net))/[^\s<>"']*''',
-    caseSensitive: false,
-  );
 
   /// Reads the public preview of every link in the message (up to three)
   /// before the model sees it, so "what is this?" works with a bare link.
   Future<void> _readLinks(ChatMessage user, ChatMessage reply) async {
-    final urls = _urlPattern
-        .allMatches(user.text)
-        .map((m) => LinkPreviewer.clean(m.group(0)!.replaceAll(RegExp(r'[).,!?]+$'), '')).toString())
-        .toSet()
-        .take(3)
-        .toList();
+    final urls = LinkPreviewer.findUrls(user.text);
     if (urls.isEmpty) return;
     if (!services.settings.readLinks) {
       user.linkContext = '[Link details]\nReading links is turned off in settings, so only the URL is known.';
@@ -469,29 +460,7 @@ class _RunContext implements SkillContext {
     required String prompt,
     List<String> imagePaths = const [],
     List<String> audioPaths = const [],
-  }) async {
-    if (!s.isDemo && !await s.models.ensurePlanner()) {
-      throw StateError('Download ${modelById(s.settings.plannerId)?.name ?? 'Gemma'} in Models first.');
-    }
-    final session = 'sub-${_uuid.v4()}';
-    final out = StringBuffer();
-    String? error;
-    await for (final e in s.llm.generate(
-      GenerationRequest(
-        modelId: s.settings.plannerId,
-        sessionId: session,
-        systemPrompt: system,
-        history: [EngineTurn(role: TurnRole.user, text: prompt, imagePaths: imagePaths, audioPaths: audioPaths)],
-        sampler: const SamplerSettings(temperature: 0.3, maxTokens: 1024),
-      ),
-    )) {
-      if (e is TokenEvent) out.write(e.text);
-      if (e is ErrorEvent) error = e.message;
-    }
-    await s.llm.resetSession(session);
-    if (error != null) throw StateError(error);
-    return out.toString().trim();
-  }
+  }) => s.ask(system: system, prompt: prompt, imagePaths: imagePaths, audioPaths: audioPaths);
 
   @override
   Future<Map<String, dynamic>> specialist(String modelId, String task, Map<String, dynamic> input) =>

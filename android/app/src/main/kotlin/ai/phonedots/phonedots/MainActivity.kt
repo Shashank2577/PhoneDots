@@ -71,7 +71,13 @@ class MainActivity : FlutterActivity() {
         null
       }
     }
-    pendingShare = mapOf("text" to (intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""), "files" to files)
+    // EXTRA_SUBJECT/EXTRA_TITLE often carry the post or video title (YouTube does this).
+    val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: intent.getStringExtra(Intent.EXTRA_TITLE)
+    pendingShare = mapOf(
+      "text" to (intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: ""),
+      "subject" to subject,
+      "files" to files,
+    )
     flushShare()
   }
 
