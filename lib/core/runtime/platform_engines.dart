@@ -152,6 +152,17 @@ class PlatformSpecialistEngine implements SpecialistEngine {
   @override
   bool get isDemo => false;
 
+  /// Points the Android SDK at the shared model store: each Desert Ant model's
+  /// weights then live in `<root>/desertant.<key>`, where sibling apps find
+  /// them. iOS: the SDK picks its own folder, so this is a no-op there.
+  Future<void> attachStore(String root) async {
+    try {
+      await Channels.specialist.invokeMethod('setStoreRoot', {'root': root});
+    } on MissingPluginException {
+      // iOS bridge without the method.
+    }
+  }
+
   @override
   Future<Map<String, String>> availability() async =>
       Map<String, String>.from(await Channels.specialist.invokeMethod('availability') as Map);

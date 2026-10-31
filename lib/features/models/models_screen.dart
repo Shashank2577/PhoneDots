@@ -167,13 +167,24 @@ class _Actions extends StatelessWidget {
     final p = context.pal;
     switch (state.status) {
       case ModelStatus.downloading:
-        return Row(
+        final progress = Row(
           children: [
-            Expanded(child: SketchProgress(value: state.progress == 0 ? null : state.progress)),
+            Expanded(child: SketchProgress(value: state.progress == 0 || state.busyElsewhere ? null : state.progress)),
             const SizedBox(width: 12),
             Text('${(state.progress * 100).round()}%', style: context.text.bodySmall),
-            if (spec.appDownloads)
+            if (spec.appDownloads || m.shared != null)
               IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: () => m.cancel(spec.id)),
+          ],
+        );
+        if (!state.busyElsewhere) return progress;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            progress,
+            Text(
+              'Another app on this phone is downloading it; PhoneDots uses the same copy.',
+              style: context.text.bodySmall?.copyWith(color: p.faint),
+            ),
           ],
         );
       case ModelStatus.ready:
@@ -212,7 +223,9 @@ class _Actions extends StatelessWidget {
                 if (await confirmDialog(
                   context,
                   title: 'Delete ${spec.name}?',
-                  body: 'Frees ${formatBytes(spec.approxBytes)}. You can download it again later.',
+                  body: m.shared == null
+                      ? 'Frees ${formatBytes(spec.approxBytes)}. You can download it again later.'
+                      : 'Frees ${formatBytes(spec.approxBytes)} unless another app on this phone still uses it. You can get it again later.',
                   confirm: 'Delete',
                   destructive: true,
                 )) {
@@ -230,6 +243,27 @@ class _Actions extends StatelessWidget {
             Text(state.error ?? 'Download failed', style: context.text.bodySmall?.copyWith(color: p.danger)),
             const SizedBox(height: 8),
             OutlinedButton(onPressed: () => m.download(spec.id), child: const Text('Try again')),
+          ],
+        );
+      case ModelStatus.absent when state.inSibling:
+        // Another app on this phone has it: getting it is a copy, no download.
+        return Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => m.download(spec.id),
+              icon: const Icon(Icons.devices_rounded, size: 18),
+              label: const Text('Copy'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Already on this phone in another app, so no download',
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.text.bodySmall?.copyWith(color: p.dot, fontSize: 11),
+              ),
+            ),
           ],
         );
       case ModelStatus.absent:

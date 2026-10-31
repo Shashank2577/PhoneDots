@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:base_models/base_models.dart' as bm;
 import 'package:flutter/foundation.dart';
 
 import 'agent/conversation.dart';
@@ -90,6 +91,7 @@ class AppServices {
       specialists: services.specialists,
       settings: settings,
       ledger: ledger,
+      shared: native ? await _openSharedModels(settings, services.specialists) : null,
     );
     services.skills = SkillRegistry(store: s, settings: settings, platform: p);
     services.knowledge = KnowledgeBase(store: s, embedder: services.bestEmbedder);
@@ -105,6 +107,37 @@ class AppServices {
     if (native) services._listenForShares();
     return services;
   }
+
+  /// The base platform's shared model store: models PhoneDots downloads are
+  /// usable by the vendor's other apps on this device, and theirs by PhoneDots.
+  static Future<bm.ModelStore> _openSharedModels(AppSettings settings, SpecialistEngine specialists) async {
+    final shared = await bm.ModelStore.open(
+      bm.StoreOptions(
+        appId: sharedModelsAppId,
+        catalog: bm.ModelCatalog(),
+        // The Hugging Face token goes to huggingface.co only (exact host, https).
+        headersFor: (f) {
+          final u = Uri.tryParse(f.url);
+          return settings.hfToken.isNotEmpty && u != null && u.scheme == 'https' && u.host == 'huggingface.co'
+              ? {'Authorization': 'Bearer ${settings.hfToken}'}
+              : const {};
+        },
+        sdkInstaller: (id, key, dir, progress) async {
+          await for (final p in specialists.download(id)) {
+            progress(p);
+          }
+        },
+      ),
+    );
+    if (specialists is PlatformSpecialistEngine) await specialists.attachStore(shared.location.path);
+    // Tell sibling apps PhoneDots is still installed; forget apps unseen for half a year.
+    await shared.touchClaims();
+    await shared.pruneStaleClaims(const Duration(days: 180));
+    return shared;
+  }
+
+  /// PhoneDots' id in the shared store's registry (its Android application id).
+  static const sharedModelsAppId = 'ai.phonedots.phonedots';
 
   Future<Embedder> bestEmbedder() async => !isDemo && await models.ensureEmbedder() ? nativeEmbedder : lexicalEmbedder;
 

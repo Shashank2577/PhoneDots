@@ -15,7 +15,8 @@ Requirements: macOS with Xcode 26 (Swift 6.2), an iPhone on iOS 18 or later (Des
    GIT_LFS_SKIP_SMUDGE=1 xcodebuild -resolvePackageDependencies -workspace ios/Runner.xcworkspace -scheme Runner
    ```
 
-5. Build to a physical device. The simulator has no Neural Engine or Metal GPU path for these models.
+5. **Signing & Capabilities → App Groups:** make sure your team has `group.com.showcase.shared` (the entitlement is already in `Runner/Runner.entitlements`). It is the shared model store: every app of the vendor keeps its models there, so a model is downloaded once per iPhone. Without the group, PhoneDots falls back to its own folder.
+6. Build to a physical device. The simulator has no Neural Engine or Metal GPU path for these models.
 
 ## Differences from Android
 

@@ -28,6 +28,13 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // The shared model store (base_models): the vendor-wide values from the
+        // base platform's platform.yaml → sharedModels. Every app of the vendor
+        // uses the same two, so they hand each other models instead of
+        // downloading them again (apps must be signed with the same key).
+        manifestPlaceholders["baseModelsPermission"] = "com.showcase.permission.SHARED_MODELS"
+        manifestPlaceholders["baseModelsDiscoveryAction"] = "com.showcase.action.SHARED_MODELS"
     }
 
     packaging {

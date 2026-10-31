@@ -15,14 +15,20 @@ description: Keep PhoneDots in step with the base platform (the baseApp repo), w
 | `lib/core/storage/*` | `packages/base_core` (`JsonStore`) |
 | `lib/theme/*`, `lib/widgets/sketch.dart` | superseded by `packages/base_design` (Burrow's system) |
 
+## The shared model store (done)
+
+PhoneDots uses `base_models` (a git dependency on baseApp, `packages/base_models`): `ModelManager` keeps its states and the resource governor, and gets files through the store (`ensure`, `pathOf`, `release`, `adopt`). So:
+
+- Gemma files live in the shared store (`<store>/<model id>/<file>`), shared with every app of the vendor: in place on iOS (App Group `group.com.showcase.shared`, `ios/Runner/Runner.entitlements`), copied from sibling apps on Android (`manifestPlaceholders` in `android/app/build.gradle.kts`; same signing key).
+- Desert Ant weights go to `<store>/desertant.<key>` on Android (`SpecialistBridge.setStoreRoot`); iOS's SDK picks its own folder.
+- Old downloads (`<app support>/models/<file>`, `filesDir/desertant/<key>`) move into the store once, without downloading again.
+- `test/shared_models_test.dart` checks that PhoneDots' catalog matches the shared one and that models come from, and are released to, the store.
+
+For local work against a baseApp checkout next to this repo, add `pubspec_overrides.yaml` (git-ignored) with `dependency_overrides: {base_models: {path: ../baseApp/packages/base_models}}`. When baseApp's branch merges, change the git `ref` in `pubspec.yaml` to `main`.
+
 ## Synced files
 
-`baseApp/./base sync` writes:
-
-- `assets/base/models.json`: the shared catalog (same ids as `model_catalog.dart`, plus the speech packs, all with SHA-256s and sizes);
-- `lib/theme/base_tokens.g.dart`: the platform's design tokens (not used yet).
-
-When you change `lib/core/models/model_catalog.dart`, make the same change in `baseApp/catalog/models.json` (then `./base checksums`, `./base gen`), or the next sync shows the drift.
+`baseApp/./base sync` writes `lib/theme/base_tokens.g.dart`: the platform's design tokens (not used yet). The model catalog comes with `base_models`; when you change `lib/core/models/model_catalog.dart`, make the same change in `baseApp/catalog/models.json` (then `./base checksums`, `./base gen`), or `test/shared_models_test.dart` fails.
 
 ## A fix made here
 
@@ -33,7 +39,7 @@ A fix in code that baseApp also has (downloader, engines, bridges, the JSON stor
 The goal is for PhoneDots to depend on the packages and get every change automatically. In order:
 
 1. Add PhoneDots to the workspace: move it to `baseApp/apps/phonedots` (or reference the packages by path) with `resolution: workspace`.
-2. Replace `ModelManager` + `downloader` with `ModelStore` (`base_models`): `ensure`, `pathOf`, `stateOf`. Gemma files then live in the shared store, so a Gemma downloaded by any app is reused here.
+2. ~~Replace the downloader with `ModelStore` (`base_models`)~~: done (above). Next, drop `lib/core/util/downloader*` once no model is outside the shared catalog.
 3. Replace `lib/core/runtime` with `base_ai` and the native bridges with `base_ai_native`; rename channels `phonedots/*` → `base/*` (the agent, skills and intake channel stay app code).
 4. Adopt `base_core`'s shell for onboarding, settings, models and privacy, and `base_design` for the look, then delete `lib/theme` and `lib/widgets/sketch.dart`.
 5. Keep PhoneDots-specific parts in the app: agent loop, 58 skills, recipes, community skills, voice mode, knowledge base.

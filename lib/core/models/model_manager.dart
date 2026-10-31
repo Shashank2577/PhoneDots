@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:base_models/base_models.dart' as bm;
 import 'package:flutter/foundation.dart';
 
 import '../ledger.dart';
@@ -15,16 +16,28 @@ import 'model_spec.dart';
 enum ModelStatus { absent, downloading, ready, failed }
 
 class ModelState {
-  const ModelState(this.status, {this.progress = 0, this.error});
+  const ModelState(this.status, {this.progress = 0, this.error, this.inSibling = false, this.busyElsewhere = false});
 
   final ModelStatus status;
   final double progress;
   final String? error;
+
+  /// Not on this app's shelf yet, but another app on this phone has it:
+  /// getting it is a copy, with no download.
+  final bool inSibling;
+
+  /// Another app on this device is downloading it right now.
+  final bool busyElsewhere;
 }
 
 /// Owns model files and which models are loaded. Acts as the resource
 /// governor: one planner at a time, and never E4B alongside heavy
 /// specialists on phones under 8 GB.
+///
+/// Model files live in the base platform's shared model store ([shared]):
+/// one copy per device for every app of the vendor (an App Group folder on
+/// iOS; on Android each app's copy, handed over by sibling apps instead of
+/// downloaded again). [shared] is null in demo mode and on the web.
 class ModelManager extends ChangeNotifier {
   ModelManager({
     required this.store,
@@ -33,7 +46,10 @@ class ModelManager extends ChangeNotifier {
     required this.specialists,
     required this.settings,
     required this.ledger,
-  });
+    this.shared,
+  }) {
+    shared?.addListener(_mirrorShared);
+  }
 
   final JsonStore store;
   final LlmEngine llm;
@@ -41,6 +57,7 @@ class ModelManager extends ChangeNotifier {
   final SpecialistEngine specialists;
   final AppSettings settings;
   final Ledger ledger;
+  final bm.ModelStore? shared;
 
   final Map<String, ModelState> _states = {};
   final Map<String, CancelToken> _tokens = {};
@@ -61,26 +78,74 @@ class ModelManager extends ChangeNotifier {
 
   List<ModelSpec> get visibleModels => allModels.where((m) => m.supports(device.platform)).toList();
 
-  String? pathFor(ModelSpec m) =>
+  /// Whether [m] goes through the shared store (it is in the shared catalog).
+  bool _inStore(ModelSpec m) => shared != null && shared!.catalog.byId(m.id) != null;
+
+  /// Where PhoneDots kept downloads before the shared store.
+  String? _legacyPath(ModelSpec m) =>
       store.modelsDir == null || m.fileName == null ? null : '${store.modelsDir}/${m.fileName}';
+
+  String? pathFor(ModelSpec m) {
+    if (m.fileName == null) return null;
+    return _inStore(m) ? shared!.pathOf(m.id, m.fileName) : _legacyPath(m);
+  }
 
   Future<void> init() async {
     device = await llm.deviceProfile();
     _demoDownloaded = {...((await store.read(_demoKey) as List?) ?? const []).cast<String>()};
     for (final m in allModels) {
+      if (_inStore(m) && m.appDownloads) await _adoptLegacy(m);
       _states[m.id] = ModelState(await _isOnDisk(m) ? ModelStatus.ready : ModelStatus.absent);
+      // Desert Ant weights the SDK already has but the store doesn't list yet
+      // (installed by an older PhoneDots): register them, so other apps see them.
+      if (_inStore(m) && !m.appDownloads && isReady(m.id) && !shared!.isReady(m.id)) {
+        unawaited(shared!.ensure(m.id).catchError((Object _) {}));
+      }
     }
-    notifyListeners();
+    _mirrorShared();
+  }
+
+  /// A model file downloaded before the shared store moves into it when it
+  /// matches the catalog (size and SHA-256), so the update downloads nothing.
+  /// A file that doesn't match is a damaged or outdated download: it is
+  /// deleted, and the model is fetched again when it is next needed.
+  Future<void> _adoptLegacy(ModelSpec m) async {
+    final old = _legacyPath(m);
+    if (old == null || !fileExists(old) || shared!.isReady(m.id)) return;
+    if (!await shared!.adopt(m.id, {m.fileName!: old})) await deleteFile(old);
   }
 
   Future<bool> _isOnDisk(ModelSpec m) async {
     if (isDemo) return _demoDownloaded.contains(m.id);
-    if (m.appDownloads) return fileExists(pathFor(m)!);
+    if (m.appDownloads) return _inStore(m) ? shared!.isReady(m.id) : fileExists(pathFor(m)!);
     try {
       return await specialists.isDownloaded(m.id);
     } catch (_) {
       return false;
     }
+  }
+
+  /// Copies the store's live state (progress, sibling copies, another app
+  /// downloading) onto PhoneDots' own model states.
+  void _mirrorShared() {
+    final s = shared;
+    if (s != null) {
+      for (final m in allModels) {
+        if (!_inStore(m)) continue;
+        final mine = state(m.id);
+        final theirs = s.stateOf(m.id);
+        if (mine.status == ModelStatus.downloading) {
+          _states[m.id] = ModelState(
+            ModelStatus.downloading,
+            progress: theirs.status == bm.ModelStatus.downloading ? theirs.progress : mine.progress,
+            busyElsewhere: theirs.busyElsewhere,
+          );
+        } else if (mine.status == ModelStatus.absent || mine.status == ModelStatus.failed) {
+          _states[m.id] = ModelState(mine.status, error: mine.error, inSibling: theirs.inSibling);
+        }
+      }
+    }
+    notifyListeners();
   }
 
   int get storageUsed => allModels.where((m) => isReady(m.id)).fold(0, (sum, m) {
@@ -95,8 +160,10 @@ class ModelManager extends ChangeNotifier {
   Future<void> download(String id) async {
     final m = modelById(id)!;
     if (state(id).status == ModelStatus.downloading) return;
+    // A copy from a sibling app is not a download: no network in the ledger.
+    final copy = state(id).inSibling;
     _set(id, const ModelState(ModelStatus.downloading));
-    unawaited(ledger.record('download', 'Started ${m.name} (${formatBytes(m.approxBytes)})', network: true));
+    unawaited(ledger.record('download', '${copy ? 'Copying' : 'Started'} ${m.name} (${formatBytes(m.approxBytes)})', network: !copy));
     try {
       if (isDemo) {
         await for (final p in specialists.download(id)) {
@@ -104,6 +171,13 @@ class ModelManager extends ChangeNotifier {
         }
         _demoDownloaded.add(id);
         await store.write(_demoKey, _demoDownloaded.toList());
+      } else if (_inStore(m)) {
+        // A copy from a sibling app when one has it; else a resumable, verified
+        // download (Desert Ant models through their SDK, into the store).
+        await shared!.ensure(id);
+        if (!m.appDownloads && !await specialists.isDownloaded(id)) {
+          throw StateError('${m.name} did not finish installing');
+        }
       } else if (m.appDownloads) {
         final token = _tokens[id] = CancelToken();
         final headers = settings.hfToken.isEmpty ? <String, String>{} : {'Authorization': 'Bearer ${settings.hfToken}'};
@@ -122,8 +196,15 @@ class ModelManager extends ChangeNotifier {
         }
       }
       _set(id, const ModelState(ModelStatus.ready));
-      unawaited(ledger.record('download', 'Finished ${m.name}', network: true));
+      final source = _inStore(m) ? shared!.sourceOf(id) : 'network';
+      if (source == 'sibling') {
+        unawaited(ledger.record('download', 'Copied ${m.name} from another app on this phone, no download'));
+      } else {
+        unawaited(ledger.record('download', 'Finished ${m.name}', network: true));
+      }
     } on DownloadCancelled {
+      _set(id, const ModelState(ModelStatus.absent));
+    } on bm.DownloadCancelled {
       _set(id, const ModelState(ModelStatus.absent));
     } catch (e) {
       _set(id, ModelState(ModelStatus.failed, error: _friendly(e)));
@@ -141,7 +222,10 @@ class ModelManager extends ChangeNotifier {
     return s.replaceFirst('Exception: ', '');
   }
 
-  void cancel(String id) => _tokens[id]?.cancel();
+  void cancel(String id) {
+    _tokens[id]?.cancel();
+    shared?.cancel(id);
+  }
 
   Future<void> delete(String id) async {
     final m = modelById(id)!;
@@ -151,10 +235,14 @@ class ModelManager extends ChangeNotifier {
     if (isDemo) {
       _demoDownloaded.remove(id);
       await store.write(_demoKey, _demoDownloaded.toList());
+    } else if (_inStore(m)) {
+      // PhoneDots stops using it; the files go only if no other app uses them.
+      await shared!.release(id);
     } else if (m.appDownloads) {
       await deleteFile(pathFor(m)!);
     }
     _set(id, const ModelState(ModelStatus.absent));
+    _mirrorShared();
     unawaited(ledger.record('model', 'Deleted ${m.name}'));
   }
 
@@ -222,5 +310,11 @@ class ModelManager extends ChangeNotifier {
   void _set(String id, ModelState s) {
     _states[id] = s;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    shared?.removeListener(_mirrorShared);
+    super.dispose();
   }
 }

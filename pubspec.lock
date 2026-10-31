@@ -25,6 +25,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  base_models:
+    dependency: "direct main"
+    description:
+      path: "packages/base_models"
+      ref: ccr-81ba2f7d-qkqv1h
+      resolved-ref: d7876e3d49fb13c05acbd7a8de17d68e048c8605
+      url: "https://github.com/Shashank2577/baseApp.git"
+    source: git
+    version: "1.0.0"
   boolean_selector:
     dependency: transitive
     description:

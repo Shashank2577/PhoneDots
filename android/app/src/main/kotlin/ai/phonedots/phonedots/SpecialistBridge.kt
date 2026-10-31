@@ -28,8 +28,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Desert Ant specialists (desert-ant-core Android SDK). Each model is created
- * lazily, downloads itself into the app's model folder on first use, and
- * returns plain maps to Dart. Uhm, Align, Title and Clips are Apple-only.
+ * lazily, downloads itself into its folder in the shared model store
+ * (`<store>/desertant.<key>`, set by `setStoreRoot`) on first use, and returns
+ * plain maps to Dart. Uhm, Align, Title and Clips are Apple-only.
  */
 class SpecialistBridge(private val context: Context, messenger: BinaryMessenger) :
   MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
@@ -38,6 +39,9 @@ class SpecialistBridge(private val context: Context, messenger: BinaryMessenger)
   private val main = Handler(Looper.getMainLooper())
   private val models = ConcurrentHashMap<String, Any>()
   private var sink: EventChannel.EventSink? = null
+
+  /** The shared model store's folder; null until Dart attaches it (then the old app folder). */
+  @Volatile private var storeRoot: String? = null
 
   init {
     MethodChannel(messenger, "phonedots/specialist").setMethodCallHandler(this)
@@ -52,8 +56,32 @@ class SpecialistBridge(private val context: Context, messenger: BinaryMessenger)
     sink = null
   }
 
-  private fun dir(key: String): String =
-    File(context.filesDir, "desertant/$key").apply { mkdirs() }.path
+  private fun dir(key: String): String {
+    val root = storeRoot ?: return File(context.filesDir, "desertant/$key").apply { mkdirs() }.path
+    return File(root, "desertant.$key").apply { mkdirs() }.path
+  }
+
+  /**
+   * Moves Desert Ant weights to the shared store. Weights an older PhoneDots
+   * kept in `filesDir/desertant/<key>` move into `<root>/desertant.<key>`
+   * (when that folder is still empty), so nothing is downloaded again. Models
+   * already created point at the old folder, so they are recreated.
+   */
+  private fun setStoreRoot(root: String) {
+    if (root == storeRoot) return
+    val legacy = File(context.filesDir, "desertant")
+    legacy.listFiles()?.filter { it.isDirectory }?.forEach { old ->
+      val target = File(root, "desertant.${old.name}")
+      if (target.listFiles().isNullOrEmpty()) {
+        target.delete()
+        if (!old.renameTo(target)) Log.w(TAG, "could not move ${old.name} into the shared store")
+      }
+    }
+    if (legacy.listFiles().isNullOrEmpty()) legacy.delete()
+    storeRoot = root
+    models.values.forEach { (it as? AutoCloseable)?.runCatching { close() } }
+    models.clear()
+  }
 
   private fun key(modelId: String) = modelId.removePrefix("desertant.")
 
@@ -78,6 +106,14 @@ class SpecialistBridge(private val context: Context, messenger: BinaryMessenger)
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     val modelId = call.argument<String>("modelId")
     when (call.method) {
+      "setStoreRoot" -> scope.launch {
+        try {
+          setStoreRoot(call.argument<String>("root")!!)
+          main.post { result.success(null) }
+        } catch (e: Throwable) {
+          main.post { result.error("store", e.message, null) }
+        }
+      }
       "availability" -> result.success(
         listOf("voz", "who", "ear", "clear", "redact", "emo", "gist", "eye", "moderator", "tongue", "shapes")
           .associate { "desertant.$it" to "native" } +

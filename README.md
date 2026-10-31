@@ -42,7 +42,7 @@ The drawing code is in `lib/theme/rough.dart` (hand-drawn Material borders, so e
 | **Voice mode** | Talk, Voz transcribes on device, the agent answers, and the reply is read aloud |
 | **My files** | On-device search index (EmbeddingGemma, or keyword fallback) over notes, imports, receipts and transcripts |
 | **Memory** | Facts you explicitly ask it to remember, fully visible and editable |
-| **Model hub** | Downloads with resume and SHA-256 verification, RAM-fit warnings, choice of brain/router/embedder |
+| **Model hub** | One shared model store for every app of the vendor (one download per device), resume and SHA-256 verification, RAM-fit warnings, choice of brain/router/embedder |
 | **Lab** | Prompt Lab and an on-device benchmark (tok/s, time to first token) |
 | **Privacy** | A ledger of every action. The only network events are model and skill downloads. |
 | **Share sheet** | "Share to PhoneDots" from any app on Android (text, images, audio, video) |
@@ -81,7 +81,13 @@ The channel contract is documented in [docs/NATIVE_BRIDGE.md](docs/NATIVE_BRIDGE
 | Desert Ant: Voz, Who, Ear, Clear, Redact, Tongue, Emo, Gist, Eye, Moderator, Shapes | Specialists, Android + iOS | 1 MB – 470 MB each |
 | Desert Ant: Uhm, Align, Title, Clips | Specialists, iOS only | |
 
-Gemma files and checksums are pinned in `lib/core/models/model_catalog.dart`. The Desert Ant SDK downloads and verifies its own weights.
+Gemma files and checksums are pinned in `lib/core/models/model_catalog.dart`, and match the base platform's shared catalog (a test checks this). The Desert Ant SDK downloads and verifies its own weights.
+
+**One download per device.** Models live in the base platform's shared model store (`base_models`, from [baseApp](https://github.com/Shashank2577/baseApp)), not in PhoneDots' own folder:
+
+- **iOS:** one folder in the App Group `group.com.showcase.shared`, used in place by every app of the vendor. Your Apple team needs that App Group; without it PhoneDots keeps its models to itself.
+- **Android:** each app keeps its own copy, and copies a model from a sibling app that has it instead of downloading it (the Models tab says "already on this phone in another app"). Siblings must be signed with the same key. Desert Ant weights go to `<store>/desertant.<key>`.
+- A model is deleted only when the last app using it lets go. Models downloaded by an older PhoneDots move into the store on first start, without downloading again.
 
 ## Run it
 
