@@ -375,7 +375,8 @@
       "sdk": {
         "name": "desertant",
         "version": "4.2.1",
-        "key": "tongue"
+        "key": "tongue",
+        "bundled": true
       },
       "approxBytes": 2000000,
       "files": []
