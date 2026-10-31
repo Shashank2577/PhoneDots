@@ -89,6 +89,9 @@ class ChatMessage {
   String? error;
   bool streaming;
 
+  /// Details of links in a user message, read before the model answers.
+  String linkContext = '';
+
   List<UiCard> get cards => [for (final s in steps) ...s.cards];
 
   Map<String, dynamic> toJson() => {
@@ -109,6 +112,7 @@ class ChatMessage {
         'decodeTps': stats!.decodeTokensPerSec,
       },
     'error': error,
+    if (linkContext.isNotEmpty) 'links': linkContext,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -129,7 +133,7 @@ class ChatMessage {
     modelId: j['modelId'] as String?,
     stats: j['stats'] == null ? null : GenerationStats.fromJson(Map<String, dynamic>.from(j['stats'] as Map)),
     error: j['error'] as String?,
-  );
+  )..linkContext = j['links'] as String? ?? '';
 }
 
 class Conversation {

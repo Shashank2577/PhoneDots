@@ -18,6 +18,9 @@ class AppSettings extends ChangeNotifier {
   String embedderId = 'embeddinggemma-2-text-270m';
   bool thinking = false;
   bool useRouter = true;
+
+  /// Read the public preview of links you paste or share (one request per link, logged).
+  bool readLinks = true;
   bool useGpu = true;
   int maxSteps = 6;
   double temperature = 0.7;
@@ -38,6 +41,7 @@ class AppSettings extends ChangeNotifier {
     embedderId = j['embedderId'] as String? ?? embedderId;
     thinking = j['thinking'] as bool? ?? thinking;
     useRouter = j['useRouter'] as bool? ?? useRouter;
+    readLinks = j['readLinks'] as bool? ?? readLinks;
     useGpu = j['useGpu'] as bool? ?? useGpu;
     maxSteps = j['maxSteps'] as int? ?? maxSteps;
     temperature = (j['temperature'] as num?)?.toDouble() ?? temperature;
@@ -58,6 +62,7 @@ class AppSettings extends ChangeNotifier {
       'embedderId': embedderId,
       'thinking': thinking,
       'useRouter': useRouter,
+      'readLinks': readLinks,
       'useGpu': useGpu,
       'maxSteps': maxSteps,
       'temperature': temperature,

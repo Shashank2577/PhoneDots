@@ -159,6 +159,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (v) => st.update((x) => x.useRouter = v),
           ),
           SwitchRow(
+            title: 'read shared links',
+            body: 'Fetch the public title and description of links you paste, straight from the site. Each one is logged under privacy.',
+            value: st.readLinks,
+            onChanged: (v) => st.update((x) => x.readLinks = v),
+          ),
+          SwitchRow(
             title: 'think first',
             body: 'Reason step by step before answering. Slower, better for hard questions.',
             value: st.thinking,

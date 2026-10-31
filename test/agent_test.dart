@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:phonedots/agent/agent.dart';
 import 'package:phonedots/agent/conversation.dart';
@@ -135,5 +139,64 @@ void main() {
     // On a phone (not demo) with no token, a gated download fails fast with guidance.
     final s = await AppServices.create(store: MemoryJsonStore(), platform: 'demo');
     expect(s.models.canTryDownload(fg), isTrue, reason: 'demo engine never blocks');
+  });
+
+  test('pasting a bare link: read first, then answered from the details', () async {
+    final client = MockClient((r) async {
+      if (r.url.path == '/oembed') {
+        return http.Response(jsonEncode({'title': 'How LiteRT works', 'author_name': 'Google for Developers'}), 200);
+      }
+      return http.Response('nope', 404);
+    });
+    final s = await AppServices.create(store: MemoryJsonStore(), platform: 'demo', linkClient: client);
+    final chat = ChatController(s);
+    await chat.send('https://youtu.be/dCS4er4Xcjo?si=abc');
+    final user = chat.messages.first;
+    final reply = chat.messages.last;
+    expect(reply.steps.first.skillId, 'read_link');
+    expect(reply.steps.first.status, StepStatus.done);
+    expect(reply.steps.first.cards.single.type, 'link');
+    expect(user.linkContext, contains('How LiteRT works'));
+    expect(user.linkContext, contains('https://youtu.be/dCS4er4Xcjo'));
+    expect(user.linkContext, isNot(contains('si=abc')));
+    expect(reply.text, contains('How LiteRT works'));
+    expect(s.ledger.entries.any((e) => e.network && e.kind == 'link'), isTrue);
+  });
+
+  test('links in a sentence skip the fast path and keep the question', () async {
+    final client = MockClient(
+      (r) async => http.Response(
+        jsonEncode({
+          'full_name': 'o/r',
+          'description': 'A tool',
+          'owner': {'login': 'o'},
+        }),
+        200,
+      ),
+    );
+    final s = await AppServices.create(store: MemoryJsonStore(), platform: 'demo', linkClient: client);
+    final chat = ChatController(s);
+    await chat.send('summarise this repo github.com/o/r and https://github.com/o/r');
+    final user = chat.messages.first;
+    expect(
+      chat.messages.last.steps.where((x) => x.skillId == 'read_link'),
+      hasLength(1),
+      reason: 'same link read once',
+    );
+    expect(user.text, startsWith('summarise this repo'));
+    expect(user.linkContext, contains('A tool'));
+  });
+
+  test('with link reading off, the model is told only the URL is known', () async {
+    final s = await AppServices.create(
+      store: MemoryJsonStore(),
+      platform: 'demo',
+      linkClient: MockClient((_) async => fail('no network')),
+    );
+    await s.settings.update((x) => x.readLinks = false);
+    final chat = ChatController(s);
+    await chat.send('https://www.instagram.com/p/DduI7Bps24j/');
+    expect(chat.messages.first.linkContext, contains('turned off'));
+    expect(chat.messages.last.steps, isEmpty);
   });
 }

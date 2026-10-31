@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_state.dart';
+
 import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
@@ -30,6 +32,7 @@ class ResultCard extends StatelessWidget {
         child: localImage('${card.data['path']}', height: 220, width: double.infinity),
       ),
       'file' => _FileCard(card.data),
+      'link' => _LinkCard(card.data),
       _ => _TextBlock(card.data),
     };
     // Results sit on the paper under a hand-lettered head, closed by a hairline.
@@ -501,4 +504,60 @@ class _StrikePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_StrikePainter o) => o.width != width;
+}
+
+/// A shared link as PhoneDots read it: platform, title, author, description.
+class _LinkCard extends StatelessWidget {
+  const _LinkCard(this.data);
+  final Map<String, dynamic> data;
+
+  static Doodle _doodle(String platform) => switch (platform) {
+    'youtube' || 'tiktok' => Doodle.play,
+    'instagram' => Doodle.camera,
+    'github' => Doodle.curl,
+    'medium' => Doodle.book,
+    'linkedin' => Doodle.person,
+    'threads' || 'x' => Doodle.bubble,
+    _ => Doodle.share,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final rich = data['rich'] == true;
+    final desc = '${data['description'] ?? ''}'.trim();
+    final services = AppScope.services(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            DoodleIcon(_doodle('${data['platform']}'), size: 18, color: p.pencil),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Meta(
+                '${data['platform']} · ${data['kind']}${data['author'] != null ? ' · ${data['author']}' : ''}',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${data['title']}',
+          style: Hand.label.copyWith(fontSize: 23, color: p.ink),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (desc.isNotEmpty) Meta(desc, maxLines: 4),
+        if (!rich)
+          const Meta(
+            'The site shared no details, so this name comes from the link. A screenshot lets PhoneDots read it.',
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: HandLink('open', onTap: () => services.device.invoke('url.open', {'url': '${data['url']}'})),
+        ),
+      ],
+    );
+  }
 }

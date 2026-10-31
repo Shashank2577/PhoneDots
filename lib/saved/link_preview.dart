@@ -64,7 +64,7 @@ class LinkPreviewer {
   static const _ua = 'PhoneDots/0.4 (on-device link preview; +https://github.com/Shashank2577/PhoneDots)';
 
   static const _tracking = {
-    'si', 'igsh', 'igshid', 'xmt', 'fbclid', 'gclid', 'ref', 'ref_src', 'feature', 'source', 'utm_source', //
+    'si', 'cplk', 'igsh', 'igshid', 'xmt', 'fbclid', 'gclid', 'ref', 'ref_src', 'feature', 'source', 'utm_source', //
     'utm_medium',
     'utm_campaign',
     'utm_term',

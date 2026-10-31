@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import 'agent/conversation.dart';
 import 'core/ledger.dart';
@@ -12,6 +13,7 @@ import 'core/runtime/platform_engines.dart';
 import 'core/settings.dart';
 import 'core/storage/json_store.dart';
 import 'knowledge/knowledge_base.dart';
+import 'saved/link_preview.dart';
 import 'knowledge/memory_store.dart';
 import 'skills/skill.dart';
 import 'skills/skill_registry.dart';
@@ -51,6 +53,7 @@ class AppServices {
   late final MemoryStore memory;
   late final ConversationStore conversations;
   final ValueNotifier<SharedIntake?> intake = ValueNotifier(null);
+  late final LinkPreviewer links;
 
   bool get isDemo => llm.isDemo;
 
@@ -63,7 +66,7 @@ class AppServices {
     };
   }
 
-  static Future<AppServices> create({JsonStore? store, String? platform}) async {
+  static Future<AppServices> create({JsonStore? store, String? platform, http.Client? linkClient}) async {
     final p = platform ?? detectPlatform();
     final s = store ?? await JsonStore.open();
     final settings = AppSettings(s);
@@ -83,6 +86,7 @@ class AppServices {
       specialists: native ? PlatformSpecialistEngine() : DemoSpecialistEngine(),
       device: DartDeviceActions(native ? PlatformDeviceActions() : DemoDeviceActions()),
     );
+    services.links = LinkPreviewer(client: linkClient);
     services.models = ModelManager(
       store: s,
       llm: services.llm,

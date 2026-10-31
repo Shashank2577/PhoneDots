@@ -7,6 +7,7 @@ import '../core/settings.dart';
 import '../core/storage/json_store.dart';
 import 'builtin/audio_skills.dart';
 import 'builtin/knowledge_skills.dart';
+import 'builtin/link_skills.dart';
 import 'builtin/output_skills.dart';
 import 'builtin/phone_skills.dart';
 import 'builtin/text_skills.dart';
@@ -28,6 +29,7 @@ class SkillRegistry extends ChangeNotifier {
     ...textSkills(),
     ...phoneSkills(),
     ...knowledgeSkills(),
+    ...linkSkills(),
     ...outputSkills(),
   ];
   final List<Recipe> recipes = [];

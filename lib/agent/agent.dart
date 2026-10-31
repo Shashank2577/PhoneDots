@@ -8,6 +8,7 @@ import '../core/models/model_catalog.dart';
 import '../core/models/model_spec.dart';
 import '../core/runtime/engine_types.dart';
 import '../core/util/files.dart';
+import '../saved/link_preview.dart';
 import '../skills/skill.dart';
 import 'conversation.dart';
 import 'prompts.dart';
@@ -60,7 +61,9 @@ class ChatController extends ChangeNotifier {
     }
     notifyListeners();
     try {
-      final routed = await _tryRouter(user, reply);
+      await _readLinks(user, reply);
+      // Messages with links always go to the planner, which can talk about them.
+      final routed = user.linkContext.isEmpty && await _tryRouter(user, reply);
       if (!routed) await _runPlanner(user, reply);
     } catch (e) {
       reply.error = '$e';
@@ -188,6 +191,52 @@ class ChatController extends ChangeNotifier {
 
   // Planner loop --------------------------------------------------------------
 
+  // Full URLs, www. links, and bare links on the platforms people share most.
+  static final _urlPattern = RegExp(
+    r'''(?:https?://|www\.)[^\s<>"']+|\b(?:youtu\.be|(?:[a-z]+\.)?(?:youtube|tiktok|instagram|threads|linkedin|github|medium|x|twitter)\.(?:com|net))/[^\s<>"']*''',
+    caseSensitive: false,
+  );
+
+  /// Reads the public preview of every link in the message (up to three)
+  /// before the model sees it, so "what is this?" works with a bare link.
+  Future<void> _readLinks(ChatMessage user, ChatMessage reply) async {
+    final urls = _urlPattern
+        .allMatches(user.text)
+        .map((m) => LinkPreviewer.clean(m.group(0)!.replaceAll(RegExp(r'[).,!?]+$'), '')).toString())
+        .toSet()
+        .take(3)
+        .toList();
+    if (urls.isEmpty) return;
+    if (!services.settings.readLinks) {
+      user.linkContext = '[Link details]\nReading links is turned off in settings, so only the URL is known.';
+      return;
+    }
+    final lines = <String>[];
+    for (final url in urls) {
+      final step = await _execute(
+        ToolCallRequest(id: _uuid.v4(), name: 'read_link', arguments: {'url': url}),
+        reply,
+        via: 'auto',
+      );
+      final r = step.result;
+      if (step.status != StepStatus.done) {
+        lines.add('- $url: could not be read (${r['error'] ?? 'unknown error'}).');
+        continue;
+      }
+      lines.add(
+        [
+          '- ${r['platform']} ${r['kind']}: "${r['title']}"',
+          if (r['author'] != null) 'by ${r['author']}',
+          if ('${r['description'] ?? ''}'.isNotEmpty) '\n  Description: ${r['description']}',
+          if (r['rich'] != true) '\n  (The site shared no details; this title comes from the URL only.)',
+          '\n  URL: ${r['url']}',
+        ].join(' '),
+      );
+    }
+    user.linkContext = '[Link details read by PhoneDots]\n${lines.join('\n')}';
+    notifyListeners();
+  }
+
   List<EngineTurn> _history() {
     final out = <EngineTurn>[];
     final planner = modelById(services.settings.plannerId);
@@ -198,7 +247,10 @@ class ChatController extends ChangeNotifier {
         out.add(
           EngineTurn(
             role: TurnRole.user,
-            text: m.text.isEmpty ? 'See attachment.' : m.text,
+            text: [
+              m.text.isEmpty ? 'See attachment.' : m.text,
+              if (m.linkContext.isNotEmpty) m.linkContext,
+            ].join('\n\n'),
             imagePaths: seesImages
                 ? [
                     for (final a in m.attachments)
@@ -475,6 +527,14 @@ class _RunContext implements SkillContext {
 
   @override
   Future<String?> saveTextFile(String name, String content) => writeTextFile(s.store.filesDir, name, content);
+
+  @override
+  Future<Map<String, dynamic>> previewLink(String url) async {
+    final host = Uri.tryParse(url.startsWith('http') ? url : 'https://$url')?.host ?? url;
+    unawaited(s.ledger.record('link', 'Read the preview of a $host link', network: true));
+    final p = await s.links.preview(url);
+    return {...p.toJson(), 'rich': p.rich};
+  }
 
   @override
   void progress(String message) {

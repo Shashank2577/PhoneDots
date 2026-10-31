@@ -101,11 +101,19 @@ class DemoLlmEngine implements LlmEngine {
   String _reply(GenerationRequest request, EngineTurn last) {
     final text = last.text.trim();
     final system = request.systemPrompt.toLowerCase();
+    final links = text.indexOf('[Link details read by PhoneDots]');
+    if (links >= 0) {
+      final details = text.substring(links).split('\n').skip(1).join('\n');
+      return 'Here is what that link is:\n$details';
+    }
     // Sub-calls from text skills (summarize, rewrite...) carry the task in the
-    // system prompt. Answer them extractively so pipelines still produce output.
-    if (system.contains('summar') || system.contains('minutes')) return _extractive(text, 3);
-    if (system.contains('json')) return '{"note": "Demo engine cannot extract fields. Load Gemma on a phone."}';
-    if (system.contains('rewrite') || system.contains('proofread') || system.contains('translate')) {
+    // system prompt; the main assistant prompt is not one of them.
+    final subCall = !system.startsWith('you are phonedots');
+    if (subCall && (system.contains('summar') || system.contains('minutes'))) return _extractive(text, 3);
+    if (subCall && system.contains('json')) {
+      return '{"note": "Demo engine cannot extract fields. Load Gemma on a phone."}';
+    }
+    if (subCall && (system.contains('rewrite') || system.contains('proofread') || system.contains('translate'))) {
       return text;
     }
     if (last.imagePaths.isNotEmpty) {

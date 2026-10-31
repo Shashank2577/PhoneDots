@@ -153,6 +153,9 @@ abstract class SkillContext {
 
   Future<String?> saveTextFile(String name, String content);
 
+  /// Reads a link's public preview (title, author, description). Logged as network use.
+  Future<Map<String, dynamic>> previewLink(String url);
+
   void progress(String message);
 }
 
