@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../ledger.dart';
 import '../runtime/engine_types.dart';
@@ -13,6 +14,17 @@ import 'model_catalog.dart';
 import 'model_spec.dart';
 
 enum ModelStatus { absent, downloading, ready, failed }
+
+/// Whether this phone may download a gated model right now.
+enum Access { ok, needsToken, badToken, needsLicence, unknown }
+
+/// Maps Hugging Face's answer for a gated file to what the user must do.
+Access classifyAccess(int status, {required bool hasToken}) => switch (status) {
+  200 || 206 || 302 || 303 || 307 => Access.ok,
+  401 => hasToken ? Access.badToken : Access.needsToken,
+  403 => hasToken ? Access.needsLicence : Access.needsToken,
+  _ => Access.unknown,
+};
 
 class ModelState {
   const ModelState(this.status, {this.progress = 0, this.error});
@@ -33,7 +45,10 @@ class ModelManager extends ChangeNotifier {
     required this.specialists,
     required this.settings,
     required this.ledger,
-  });
+    http.Client? client,
+  }) : _http = client ?? http.Client();
+
+  final http.Client _http;
 
   final JsonStore store;
   final LlmEngine llm;
@@ -92,9 +107,35 @@ class ModelManager extends ChangeNotifier {
   /// Models this phone can comfortably run.
   bool fits(ModelSpec m) => device.totalRamMb == 0 || m.minRamMb <= device.totalRamMb;
 
+  /// Asks Hugging Face (without downloading) whether the saved token may
+  /// fetch [m]. One small request, logged in the privacy ledger.
+  Future<Access> checkAccess(ModelSpec m) async {
+    if (isDemo || !m.gated) return Access.ok;
+    final hasToken = settings.hfToken.isNotEmpty;
+    try {
+      final req = http.Request('GET', Uri.parse(m.downloadUrl!))
+        ..followRedirects = false
+        ..headers['Range'] = 'bytes=0-0';
+      if (hasToken) req.headers['Authorization'] = 'Bearer ${settings.hfToken}';
+      final res = await _http.send(req).timeout(const Duration(seconds: 15));
+      await res.stream.drain<void>();
+      unawaited(ledger.record('download', 'Checked access to ${m.name}', network: true));
+      return classifyAccess(res.statusCode, hasToken: hasToken);
+    } catch (_) {
+      return Access.unknown;
+    }
+  }
+
+  /// Gated models need a token first; skip them in bulk downloads until then.
+  bool canTryDownload(ModelSpec m) => isDemo || !m.gated || settings.hfToken.isNotEmpty;
+
   Future<void> download(String id) async {
     final m = modelById(id)!;
     if (state(id).status == ModelStatus.downloading) return;
+    if (!canTryDownload(m)) {
+      _set(id, const ModelState(ModelStatus.failed, error: 'needs a free Hugging Face OK: tap "get access"'));
+      return;
+    }
     _set(id, const ModelState(ModelStatus.downloading));
     unawaited(ledger.record('download', 'Started ${m.name} (${formatBytes(m.approxBytes)})', network: true));
     try {
@@ -135,9 +176,12 @@ class ModelManager extends ChangeNotifier {
 
   String _friendly(Object e) {
     final s = '$e';
-    if (s.contains('401') || s.contains('403')) {
-      return 'Hugging Face refused the download. Accept the Gemma licence on huggingface.co and add a token in Settings.';
+    if (s.contains('HTTP 401')) {
+      return settings.hfToken.isEmpty
+          ? 'needs a free Hugging Face OK: tap "get access"'
+          : 'Hugging Face didn\'t accept the token. Check it under "get access".';
     }
+    if (s.contains('HTTP 403')) return 'accept Google\'s licence on the model page first: tap "get access"';
     return s.replaceFirst('Exception: ', '');
   }
 

@@ -26,6 +26,7 @@ class ModelSpec {
     this.ios = PlatformSupport.native,
     this.beta = false,
     this.recommended = false,
+    this.gated = false,
   });
 
   final String id;
@@ -50,6 +51,12 @@ class ModelSpec {
   final PlatformSupport ios;
   final bool beta;
   final bool recommended;
+
+  /// Google's licence must be accepted on Hugging Face (signed in) before the
+  /// file downloads; requests without an approved token get HTTP 401/403.
+  final bool gated;
+
+  String? get hfPage => hfRepo == null ? null : 'https://huggingface.co/$hfRepo';
 
   bool get appDownloads => hfRepo != null;
 

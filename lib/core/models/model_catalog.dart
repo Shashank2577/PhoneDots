@@ -60,6 +60,7 @@ const gemmaModels = <ModelSpec>[
     fileName: 'mobile_actions_q8_ekv1024.litertlm',
     sha256: '33e295cbd996b419bb1de8f3f85c5b6b01ee058a2c89bdb2173cf3e6ff4ce9d0',
     recommended: true,
+    gated: true,
   ),
   ModelSpec(
     id: 'gemma-3-270m',
@@ -74,6 +75,7 @@ const gemmaModels = <ModelSpec>[
     hfRepo: 'litert-community/gemma-3-270m-it',
     fileName: 'gemma3-270m-it-q8.litertlm',
     sha256: '757e9119fa5bd667a2774fb470ac4afcd3190a21c677f8e69a5d6bc908abdd63',
+    gated: true,
   ),
   ModelSpec(
     id: 'embeddinggemma-2-text-270m',

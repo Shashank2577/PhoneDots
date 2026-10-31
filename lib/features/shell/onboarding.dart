@@ -34,7 +34,8 @@ class _OnboardingState extends State<Onboarding> {
     final s = AppScope.services(context);
     for (final id in _starter) {
       final m = modelById(id);
-      if (m != null && m.supports(s.platform) && s.models.fits(m)) s.models.download(id);
+      // Gated models (FunctionGemma) wait until the user grants access under models.
+      if (m != null && m.supports(s.platform) && s.models.fits(m) && s.models.canTryDownload(m)) s.models.download(id);
     }
     setState(() => _downloading = true);
   }

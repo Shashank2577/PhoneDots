@@ -44,7 +44,10 @@ void main() {
     const tools = {'set_timer', 'calculate'};
 
     test('fenced JSON from our prompt format', () {
-      final r = ToolCallParser.parse('Sure.\n```tool_call\n{"name": "set_timer", "arguments": {"seconds": 300}}\n```', tools);
+      final r = ToolCallParser.parse(
+        'Sure.\n```tool_call\n{"name": "set_timer", "arguments": {"seconds": 300}}\n```',
+        tools,
+      );
       expect(r.calls.single.name, 'set_timer');
       expect(r.calls.single.arguments['seconds'], 300);
       expect(r.text, 'Sure.');
@@ -52,7 +55,9 @@ void main() {
 
     test('FunctionGemma format', () {
       final r = ToolCallParser.parse(
-          '<start_function_call>call:set_timer{seconds:60,label:<escape>Tea, strong<escape>}<end_function_call>', tools);
+        '<start_function_call>call:set_timer{seconds:60,label:<escape>Tea, strong<escape>}<end_function_call>',
+        tools,
+      );
       expect(r.calls.single.arguments, {'seconds': 60, 'label': 'Tea, strong'});
     });
 
@@ -76,7 +81,10 @@ void main() {
   test('recipe templates', () {
     final results = [
       {'text': 'hello world'},
-      {'result': 'summary', 'items': ['a', 'b']},
+      {
+        'result': 'summary',
+        'items': ['a', 'b'],
+      },
     ];
     expect(fillTemplate('{{input}}!', 'x', results), 'x!');
     expect(fillTemplate('{{prev.result}}', '', results), 'summary');
@@ -95,7 +103,13 @@ void main() {
     test('rejects bad manifests', () {
       expect(() => CommunitySkill.parse({'schema': 'x'}), throwsFormatException);
       expect(
-        () => CommunitySkill.parse({'schema': CommunitySkill.schema, 'id': 'Bad Id', 'name': 'n', 'description': 'd', 'prompt': {'user': 'u'}}),
+        () => CommunitySkill.parse({
+          'schema': CommunitySkill.schema,
+          'id': 'Bad Id',
+          'name': 'n',
+          'description': 'd',
+          'prompt': {'user': 'u'},
+        }),
         throwsFormatException,
       );
       expect(

@@ -351,7 +351,10 @@ class MarkedText extends StatelessWidget {
               style: s,
               children: [
                 TextSpan(text: text.substring(0, start)),
-                TextSpan(text: mark, style: TextStyle(color: p.markerInk)),
+                TextSpan(
+                  text: mark,
+                  style: TextStyle(color: p.markerInk),
+                ),
                 TextSpan(text: text.substring(start + mark!.length)),
               ],
             ),
