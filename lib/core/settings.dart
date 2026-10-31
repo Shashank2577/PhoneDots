@@ -28,6 +28,11 @@ class AppSettings extends ChangeNotifier {
   /// Free fallback: ask Jina Reader for a page's text when its preview says too
   /// little. Sends the link to Jina, so it is off unless the user turns it on.
   bool webReader = false;
+
+  /// Optional free keys. YouTube Data API: full video details (10,000 free
+  /// units a day, one per video). Jina: higher reader limits.
+  String youtubeKey = '';
+  String jinaKey = '';
   bool useGpu = true;
   int maxSteps = 6;
   double temperature = 0.7;
@@ -51,6 +56,8 @@ class AppSettings extends ChangeNotifier {
     readLinks = j['readLinks'] as bool? ?? readLinks;
     autoSummarise = j['autoSummarise'] as bool? ?? autoSummarise;
     webReader = j['webReader'] as bool? ?? webReader;
+    youtubeKey = j['youtubeKey'] as String? ?? '';
+    jinaKey = j['jinaKey'] as String? ?? '';
     useGpu = j['useGpu'] as bool? ?? useGpu;
     maxSteps = j['maxSteps'] as int? ?? maxSteps;
     temperature = (j['temperature'] as num?)?.toDouble() ?? temperature;
@@ -74,6 +81,8 @@ class AppSettings extends ChangeNotifier {
       'readLinks': readLinks,
       'autoSummarise': autoSummarise,
       'webReader': webReader,
+      'youtubeKey': youtubeKey,
+      'jinaKey': jinaKey,
       'useGpu': useGpu,
       'maxSteps': maxSteps,
       'temperature': temperature,

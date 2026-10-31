@@ -73,11 +73,15 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final _token = TextEditingController(text: AppScope.services(context).settings.hfToken);
+  late final _yt = TextEditingController(text: AppScope.services(context).settings.youtubeKey);
+  late final _jina = TextEditingController(text: AppScope.services(context).settings.jinaKey);
   bool _showToken = false;
 
   @override
   void dispose() {
     _token.dispose();
+    _yt.dispose();
+    _jina.dispose();
     super.dispose();
   }
 
@@ -176,6 +180,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             body: 'When an open page only shares a line or two, ask Jina Reader for its full text. Free, but the link is sent to Jina. Never used on pages that ask you to log in. Logged under privacy.',
             value: st.webReader,
             onChanged: (v) => st.update((x) => x.webReader = v),
+          ),
+          const SizedBox(height: 8),
+          const Meta(
+            'Optional free keys, stored on this phone only. Everything works without them.\n'
+            '• YouTube Data API key: full video details even when YouTube rate-limits the page. '
+            'Free at console.cloud.google.com (enable "YouTube Data API v3", create an API key). '
+            '10,000 videos a day.\n'
+            '• Jina key: raises the free web reader from about 20 to about 500 pages a minute. '
+            'Free at jina.ai.',
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _yt,
+            obscureText: true,
+            onChanged: (v) => st.update((x) => x.youtubeKey = v.trim()),
+            decoration: const InputDecoration(hintText: 'YouTube Data API key (optional)'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _jina,
+            obscureText: true,
+            onChanged: (v) => st.update((x) => x.jinaKey = v.trim()),
+            decoration: const InputDecoration(hintText: 'Jina key (optional)'),
           ),
           const SectionHead('more'),
           SwitchRow(

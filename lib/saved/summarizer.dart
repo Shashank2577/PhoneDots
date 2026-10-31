@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../core/ledger.dart';
 import '../core/settings.dart';
 import '../core/util/files.dart';
+import 'deep_reader.dart';
 import 'link_preview.dart';
 import 'saved_store.dart';
 import 'web_reader.dart';
@@ -37,9 +38,12 @@ class Summarizer {
     required this.ask,
     required this.canSee,
     this.transcribe,
+    this.videoSheet,
+    DeepReader? deep,
     this.filesDir,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.Client(),
+       deep = deep ?? DeepReader(client: client);
 
   final SavedStore store;
   final LinkPreviewer links;
@@ -51,6 +55,11 @@ class Summarizer {
   /// Whether the loaded Gemma can look at images (false in the demo engine).
   final bool Function() canSee;
   final Future<String?> Function(String path)? transcribe;
+
+  /// Makes one contact-sheet image of a few frames from a shared video, so
+  /// Gemma can see what happens in a screen-recorded reel.
+  final Future<String?> Function(String path)? videoSheet;
+  final DeepReader deep;
   final String? filesDir;
   final http.Client _client;
 
@@ -129,30 +138,58 @@ class Summarizer {
           _ => 'page preview',
         });
       }
+      // The whole thing, from each site's own free channel.
+      final servedOpenly = p.servedOpenly;
+      final contacted = await deep.read(p, youtubeKey: settings.youtubeKey);
+      for (final h in contacted.toSet()) {
+        unawaited(ledger.record('link', 'Read the full text from $h', network: true));
+      }
+      if (p.body != null) {
+        pageText = p.body;
+        item.sources.add(p.bodyFrom ?? 'full text');
+        item
+          ..title = p.title ?? item.title
+          ..author = p.author ?? item.author
+          ..description = p.description ?? item.description
+          ..imageUrl = p.imageUrl ?? item.imageUrl;
+      }
       // Only for pages the site served openly but described thinly. A refusal,
       // bot check or login wall is the site's answer; the reader is not a way round it.
-      if (settings.webReader && p.servedOpenly && (item.description ?? '').length < 200) {
-        pageText = await reader.read(p.url);
+      if (pageText == null && settings.webReader && servedOpenly && (item.description ?? '').length < 200) {
+        pageText = await reader.read(p.url, apiKey: settings.jinaKey);
         unawaited(ledger.record('link', 'Asked ${WebReader.name} to read $host', network: true));
         if (pageText != null) item.sources.add(WebReader.name);
       }
+      item.body = pageText;
     } else if (url != null) {
       item.title ??= item.subject;
     }
 
-    if (canSee() && item.imagePath == null && item.imageUrl != null) {
+    // The cover is kept for the preview even when the model can't look at it.
+    if (item.imagePath == null && item.imageUrl != null) {
       item.imagePath = await _downloadCover(item);
-      if (item.imagePath != null) item.sources.add('cover image');
+      if (item.imagePath != null && canSee()) item.sources.add('cover image');
     } else if (item.imagePath != null && item.url == null) {
-      item.sources.add('screenshot');
+      final fromVideo = !item.files.any((f) => f['kind'] == 'image');
+      item.sources.add(fromVideo ? 'video frames' : 'screenshot');
     }
 
     final transcripts = <String>[];
     for (final f in item.files.where((f) => f['kind'] == 'audio')) {
+      if (item.imagePath == null && item.url == null && videoSheet != null) {
+        final sheet = await videoSheet!(f['path']!);
+        if (sheet != null) {
+          item.imagePath = sheet;
+          item.sources.add('video frames');
+        }
+      }
       final t = await transcribe?.call(f['path']!);
       if (t != null && t.trim().isNotEmpty) transcripts.add(t.trim());
     }
-    if (transcripts.isNotEmpty) item.sources.add('transcript');
+    if (transcripts.isNotEmpty) {
+      item.sources.add('transcript');
+      item.body = [?item.body, 'Transcript:\n${transcripts.join('\n')}'].join('\n\n');
+    }
 
     item.status = SavedStatus.summarising;
     await store.save();
@@ -201,8 +238,8 @@ class Summarizer {
       '{"title": "short title, max 8 words", "summary": "one or two plain sentences: what it is and why it is useful", '
       '"points": ["up to 4 key takeaways, steps or facts"], "collection": "one word", "tags": ["up to 4 lowercase tags"]}\n'
       'Pick the collection from: ${collections.join(', ')}; invent a better one-word name only if none fits.\n'
-      'Use only the material. For a video or reel you only have its caption, cover and creator: summarise those and '
-      'do not describe scenes you cannot see. If the material is thin, say plainly what it is. Never invent details.';
+      'Use only the material. For a video or reel without a transcript or frames you only have its caption, cover and '
+      'creator: summarise those and do not describe scenes you cannot see. If the material is thin, say plainly what it is. Never invent details.';
 
   static String material(SavedItem i, {String? pageText, String transcript = '', bool image = false}) {
     String clip(String s, int n) => s.length <= n ? s : '${s.substring(0, n)}…';
@@ -213,17 +250,18 @@ class Summarizer {
     if (i.author != null) b.writeln('Creator: ${i.author}');
     if (i.sharedText.isNotEmpty) b.writeln('Text shared with it: ${clip(i.sharedText, 1500)}');
     if ((i.description ?? '').isNotEmpty) b.writeln('Caption / description: ${clip(i.description!, 2000)}');
-    if (pageText != null) b.writeln('Page text:\n${clip(pageText, 4000)}');
+    if (pageText != null) b.writeln('Full text:\n${clip(pageText, 5000)}');
     if (transcript.isNotEmpty) b.writeln('Transcript:\n${clip(transcript, 3000)}');
     for (final f in i.files.where((f) => f['kind'] != 'image')) {
       b.writeln('Shared file: ${f['name']}');
     }
-    if (image)
-      b.writeln(
-        i.url == null
-            ? 'The attached image is the screenshot the user saved.'
-            : 'The attached image is the post\'s cover.',
-      );
+    if (image) {
+      b.writeln(switch (i.sources) {
+        final s when s.contains('video frames') => 'The attached image shows frames from the shared video, in order.',
+        _ when i.url == null => 'The attached image is the screenshot the user saved.',
+        _ => 'The attached image is the post\'s cover.',
+      });
+    }
     if (b.isEmpty) b.writeln('(Nothing but the share itself.)');
     return b.toString().trim();
   }

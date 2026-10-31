@@ -122,6 +122,7 @@ class AppServices {
           services.ask(system: system, prompt: prompt, imagePaths: imagePaths, maxTokens: 600),
       canSee: () => !services.isDemo && (modelById(settings.plannerId)?.has(ModelCapability.image) ?? false),
       transcribe: native ? services._transcribe : null,
+      videoSheet: native ? services._videoSheet : null,
       filesDir: s.filesDir,
       client: linkClient,
     );
@@ -168,6 +169,15 @@ class AppServices {
     await llm.resetSession(session);
     if (error != null) throw StateError(error);
     return out.toString().trim();
+  }
+
+  Future<String?> _videoSheet(String path) async {
+    try {
+      final r = await device.invoke('video.frames', {'path': path, 'frames': 6});
+      return r['error'] == null ? r['path'] as String? : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String?> _transcribe(String path) async {

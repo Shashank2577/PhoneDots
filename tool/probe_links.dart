@@ -4,6 +4,7 @@
 // than phones on home or mobile connections.
 import 'dart:io';
 
+import 'package:phonedots/saved/deep_reader.dart';
 import 'package:phonedots/saved/link_preview.dart';
 
 const _defaults = [
@@ -25,9 +26,11 @@ const _defaults = [
 Future<void> main(List<String> args) async {
   final urls = args.isEmpty ? _defaults : args;
   final p = LinkPreviewer();
+  final deep = DeepReader();
   var rich = 0;
   for (final u in urls) {
     final r = await p.preview(u);
+    await deep.read(r);
     if (r.rich) rich++;
     stdout.writeln(
       '${r.rich ? 'OK  ' : 'URL '} ${r.platform.padRight(9)} ${r.kind.padRight(7)} via ${r.via.padRight(6)} '
@@ -37,8 +40,15 @@ Future<void> main(List<String> args) async {
       final d = r.description!.replaceAll('\n', ' ');
       stdout.writeln('       ${d.length > 110 ? '${d.substring(0, 110)}…' : d}');
     }
+    if (r.body != null) {
+      final b = r.body!.replaceAll('\n', ' ');
+      stdout.writeln(
+        '       FULL TEXT (${r.bodyFrom}, ${r.body!.length} chars): ${b.length > 140 ? '${b.substring(0, 140)}…' : b}',
+      );
+    }
     stdout.writeln('       ${r.url}');
   }
   stdout.writeln('\n$rich/${urls.length} with real metadata; the rest saved with a title from the URL.');
   p.close();
+  deep.close();
 }

@@ -20,6 +20,7 @@ class SavedItem {
     this.imageUrl,
     this.imagePath,
     List<Map<String, String>>? files,
+    this.body,
     this.summary,
     List<String>? points,
     List<String>? tags,
@@ -54,6 +55,9 @@ class SavedItem {
   /// Shared files: {path, name, kind}.
   final List<Map<String, String>> files;
 
+  /// The whole readable text: full description, README, article, caption, transcript.
+  String? body;
+
   String? summary;
   List<String> points;
   List<String> tags;
@@ -87,6 +91,7 @@ class SavedItem {
     'imageUrl': imageUrl,
     'imagePath': imagePath,
     'files': files,
+    'body': body,
     'summary': summary,
     'points': points,
     'tags': tags,
@@ -111,6 +116,7 @@ class SavedItem {
     imageUrl: j['imageUrl'] as String?,
     imagePath: j['imagePath'] as String?,
     files: [for (final f in (j['files'] as List? ?? const [])) Map<String, String>.from(f as Map)],
+    body: j['body'] as String?,
     summary: j['summary'] as String?,
     points: (j['points'] as List? ?? const []).cast<String>(),
     tags: (j['tags'] as List? ?? const []).cast<String>(),
@@ -176,6 +182,7 @@ class SavedStore extends ChangeNotifier {
         i.title,
         i.summary,
         i.description,
+        i.body,
         i.author,
         i.sharedText,
         i.url,

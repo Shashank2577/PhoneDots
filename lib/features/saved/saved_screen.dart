@@ -244,10 +244,11 @@ class SavedDetailScreen extends StatelessWidget {
       listenable: s.saved,
       builder: (context, _) {
         final item = s.saved.byId(id);
-        if (item == null)
+        if (item == null) {
           return const HandPage(
             children: [HandEmpty(title: 'gone', doodle: Doodle.trash)],
           );
+        }
         final status = statusLine(item);
         return HandPage(
           actions: [
@@ -326,10 +327,13 @@ class SavedDetailScreen extends StatelessWidget {
                 ],
               ),
             ],
-            if (item.sharedText.isNotEmpty || (item.description ?? '').isNotEmpty) ...[
-              const SectionHead('what was shared'),
-              if (item.sharedText.isNotEmpty) Meta(item.sharedText),
-              if ((item.description ?? '').isNotEmpty) Meta(item.description!, maxLines: 12),
+            if (item.sharedText.isNotEmpty) ...[const SectionHead('shared with it'), Meta(item.sharedText)],
+            if ((item.body ?? '').isNotEmpty) ...[
+              const SectionHead('the whole thing'),
+              FullText(item.body!),
+            ] else if ((item.description ?? '').isNotEmpty) ...[
+              const SectionHead('caption'),
+              Meta(item.description!, maxLines: 12),
             ],
             if (item.sources.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -384,6 +388,42 @@ class SavedDetailScreen extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Long text (a README, an article, a transcript) folded to a few lines until tapped.
+class FullText extends StatefulWidget {
+  const FullText(this.text, {super.key});
+  final String text;
+
+  @override
+  State<FullText> createState() => _FullTextState();
+}
+
+class _FullTextState extends State<FullText> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final long = widget.text.length > 700;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          alignment: Alignment.topCenter,
+          child: SelectableText(
+            !_open && long ? '${widget.text.substring(0, 700)}…' : widget.text,
+            style: context.text.bodyMedium?.copyWith(color: context.pal.pencil),
+          ),
+        ),
+        if (long)
+          HandLink(
+            _open ? 'fold it up' : 'read all ${(widget.text.length / 1000).toStringAsFixed(1)}k characters',
+            onTap: () => setState(() => _open = !_open),
+          ),
+      ],
     );
   }
 }

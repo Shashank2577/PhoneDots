@@ -7,8 +7,8 @@ import 'package:http/http.dart' as http;
 /// Callers only use it for pages the site served openly, never to get past a
 /// refusal, bot check or login wall.
 ///
-/// Uses Jina Reader's keyless free tier (r.jina.ai, roughly 20 requests a
-/// minute). The link's URL is sent to Jina, so this is off by default and every
+/// Uses Jina Reader's free tier (r.jina.ai): about 20 requests a minute with
+/// no key, more with a free key from jina.ai. The link's URL is sent to Jina, so this is off by default and every
 /// use is logged under privacy. It only sees what an anonymous visitor sees:
 /// private posts and login walls stay private.
 class WebReader {
@@ -20,12 +20,16 @@ class WebReader {
   static const name = 'Jina Reader';
 
   /// Returns the page as Markdown-ish text, or null when it could not be read.
-  Future<String?> read(String url, {int maxChars = 6000}) async {
+  Future<String?> read(String url, {int maxChars = 8000, String apiKey = ''}) async {
     try {
       final res = await _client
           .get(
             Uri.parse('https://r.jina.ai/$url'),
-            headers: {'Accept': 'text/plain', 'X-Retain-Images': 'none', 'X-No-Cache': 'false'},
+            headers: {
+              'Accept': 'text/plain',
+              'X-Retain-Images': 'none',
+              if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+            },
           )
           .timeout(timeout);
       if (res.statusCode != 200) return null;

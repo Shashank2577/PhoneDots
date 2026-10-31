@@ -35,6 +35,13 @@ class LinkPreview {
   /// HTTP status of the last request, for diagnostics.
   int? status;
 
+  /// The whole readable text when an official source has it: a video's full
+  /// description, a repo's README, a free article, a post's text.
+  String? body;
+
+  /// Where [body] came from, e.g. "YouTube page", "README", "Medium RSS".
+  String? bodyFrom;
+
   /// The site answered with a login wall or bot check instead of the page.
   bool walled = false;
 
@@ -55,6 +62,8 @@ class LinkPreview {
     'imageUrl': imageUrl,
     'kind': kind,
     'via': via,
+    if (body != null) 'body': body,
+    if (bodyFrom != null) 'bodyFrom': bodyFrom,
   };
 }
 
@@ -139,6 +148,14 @@ class LinkPreviewer {
           await _oembed(p, Uri.https('www.tiktok.com', '/oembed', {'url': p.url}));
         case 'github':
           await _github(p, uri);
+        case 'threads':
+          await _htmlOembed(p, Uri.https('graph.threads.com', '/oembed', {'url': p.url}), 'Threads embed');
+        case 'x' when uri.path.contains('/status/'):
+          await _htmlOembed(
+            p,
+            Uri.https('publish.twitter.com', '/oembed', {'url': p.url, 'omit_script': '1', 'dnt': 'true'}),
+            'X embed',
+          );
       }
       if (!p.rich) await _meta(p, uri);
     } catch (_) {
@@ -171,6 +188,50 @@ class LinkPreviewer {
         ..via = 'oembed';
     }
   }
+
+  /// Meta's tokenless oEmbed (Threads) and X's publish oEmbed return the post
+  /// as an HTML blockquote; its text is the post.
+  Future<void> _htmlOembed(LinkPreview p, Uri endpoint, String from) async {
+    final res = await _client.get(endpoint, headers: {'User-Agent': _ua}).timeout(timeout);
+    p.status = res.statusCode;
+    if (res.statusCode != 200) return;
+    final j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final html = '${j['html'] ?? ''}';
+    final para = RegExp(r'<p\b[^>]*>([\s\S]*?)</p>', caseSensitive: false).allMatches(html).map((m) => m.group(1)!);
+    var text = htmlToText(para.isEmpty ? html : para.join('\n'))
+        .split('\n')
+        .where(
+          (l) =>
+              !RegExp(r'^(view on threads|post by|a post shared by|view this post)', caseSensitive: false).hasMatch(l),
+        )
+        .join('\n')
+        .trim();
+    if (text.isEmpty) return;
+    final author = j['author_name'] as String?;
+    p
+      ..author = author ?? p.author
+      ..body = text
+      ..bodyFrom = from
+      ..description = text.length > 300 ? '${text.substring(0, 297)}…' : text
+      ..title = '${author ?? p.platform}: ${text.split('\n').first}'
+      ..kind = 'post'
+      ..via = 'oembed';
+  }
+
+  /// Turns an HTML fragment into readable plain text, keeping paragraph breaks.
+  static String htmlToText(String html) =>
+      decodeEntities(
+            html
+                .replaceAll(RegExp(r'<(script|style)\b[\s\S]*?</\1>', caseSensitive: false), '')
+                .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+                .replaceAll(RegExp(r'</(p|div|h[1-6]|li|blockquote|pre|figure|tr)>', caseSensitive: false), '\n')
+                .replaceAll(RegExp(r'<li\b[^>]*>', caseSensitive: false), '• ')
+                .replaceAll(RegExp(r'<[^>]+>'), ''),
+          )
+          .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
+          .replaceAll(RegExp(r' *\n *'), '\n')
+          .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+          .trim();
 
   Future<void> _github(LinkPreview p, Uri uri) async {
     final seg = uri.pathSegments.where((s) => s.isNotEmpty).toList();
