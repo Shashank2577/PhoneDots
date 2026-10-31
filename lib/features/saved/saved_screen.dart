@@ -318,7 +318,13 @@ class SavedDetailScreen extends StatelessWidget {
             ],
             if (item.busy) ...[
               const SizedBox(height: 18),
-              Row(children: [const HoppingDots(), const SizedBox(width: 10), Meta('$status…')]),
+              Row(
+                children: [
+                  const HoppingDots(),
+                  const SizedBox(width: 10),
+                  Expanded(child: Meta('$status…')),
+                ],
+              ),
             ],
             if (item.summary != null) ...[const SectionHead('summary', mark: true), Body(item.summary!)],
             if (item.points.isNotEmpty) ...[

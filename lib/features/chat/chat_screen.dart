@@ -156,7 +156,8 @@ class _ChatScreenState extends State<ChatScreen> {
       ],
       body: Column(
         children: [
-          if (s.isDemo) const DemoBanner(),
+          // While typing on a small screen, every line goes to the conversation.
+          if (s.isDemo && _keyboard(context) == 0) const DemoBanner(),
           ListenableBuilder(
             listenable: s.conversations,
             builder: (context, _) {
@@ -349,8 +350,9 @@ class _ModelChip extends StatelessWidget {
         final name = services.isDemo ? 'demo' : (planner?.name.replaceFirst('Gemma ', '').toLowerCase() ?? 'no model');
         return Pressable(
           onTap: () => _pick(context),
-          child: Padding(
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            constraints: const BoxConstraints(minHeight: 48),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -376,12 +378,14 @@ class _ModelChip extends StatelessWidget {
     final state = AppScope.of(context);
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
       builder: (c) => ListenableBuilder(
         listenable: services.models,
         builder: (context, _) {
           final planners = gemmaModels.where((g) => g.role == ModelRole.planner).toList();
           return SafeArea(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -533,8 +537,13 @@ class _Welcome extends StatelessWidget {
             builder: (_, _) => Row(
               children: [
                 const OnDeviceStamp(),
-                const Spacer(),
-                Meta('${services.skills.enabled.length} skills · ${services.models.visibleModels.length} models'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Meta(
+                    '${services.skills.enabled.length} skills · ${services.models.visibleModels.length} models',
+                    align: TextAlign.end,
+                  ),
+                ),
               ],
             ),
           ),
@@ -583,13 +592,16 @@ class _Composer extends StatelessWidget {
                     ? const SizedBox(width: double.infinity)
                     : Padding(
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
+                        // One scrolling row, so many attachments never push the chat off screen.
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
                             children: [
-                              for (final a in pending) Enter(child: AttachmentChip(a, onRemove: () => onRemove(a))),
+                              for (final a in pending)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Enter(child: AttachmentChip(a, onRemove: () => onRemove(a))),
+                                ),
                             ],
                           ),
                         ),
@@ -609,7 +621,8 @@ class _Composer extends StatelessWidget {
                       child: TextField(
                         controller: controller,
                         minLines: 1,
-                        maxLines: 6,
+                        // Short screens (or a big keyboard) keep the draft to a few lines; it scrolls inside.
+                        maxLines: _draftLines(context),
                         textCapitalization: TextCapitalization.sentences,
                         onSubmitted: (_) => onSend(),
                         decoration: const InputDecoration(
@@ -635,8 +648,8 @@ class _Composer extends StatelessWidget {
                           scale: 0.86,
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
-                            width: 44,
-                            height: 44,
+                            width: 48,
+                            height: 48,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: active ? p.ink : Colors.transparent,
@@ -668,4 +681,19 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How many lines the draft may grow to: about a third of the room left above
+/// the keyboard, so the conversation never disappears (big text included).
+int _draftLines(BuildContext context) {
+  final room = MediaQuery.sizeOf(context).height - _keyboard(context) - 160;
+  final line = MediaQuery.textScalerOf(context).scale(22);
+  return (room * 0.33 / line).floor().clamp(1, 6);
+}
+
+/// The on-screen keyboard's height. Read from the window, because the page's
+/// Scaffold has already taken it out of MediaQuery by the time we build.
+double _keyboard(BuildContext context) {
+  final v = View.of(context);
+  return v.viewInsets.bottom / v.devicePixelRatio;
 }

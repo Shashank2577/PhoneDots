@@ -39,10 +39,11 @@ class _LabState extends State<_Lab> {
           ),
         ),
         Column0(
-          child: Row(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               ChoicePill('prompt lab', selected: _tab == 0, onTap: () => setState(() => _tab = 0)),
-              const SizedBox(width: 8),
               ChoicePill('speed test', selected: _tab == 1, onTap: () => setState(() => _tab = 1)),
             ],
           ),

@@ -126,11 +126,11 @@ class _OnboardingState extends State<Onboarding> {
         const HandDivider(padding: EdgeInsets.symmetric(vertical: 18)),
         Enter(
           index: 2,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.end,
+            spacing: 10,
             children: [
               Text('one-time setup', style: Hand.title.copyWith(fontSize: 27, color: context.pal.ink)),
-              const SizedBox(width: 10),
               Padding(padding: const EdgeInsets.only(bottom: 4), child: Meta('about ${formatBytes(total)}')),
             ],
           ),

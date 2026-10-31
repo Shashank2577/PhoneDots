@@ -48,8 +48,10 @@ class Attach {
   static Future<Attachment?> chooseAndPick(BuildContext context, AppServices s, String id) async {
     final choice = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
       builder: (c) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,

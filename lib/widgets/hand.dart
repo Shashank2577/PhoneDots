@@ -594,24 +594,27 @@ class _PressableState extends State<Pressable> {
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onTapDown: (_) => _set(true),
-    onTapUp: (_) => _set(false),
-    onTapCancel: () => _set(false),
-    onTap: widget.onTap == null
-        ? null
-        : () {
-            if (widget.haptic) HapticFeedback.selectionClick();
-            widget.onTap!();
-          },
-    child: AnimatedScale(
-      scale: _down ? widget.scale : 1,
-      duration: Duration(milliseconds: _down ? 90 : 260),
-      curve: _down ? Curves.easeOut : Curves.easeOutBack,
-      child: widget.child,
-    ),
-  );
+  Widget build(BuildContext context) => widget.onTap == null
+      ? widget
+            .child // not tappable, so not announced as a button either
+      : GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _set(true),
+          onTapUp: (_) => _set(false),
+          onTapCancel: () => _set(false),
+          onTap: widget.onTap == null
+              ? null
+              : () {
+                  if (widget.haptic) HapticFeedback.selectionClick();
+                  widget.onTap!();
+                },
+          child: AnimatedScale(
+            scale: _down ? widget.scale : 1,
+            duration: Duration(milliseconds: _down ? 90 : 260),
+            curve: _down ? Curves.easeOut : Curves.easeOutBack,
+            child: widget.child,
+          ),
+        );
 }
 
 /// The one primary action per screen: a black pill with Caveat lettering.
@@ -725,14 +728,17 @@ class HandLink extends StatelessWidget {
     final c = color ?? context.pal.ink;
     return Pressable(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-        child: Opacity(
-          opacity: onTap == null ? 0.4 : 1,
-          child: HandUnderline(
-            color: c,
-            seed: text.length,
-            child: Text(text, style: (style ?? Hand.label).copyWith(color: c)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Opacity(
+            opacity: onTap == null ? 0.4 : 1,
+            child: HandUnderline(
+              color: c,
+              seed: text.length,
+              child: Text(text, style: (style ?? Hand.label).copyWith(color: c)),
+            ),
           ),
         ),
       ),
@@ -756,7 +762,7 @@ class ChoicePill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 48, maxWidth: 280),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: ShapeDecoration(
           color: selected ? p.ink : Colors.transparent,
@@ -766,7 +772,14 @@ class ChoicePill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (leading != null) ...[DoodleIcon(leading!, size: 18, color: fg), const SizedBox(width: 8)],
-            Text(text, style: Hand.label.copyWith(color: fg)),
+            Flexible(
+              child: Text(
+                text,
+                style: Hand.label.copyWith(color: fg),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
       ),
@@ -806,38 +819,56 @@ class DoodleButton extends StatelessWidget {
 
 /// A drawn toggle: an ink pill with a ticked knob when on, an outline when off.
 class HandSwitch extends StatelessWidget {
-  const HandSwitch({super.key, required this.value, this.onChanged});
+  const HandSwitch({super.key, required this.value, this.onChanged, this.label});
   final bool value;
   final ValueChanged<bool>? onChanged;
+
+  /// What the switch turns on or off, read out by screen readers.
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Pressable(
+    return Semantics(
+      container: true,
+      toggled: value,
+      enabled: onChanged != null,
+      label: label,
       onTap: onChanged == null ? null : () => onChanged!(!value),
-      scale: 0.92,
-      child: Opacity(
-        opacity: onChanged == null ? 0.4 : 1,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: value ? 1 : 0),
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          builder: (_, t, _) => SizedBox(
-            width: 52,
-            height: 30,
-            child: Stack(
-              children: [
-                Positioned.fill(child: CustomPaint(painter: _SwitchPainter(t, p))),
-                if (t > 0.6)
-                  Positioned(
-                    right: 7,
-                    top: 7,
-                    child: Opacity(
-                      opacity: (t - 0.6) / 0.4,
-                      child: DoodleIcon(Doodle.tick, size: 16, stroke: 2.2, color: p.ink),
-                    ),
+      child: ExcludeSemantics(
+        child: Pressable(
+          onTap: onChanged == null ? null : () => onChanged!(!value),
+          scale: 0.92,
+          // The drawn switch is 52x30; the touch area is a full 56x48.
+          child: Container(
+            width: 56,
+            height: 48,
+            alignment: Alignment.center,
+            child: Opacity(
+              opacity: onChanged == null ? 0.4 : 1,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: value ? 1 : 0),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                builder: (_, t, _) => SizedBox(
+                  width: 52,
+                  height: 30,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: CustomPaint(painter: _SwitchPainter(t, p))),
+                      if (t > 0.6)
+                        Positioned(
+                          right: 7,
+                          top: 7,
+                          child: Opacity(
+                            opacity: (t - 0.6) / 0.4,
+                            child: DoodleIcon(Doodle.tick, size: 16, stroke: 2.2, color: p.ink),
+                          ),
+                        ),
+                    ],
                   ),
-              ],
+                ),
+              ),
             ),
           ),
         ),
@@ -902,7 +933,7 @@ class SwitchRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          HandSwitch(value: value, onChanged: onChanged),
+          HandSwitch(value: value, onChanged: onChanged, label: title),
         ],
       ),
     ),
@@ -1224,9 +1255,13 @@ class Column0 extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: maxColumn + gutter * 2),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: gutter),
-        child: child,
+      // Full column width, content starting at the left edge like the body copy.
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: gutter),
+          child: Align(alignment: AlignmentDirectional.centerStart, child: child),
+        ),
       ),
     ),
   );
@@ -1249,6 +1284,10 @@ class HandNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
+    // One size for every word, small enough to fit five on a narrow phone,
+    // so FittedBox rarely has to shrink any single word on its own.
+    final perWord = (MediaQuery.sizeOf(context).width - 24) / labels.length - 30;
+    final navSize = (perWord / MediaQuery.textScalerOf(context).scale(1) / 2.6).clamp(15.0, 23.0);
     return Container(
       color: p.paper,
       child: SafeArea(
@@ -1266,23 +1305,29 @@ class HandNav extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   for (var i = 0; i < labels.length; i++) ...[
-                    if (i > 0) Text('·', style: Hand.label.copyWith(color: p.graphite)),
+                    if (i > 0)
+                      ExcludeSemantics(
+                        child: Text('·', style: Hand.label.copyWith(color: p.pencil)),
+                      ),
                     Flexible(
                       child: Pressable(
                         onTap: () => onTap(i),
                         scale: 0.92,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          child: TweenAnimationBuilder<double>(
-                            tween: Tween(end: i == index ? 1 : 0),
-                            duration: const Duration(milliseconds: 450),
-                            builder: (_, ring, child) =>
-                                CustomPaint(painter: _RingPainter(p.ink, ring, i + 2), child: child),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                labels[i],
-                                style: Hand.label.copyWith(fontSize: 23, color: i == index ? p.ink : p.pencil),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 30),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(end: i == index ? 1 : 0),
+                              duration: const Duration(milliseconds: 450),
+                              builder: (_, ring, child) =>
+                                  CustomPaint(painter: _RingPainter(p.ink, ring, i + 2), child: child),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  labels[i],
+                                  style: Hand.label.copyWith(fontSize: navSize, color: i == index ? p.ink : p.pencil),
+                                ),
                               ),
                             ),
                           ),

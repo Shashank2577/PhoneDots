@@ -248,23 +248,33 @@ class StepTile extends StatelessWidget {
     return Pressable(
       onTap: () => _showDetails(context),
       scale: 0.98,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: KeyedSubtree(key: ValueKey(step.status), child: marker),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 22,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: KeyedSubtree(key: ValueKey(step.status), child: marker),
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Text(step.skillName.toLowerCase(), style: Hand.label.copyWith(color: p.ink)),
-            if (step.via == 'router') ...[const SizedBox(width: 8), const HandTag('fast path')],
-            const SizedBox(width: 8),
-            Expanded(child: Meta(label, maxLines: 2, color: step.status == StepStatus.failed ? p.redPen : null)),
-          ],
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  step.skillName.toLowerCase(),
+                  style: Hand.label.copyWith(color: p.ink),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (step.via == 'router') ...[const SizedBox(width: 8), const HandTag('fast path')],
+              const SizedBox(width: 8),
+              Expanded(child: Meta(label, maxLines: 2, color: step.status == StepStatus.failed ? p.redPen : null)),
+            ],
+          ),
         ),
       ),
     );

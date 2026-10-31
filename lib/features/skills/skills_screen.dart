@@ -179,7 +179,11 @@ class SkillTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            HandSwitch(value: s.skills.isEnabled(skill), onChanged: (v) => s.skills.setEnabled(skill, v)),
+            HandSwitch(
+              value: s.skills.isEnabled(skill),
+              label: 'use ${skill.name}',
+              onChanged: (v) => s.skills.setEnabled(skill, v),
+            ),
           ],
         ),
       ),
