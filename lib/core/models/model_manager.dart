@@ -94,7 +94,6 @@ class ModelManager extends ChangeNotifier {
     device = await llm.deviceProfile();
     _demoDownloaded = {...((await store.read(_demoKey) as List?) ?? const []).cast<String>()};
     for (final m in allModels) {
-      if (_inStore(m) && m.appDownloads) await _adoptLegacy(m);
       _states[m.id] = ModelState(await _isOnDisk(m) ? ModelStatus.ready : ModelStatus.absent);
       // Desert Ant weights the SDK already has but the store doesn't list yet
       // (installed by an older PhoneDots): register them, so other apps see them.
@@ -103,16 +102,29 @@ class ModelManager extends ChangeNotifier {
       }
     }
     _mirrorShared();
+    // Checking old files hashes gigabytes: in the background, not before the first frame.
+    if (shared != null) unawaited(_adoptAllLegacy());
+  }
+
+  Future<void> _adoptAllLegacy() async {
+    for (final m in allModels) {
+      if (!_inStore(m) || !m.appDownloads) continue;
+      try {
+        if (await _adoptLegacy(m)) _set(m.id, const ModelState(ModelStatus.ready));
+      } catch (_) {
+        // Left where it is; the model downloads into the store when next needed.
+      }
+    }
   }
 
   /// A model file downloaded before the shared store moves into it when it
   /// matches the catalog (size and SHA-256), so the update downloads nothing.
-  /// A file that doesn't match is a damaged or outdated download: it is
-  /// deleted, and the model is fetched again when it is next needed.
-  Future<void> _adoptLegacy(ModelSpec m) async {
+  /// A file that doesn't match stays where it is (never delete gigabytes on a
+  /// guess); it goes once the model is in the store.
+  Future<bool> _adoptLegacy(ModelSpec m) async {
     final old = _legacyPath(m);
-    if (old == null || !fileExists(old) || shared!.isReady(m.id)) return;
-    if (!await shared!.adopt(m.id, {m.fileName!: old})) await deleteFile(old);
+    if (old == null || !fileExists(old) || shared!.isReady(m.id)) return false;
+    return shared!.adopt(m.id, {m.fileName!: old});
   }
 
   Future<bool> _isOnDisk(ModelSpec m) async {
@@ -178,6 +190,9 @@ class ModelManager extends ChangeNotifier {
         if (!m.appDownloads && !await specialists.isDownloaded(id)) {
           throw StateError('${m.name} did not finish installing');
         }
+        // A copy from before the store that didn't match the catalog is no longer needed.
+        final old = m.appDownloads ? _legacyPath(m) : null;
+        if (old != null && fileExists(old)) await deleteFile(old);
       } else if (m.appDownloads) {
         final token = _tokens[id] = CancelToken();
         final headers = settings.hfToken.isEmpty ? <String, String>{} : {'Authorization': 'Bearer ${settings.hfToken}'};

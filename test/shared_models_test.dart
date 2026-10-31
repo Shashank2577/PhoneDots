@@ -78,7 +78,8 @@ void main() {
 
     expect(manager.isReady(spec.id), isTrue, reason: "another app's copy counts");
     expect(manager.pathFor(spec), '${root.path}/${spec.id}/${spec.fileName}');
-    expect(stale.existsSync(), isFalse, reason: "a download that doesn't match the catalog is dropped");
+    await Future<void>.delayed(const Duration(milliseconds: 200)); // The background adoption pass.
+    expect(stale.existsSync(), isTrue, reason: "a download that doesn't match the catalog is never deleted on a guess");
     expect(manager.isReady('gemma-4-e2b'), isFalse);
 
     await shared.ensure(spec.id); // PhoneDots claims it.
