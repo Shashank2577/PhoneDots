@@ -18,7 +18,8 @@ const _kt = 'android/app/src/main/kotlin/ai/phonedots/phonedots';
 
 String _src(String path) => File(path).readAsStringSync();
 
-Set<String> _matches(String source, RegExp re, [int group = 1]) => re.allMatches(source).map((m) => m.group(group)!).toSet();
+Set<String> _matches(String source, RegExp re, [int group = 1]) =>
+    re.allMatches(source).map((m) => m.group(group)!).toSet();
 
 /// Records every call on a channel and answers from [answers].
 class _Recorder {
@@ -71,12 +72,7 @@ class _Store extends MemoryJsonStore {
   String? get filesDir => '/nonexistent/files';
 }
 
-const _channels = [
-  'phonedots/llm',
-  'phonedots/specialist',
-  'phonedots/device',
-  'phonedots/intake',
-];
+const _channels = ['phonedots/llm', 'phonedots/specialist', 'phonedots/device', 'phonedots/intake'];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -133,7 +129,13 @@ void main() {
     final phoneArgs = <String, Map<String, dynamic>>{
       'set_timer': {'seconds': 90, 'label': 'tea'},
       'set_alarm': {'hour': 6, 'minute': 30},
-      'create_event': {'title': 'Sam', 'start': '2026-11-02T15:00', 'end': '2026-11-02T16:00', 'location': 'x', 'notes': 'y'},
+      'create_event': {
+        'title': 'Sam',
+        'start': '2026-11-02T15:00',
+        'end': '2026-11-02T16:00',
+        'location': 'x',
+        'notes': 'y',
+      },
       'list_events': {'days': 2},
       'find_contact': {'name': 'Sam'},
       'call_number': {'number': '+15551234'},
@@ -293,7 +295,9 @@ void main() {
       test('skill $skillId -> run{modelId,task,input}', () async {
         final skill = services.skills.byId(skillId)!;
         final isImage = expected.$3.containsKey('imagePath');
-        final args = skill.params.isEmpty ? <String, dynamic>{} : <String, dynamic>{for (final p in skill.params) p.name: p.type == ParamType.attachment ? 'a1' : 'hello'};
+        final args = skill.params.isEmpty
+            ? <String, dynamic>{}
+            : <String, dynamic>{for (final p in skill.params) p.name: p.type == ParamType.attachment ? 'a1' : 'hello'};
         final r = await skill.run(args, _Ctx(services, [isImage ? image() : audio()]));
         final runs = rec.on('phonedots/specialist').where((c) => c.method == 'run').toList();
         expect(runs, isNotEmpty, reason: 'skill returned ${r.data}');
@@ -372,7 +376,10 @@ void main() {
       final r = await services.skills.byId('transcribe_with_speakers')!.run({'audio': 'a1'}, _Ctx(services, [audio()]));
       expect(r.isError, isFalse, reason: '${r.data}');
       expect(r.data['speakers'], 2);
-      final ran = rec.on('phonedots/specialist').where((c) => c.method == 'run').map((c) => (c.arguments as Map)['modelId']);
+      final ran = rec
+          .on('phonedots/specialist')
+          .where((c) => c.method == 'run')
+          .map((c) => (c.arguments as Map)['modelId']);
       expect(ran, ['desertant.voz', 'desertant.who']);
     });
 
@@ -384,7 +391,8 @@ void main() {
         MockStreamHandler.inline(onListen: (args, sink) => sinkReady.complete(sink)),
       );
       final done = Completer<void>();
-      rec.answers['phonedots/specialist'] = (c) => c.method == 'download' ? Future<void>.delayed(const Duration(milliseconds: 100)) : null;
+      rec.answers['phonedots/specialist'] = (c) =>
+          c.method == 'download' ? Future<void>.delayed(const Duration(milliseconds: 100)) : null;
       final stream = PlatformSpecialistEngine().download('desertant.voz');
       final sub = stream.listen(events.add, onDone: done.complete);
       final sink = await sinkReady.future;
@@ -430,7 +438,11 @@ void main() {
       rec.answers['phonedots/llm'] = (c) => c.method == 'embed' ? [0.1, 0.2] : null;
       expect(await e.embed('hi'), [0.1, 0.2]);
       final calls = rec.on('phonedots/llm');
-      expect((calls.lastWhere((c) => c.method == 'loadEmbedder').arguments as Map).keys, ['modelId', 'path', 'dimensions']);
+      expect((calls.lastWhere((c) => c.method == 'loadEmbedder').arguments as Map).keys, [
+        'modelId',
+        'path',
+        'dimensions',
+      ]);
       expect((calls.lastWhere((c) => c.method == 'embed').arguments as Map).keys, ['modelId', 'text']);
       for (final k in ['path', 'dimensions', 'text']) {
         expect(kt, contains('("$k")'));
@@ -453,7 +465,9 @@ void main() {
           history: [
             const EngineTurn(role: TurnRole.user, text: 'hi', imagePaths: ['/i.jpg'], audioPaths: ['/a.wav']),
           ],
-          tools: [const ToolSpec(name: 't', description: 'd', parameters: {'type': 'object'})],
+          tools: [
+            const ToolSpec(name: 't', description: 'd', parameters: {'type': 'object'}),
+          ],
           thinking: true,
         ),
       );
@@ -463,11 +477,27 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final gen = rec.on('phonedots/llm').lastWhere((c) => c.method == 'generate').arguments as Map;
-      expect(gen.keys.toSet(), {'requestId', 'modelId', 'sessionId', 'history', 'systemPrompt', 'tools', 'thinking', 'sampler'});
+      expect(gen.keys.toSet(), {
+        'requestId',
+        'modelId',
+        'sessionId',
+        'history',
+        'systemPrompt',
+        'tools',
+        'thinking',
+        'sampler',
+      });
       for (final k in gen.keys) {
         expect(kt, contains('("$k")'), reason: 'LlmBridge.kt never reads "$k"');
       }
-      expect((gen['history'] as List).single.keys.toSet(), {'role', 'text', 'images', 'audio', 'toolCalls', 'toolResponses'});
+      expect((gen['history'] as List).single.keys.toSet(), {
+        'role',
+        'text',
+        'images',
+        'audio',
+        'toolCalls',
+        'toolResponses',
+      });
       expect((gen['sampler'] as Map).keys.toSet(), {'temperature', 'topK', 'topP', 'maxTokens'});
       for (final k in ['topK', 'topP', 'temperature', 'maxTokens']) {
         expect(kt, contains('sampler["$k"]'));
@@ -480,7 +510,11 @@ void main() {
         'requestId': id,
         'type': 'toolCalls',
         'calls': [
-          {'id': '$id-0', 'name': 'set_timer', 'arguments': {'seconds': 5}},
+          {
+            'id': '$id-0',
+            'name': 'set_timer',
+            'arguments': {'seconds': 5},
+          },
         ],
       });
       sink.success({
@@ -489,7 +523,12 @@ void main() {
         'stats': {'ttftMs': 10, 'totalMs': 50, 'outputTokens': 3, 'prefillTps': 1.5, 'decodeTps': 20},
       });
       await done.future;
-      expect(events.map((e) => e.runtimeType.toString()), ['ThinkingEvent', 'TokenEvent', 'ToolCallsEvent', 'DoneEvent']);
+      expect(events.map((e) => e.runtimeType.toString()), [
+        'ThinkingEvent',
+        'TokenEvent',
+        'ToolCallsEvent',
+        'DoneEvent',
+      ]);
       expect((events[2] as ToolCallsEvent).calls.single.arguments, {'seconds': 5});
     });
 
@@ -596,7 +635,11 @@ void main() {
       };
       final native = [
         ...Directory(_kt).listSync().whereType<File>().map((f) => f.readAsStringSync()),
-        ...Directory('ios/Runner').listSync().whereType<File>().where((f) => f.path.endsWith('.swift')).map((f) => f.readAsStringSync()),
+        ...Directory('ios/Runner')
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.swift'))
+            .map((f) => f.readAsStringSync()),
       ].join('\n');
       for (final n in names) {
         expect(native, contains('"$n"'), reason: 'no native side registers $n');

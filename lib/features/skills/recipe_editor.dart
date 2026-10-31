@@ -28,14 +28,21 @@ class _RecipeEditorState extends State<RecipeEditor> {
   late String _input = widget.recipe?.input ?? 'text';
   final List<_EditStep> _steps = [];
 
+  /// Steps whose skill isn't installed (any more). They're kept, in place, on save.
+  final List<(int, RecipeStep)> _missing = [];
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_steps.isEmpty && widget.recipe != null) {
       final reg = AppScope.services(context).skills;
-      for (final s in widget.recipe!.steps) {
+      for (final (i, s) in widget.recipe!.steps.indexed) {
         final skill = reg.byId(s.skillId);
-        if (skill != null) _steps.add(_EditStep(skill, s.args));
+        if (skill != null) {
+          _steps.add(_EditStep(skill, s.args));
+        } else {
+          _missing.add((i, s));
+        }
       }
     }
   }
@@ -106,13 +113,19 @@ class _RecipeEditorState extends State<RecipeEditor> {
       name: name,
       description: _description.text.trim().isEmpty ? name : _description.text.trim(),
       input: _input,
-      steps: [
-        for (final s in _steps)
-          RecipeStep(s.skill.id, {
-            for (final e in s.fields.entries)
-              if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
-          }),
-      ],
+      steps: () {
+        final steps = [
+          for (final s in _steps)
+            RecipeStep(s.skill.id, {
+              for (final e in s.fields.entries)
+                if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
+            }),
+        ];
+        for (final (i, step) in _missing) {
+          steps.insert(i.clamp(0, steps.length), step);
+        }
+        return steps;
+      }(),
     );
     await AppScope.services(context).skills.saveRecipe(recipe);
     if (mounted) Navigator.pop(context);
@@ -129,6 +142,16 @@ class _RecipeEditorState extends State<RecipeEditor> {
           'Chain skills so one tap runs them all. Pass results along with {{input}}, {{prev.field}} or {{steps.1.field}}.',
           doodle: Doodle.curl,
         ),
+        if (_missing.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Meta(
+              '${_missing.length} step${_missing.length == 1 ? ' uses a skill' : 's use skills'} that '
+              'isn\'t installed (${_missing.map((m) => m.$2.skillId).join(', ')}). '
+              '${_missing.length == 1 ? 'It is' : 'They are'} kept as they are.',
+              color: p.redPen,
+            ),
+          ),
         TextField(
           controller: _name,
           decoration: const InputDecoration(hintText: 'name it'),

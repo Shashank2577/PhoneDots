@@ -153,8 +153,11 @@ Future<bool> confirmDialog(
 }) async {
   final r = await showModalBottomSheet<bool>(
     context: context,
+    // Long reviews (an install, a permission) scroll instead of pushing the button off screen.
+    isScrollControlled: true,
+    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
     builder: (c) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,

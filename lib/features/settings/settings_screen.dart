@@ -280,7 +280,7 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => HandPage(
     children: [
-      const PageIntro('about', 'PhoneDots 0.4. An assistant that lives on your phone.', doodle: Doodle.book),
+      const PageIntro('about', 'PhoneDots 0.5. An assistant that lives on your phone.', doodle: Doodle.book),
       for (final (title, body) in [
         (
           'gemma',

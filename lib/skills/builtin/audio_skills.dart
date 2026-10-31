@@ -205,6 +205,7 @@ List<Skill> audioSkills() => [
   ),
   FnSkill(
     id: 'detect_spoken_language',
+    examples: const ['What language is this recording in?'],
     name: 'Detect spoken language',
     description: 'Identify the language spoken in a recording (102 languages, Ear).',
     kind: SkillKind.model,
@@ -234,6 +235,7 @@ List<Skill> audioSkills() => [
   ),
   FnSkill(
     id: 'enhance_speech',
+    examples: const ['Clean up the background noise in this recording'],
     name: 'Clean up audio',
     description: 'Remove background noise and echo and even out loudness in a voice recording (Clear).',
     kind: SkillKind.model,
@@ -257,6 +259,7 @@ List<Skill> audioSkills() => [
   ),
   FnSkill(
     id: 'find_filler_words',
+    examples: const ['How many ums and uhs are in my talk?'],
     name: 'Find filler words',
     description: 'Find every "uh", "um" and "hmm" in a recording with timestamps (Uhm).',
     kind: SkillKind.model,
@@ -291,6 +294,7 @@ List<Skill> audioSkills() => [
   ),
   FnSkill(
     id: 'export_subtitles',
+    examples: const ['Make subtitles for this video'],
     name: 'Export subtitles',
     description: 'Create an .srt subtitle file from a recording or video soundtrack.',
     kind: SkillKind.model,

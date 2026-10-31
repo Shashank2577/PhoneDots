@@ -123,9 +123,7 @@ class _Req {
   final String? auth;
 }
 
-Future<(HttpServer, List<_Req>)> _serve(
-  Future<void> Function(HttpRequest req, HttpResponse res) handler,
-) async {
+Future<(HttpServer, List<_Req>)> _serve(Future<void> Function(HttpRequest req, HttpResponse res) handler) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   final seen = <_Req>[];
   server.listen((req) async {
@@ -298,16 +296,32 @@ Future<void> _back(WidgetTester tester) async {
 }
 
 Future<void> _seedRich(AppServices s) async {
-  await s.memory.add('Prefers metric units and a very long fact that keeps going on and on so that it must wrap '
-      'across several lines without overflowing anything in the row ' * 2);
+  await s.memory.add(
+    'Prefers metric units and a very long fact that keeps going on and on so that it must wrap '
+            'across several lines without overflowing anything in the row ' *
+        2,
+  );
   await s.memory.add('Lives in Zürich');
-  await s.knowledge.add('A really quite long document title that needs wrapping onto lines', 'alpha beta gamma ' * 100,
-      source: 'import');
+  await s.knowledge.add(
+    'A really quite long document title that needs wrapping onto lines',
+    'alpha beta gamma ' * 100,
+    source: 'import',
+  );
   await s.knowledge.add('Notes', 'short note about bananas', source: 'notes');
   for (var i = 0; i < 6; i++) {
-    await s.ledger.record('download', 'Started Gemma 4 E2B with a rather long ledger detail line number $i', network: i.isEven);
+    await s.ledger.record(
+      'download',
+      'Started Gemma 4 E2B with a rather long ledger detail line number $i',
+      network: i.isEven,
+    );
   }
-  await s.conversations.save(Conversation(id: 'c1', title: 'Hello', messages: [ChatMessage(id: 'm1', isUser: true, text: 'hi')]));
+  await s.conversations.save(
+    Conversation(
+      id: 'c1',
+      title: 'Hello',
+      messages: [ChatMessage(id: 'm1', isUser: true, text: 'hi')],
+    ),
+  );
   await s.saved.add(SavedItem(id: 's1', created: DateTime.now(), sharedText: 'https://example.com'));
 }
 
@@ -432,10 +446,12 @@ void main() {
   group('ModelManager (non-demo)', () {
     test('checkAccess sends Range + bearer, does not follow redirects, logs to ledger', () async {
       http.BaseRequest? seen;
-      final r = await _rig(http_testing.MockClient.streaming((req, body) async {
-        seen = req;
-        return http.StreamedResponse(const Stream.empty(), 302);
-      }));
+      final r = await _rig(
+        http_testing.MockClient.streaming((req, body) async {
+          seen = req;
+          return http.StreamedResponse(const Stream.empty(), 302);
+        }),
+      );
       final fg = modelById('functiongemma-270m-mobile-actions')!;
       r.settings.hfToken = 'hf_abc';
       expect(await r.mgr.checkAccess(fg), Access.ok);
@@ -458,10 +474,12 @@ void main() {
         (404, true, Access.unknown),
       ]) {
         String? auth;
-        final r = await _rig(http_testing.MockClient.streaming((req, body) async {
-          auth = req.headers['Authorization'];
-          return http.StreamedResponse(const Stream.empty(), status);
-        }));
+        final r = await _rig(
+          http_testing.MockClient.streaming((req, body) async {
+            auth = req.headers['Authorization'];
+            return http.StreamedResponse(const Stream.empty(), status);
+          }),
+        );
         r.settings.hfToken = hasToken ? 'hf_x' : '';
         final a = await r.mgr.checkAccess(modelById('gemma-3-270m')!);
         expect(a, expected, reason: '$status token=$hasToken');
@@ -471,10 +489,12 @@ void main() {
 
     test('checkAccess: network error -> unknown; non-gated -> ok without a request', () async {
       var calls = 0;
-      final r = await _rig(http_testing.MockClient.streaming((req, body) async {
-        calls++;
-        throw const SocketException('offline');
-      }));
+      final r = await _rig(
+        http_testing.MockClient.streaming((req, body) async {
+          calls++;
+          throw const SocketException('offline');
+        }),
+      );
       expect(await r.mgr.checkAccess(modelById('gemma-3-270m')!), Access.unknown);
       expect(calls, 1);
       expect(await r.mgr.checkAccess(modelById('gemma-4-e2b')!), Access.ok);
@@ -492,10 +512,12 @@ void main() {
 
     test('download of a gated model without token fails with guidance and no network', () async {
       var calls = 0;
-      final r = await _rig(http_testing.MockClient.streaming((req, body) async {
-        calls++;
-        return http.StreamedResponse(const Stream.empty(), 200);
-      }));
+      final r = await _rig(
+        http_testing.MockClient.streaming((req, body) async {
+          calls++;
+          return http.StreamedResponse(const Stream.empty(), 200);
+        }),
+      );
       await r.mgr.download('gemma-3-270m');
       expect(r.mgr.state('gemma-3-270m').status, ModelStatus.failed);
       expect(r.mgr.state('gemma-3-270m').error, contains('get access'));
@@ -637,8 +659,13 @@ void main() {
     });
     tearDown(() => tmp.deleteSync(recursive: true));
 
-    Future<List<DownloadProgress>> run(String url, String dest,
-        {String? sha, Map<String, String> headers = const {}, CancelToken? token}) async {
+    Future<List<DownloadProgress>> run(
+      String url,
+      String dest, {
+      String? sha,
+      Map<String, String> headers = const {},
+      CancelToken? token,
+    }) async {
       final out = <DownloadProgress>[];
       await for (final p in downloadFile(
         url: url,
@@ -657,7 +684,12 @@ void main() {
       final (server, seen) = await _serveBody(body);
       addTearDown(() => server.close(force: true));
       final dest = '${tmp.path}/m.bin';
-      final p = await run('http://127.0.0.1:${server.port}/f', dest, sha: _sha(body), headers: {'Authorization': 'Bearer t'});
+      final p = await run(
+        'http://127.0.0.1:${server.port}/f',
+        dest,
+        sha: _sha(body),
+        headers: {'Authorization': 'Bearer t'},
+      );
       expect(File(dest).readAsBytesSync(), body);
       expect(File('$dest.part').existsSync(), isFalse);
       expect(p.last.fraction, 1.0);
@@ -706,7 +738,10 @@ void main() {
       addTearDown(() => server.close(force: true));
       final dest = '${tmp.path}/m.bin';
       File('$dest.part').writeAsBytesSync(_bytes(35000));
-      await expectLater(run('http://127.0.0.1:${server.port}/f', dest, sha: _sha(body)), throwsA(isA<ChecksumMismatch>()));
+      await expectLater(
+        run('http://127.0.0.1:${server.port}/f', dest, sha: _sha(body)),
+        throwsA(isA<ChecksumMismatch>()),
+      );
       expect(File('$dest.part').existsSync(), isFalse);
       expect(File(dest).existsSync(), isFalse);
     });
@@ -754,7 +789,10 @@ void main() {
       });
       final dest = '${tmp.path}/m.bin';
       final url = 'http://127.0.0.1:${server.port}/f';
-      await expectLater(run(url, dest, sha: _sha(body)).timeout(const Duration(seconds: 10)), throwsA(isA<Exception>()));
+      await expectLater(
+        run(url, dest, sha: _sha(body)).timeout(const Duration(seconds: 10)),
+        throwsA(isA<Exception>()),
+      );
       final partial = File('$dest.part').lengthSync();
       expect(partial, greaterThan(0));
       expect(partial, lessThan(body.length));
@@ -795,12 +833,9 @@ void main() {
       final token = CancelToken();
       final dest = '${tmp.path}/m.bin';
       Timer(const Duration(milliseconds: 60), token.cancel);
-      await expectLater(
-        () async {
-          await for (final _ in downloadFile(url: 'http://127.0.0.1:${server.port}/f', destPath: dest, token: token)) {}
-        }(),
-        throwsA(isA<DownloadCancelled>()),
-      );
+      await expectLater(() async {
+        await for (final _ in downloadFile(url: 'http://127.0.0.1:${server.port}/f', destPath: dest, token: token)) {}
+      }(), throwsA(isA<DownloadCancelled>()));
       expect(File(dest).existsSync(), isFalse);
       expect(File('$dest.part').existsSync(), isTrue);
     });
@@ -1284,7 +1319,6 @@ void main() {
       expect(find.text('start · download later'), findsOneWidget);
       expect(find.textContaining('about '), findsWidgets);
 
-
       await _tap(tester, find.text('download the models'));
       expect(find.text('downloading, carry on while it runs'), findsOneWidget);
       expect(find.text('start'), findsOneWidget);
@@ -1409,7 +1443,9 @@ void main() {
         await _tap(tester, find.text(v.label));
         expect(app.services.settings.voice, v.name);
         final row = find.ancestor(of: find.text(v.label).first, matching: find.byType(Row)).first;
-        final sample = tester.widget<Text>(find.descendant(of: row, matching: find.text('Nothing you say leaves this phone.')));
+        final sample = tester.widget<Text>(
+          find.descendant(of: row, matching: find.text('Nothing you say leaves this phone.')),
+        );
         expect(sample.style!.fontFamily, v.family);
         _noError(tester, 'voice ${v.name}');
       }
@@ -1494,15 +1530,24 @@ void main() {
     });
 
     testWidgets('stored keys prefill the fields on open', (tester) async {
-      await _boot(tester, seed: (s) => s.settings.update((x) {
-        x.youtubeKey = 'yt1';
-        x.jinaKey = 'jn1';
-        x.hfToken = 'hf1';
-      }));
+      await _boot(
+        tester,
+        seed: (s) => s.settings.update((x) {
+          x.youtubeKey = 'yt1';
+          x.jinaKey = 'jn1';
+          x.hfToken = 'hf1';
+        }),
+      );
       await _door(tester, 'settings');
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'YouTube Data API key (optional)')).controller!.text, 'yt1');
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'YouTube Data API key (optional)')).controller!.text,
+        'yt1',
+      );
       expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Jina key (optional)')).controller!.text, 'jn1');
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'access token (optional)')).controller!.text, 'hf1');
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'access token (optional)')).controller!.text,
+        'hf1',
+      );
     });
 
     testWidgets('key links are present, tappable and error free', (tester) async {
@@ -1572,9 +1617,14 @@ void main() {
       expect(find.textContaining('download the 2 recommended'), findsOneWidget);
 
       // second planner -> "use" switches the brain
-      await _tap(tester, find.descendant(
+      await _tap(
+        tester,
+        find.descendant(
           of: find.ancestor(of: find.textContaining('gemma 3 270m ·'), matching: find.byType(ModelTile)).first,
-          matching: find.text('download')), 200);
+          matching: find.text('download'),
+        ),
+        200,
+      );
       await _settle(tester, 1500);
       final g3 = find.ancestor(of: find.textContaining('gemma 3 270m ·'), matching: find.byType(ModelTile)).first;
       await _tap(tester, find.descendant(of: g3, matching: find.text('use')));
@@ -1613,11 +1663,15 @@ void main() {
       await _tab(tester, 'models');
       final label = find.textContaining('recommended');
       expect(label, findsOneWidget);
-      final shown = int.parse(RegExp(r'download the (\d+) recommended').firstMatch(tester.widget<Text>(label).data!)!.group(1)!);
+      final shown = int.parse(
+        RegExp(r'download the (\d+) recommended').firstMatch(tester.widget<Text>(label).data!)!.group(1)!,
+      );
       await _tap(tester, label, 200);
-      final started = ['gemma-4-e2b', 'functiongemma-270m-mobile-actions', 'embeddinggemma-2-text-270m']
-          .where((id) => app.services.models.state(id).status == ModelStatus.downloading)
-          .length;
+      final started = [
+        'gemma-4-e2b',
+        'functiongemma-270m-mobile-actions',
+        'embeddinggemma-2-text-270m',
+      ].where((id) => app.services.models.state(id).status == ModelStatus.downloading).length;
       // BUG: the button advertises every missing recommended model but silently skips those that
       // don't fit in RAM (Gemma 4 E2B needs 6 GB), so on a 4 GB phone it says 3 and starts 2.
       expect(started, shown);
@@ -1665,7 +1719,9 @@ void main() {
       await _door(tester, 'privacy');
       expect(find.text('log lines'), findsOneWidget);
       Finder count(String label) => find.descendant(
-          of: find.ancestor(of: find.text(label).last, matching: find.byType(Column)).first, matching: find.byType(Text));
+        of: find.ancestor(of: find.text(label).last, matching: find.byType(Column)).first,
+        matching: find.byType(Text),
+      );
       expect(tester.widgetList<Text>(count('memories')).first.data, '2');
       expect(tester.widgetList<Text>(count('files')).first.data, '2');
       expect(tester.widgetList<Text>(count('chats')).first.data, '1');
@@ -1805,8 +1861,10 @@ void main() {
       final app = await _boot(tester);
       await _door(tester, 'lab');
       await _tap(tester, find.text('translate'));
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction')).controller!.text,
-          'Translate into French.');
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction')).controller!.text,
+        'Translate into French.',
+      );
       await _tap(tester, find.text('free'));
       expect(tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction')).controller!.text, '');
 
@@ -1886,7 +1944,10 @@ void main() {
           _collect(tester, 'models ready @$sizeName ${theme.name}', found);
           // scroll through the models list to build every row
           for (var i = 0; i < 12; i++) {
-            await tester.drag(find.byWidgetPredicate((w) => w is Scrollable && w.axis == Axis.vertical).last, const Offset(0, -500));
+            await tester.drag(
+              find.byWidgetPredicate((w) => w is Scrollable && w.axis == Axis.vertical).last,
+              const Offset(0, -500),
+            );
             await tester.pump(const Duration(milliseconds: 100));
             _collect(tester, 'models scroll $i @$sizeName ${theme.name}', found);
           }
@@ -1915,7 +1976,10 @@ void main() {
               await _tap(tester, find.byTooltip('New note'));
               _collect(tester, 'new note dialog @$sizeName ${theme.name}', found);
               await _tap(tester, find.text('Cancel'));
-              await _tap(tester, find.widgetWithText(Door, 'a really quite long document title that needs wrapping onto lines'));
+              await _tap(
+                tester,
+                find.widgetWithText(Door, 'a really quite long document title that needs wrapping onto lines'),
+              );
               _collect(tester, 'doc sheet @$sizeName ${theme.name}', found);
               await tester.tapAt(const Offset(5, 5));
               await _settle(tester);
@@ -1933,7 +1997,7 @@ void main() {
             await _back(tester);
           }
           _stopCollect();
-        expect(found.toSet(), isEmpty, reason: 'layout errors:\n${found.toSet().join('\n')}');
+          expect(found.toSet(), isEmpty, reason: 'layout errors:\n${found.toSet().join('\n')}');
         });
       }
       testWidgets('onboarding pages at $sizeName (light and dark)', (tester) async {
@@ -1967,7 +2031,7 @@ void main() {
         await _back(tester);
       }
       _stopCollect();
-        expect(found.toSet(), isEmpty, reason: 'layout errors:\n${found.toSet().join('\n')}');
+      expect(found.toSet(), isEmpty, reason: 'layout errors:\n${found.toSet().join('\n')}');
     });
   });
 }

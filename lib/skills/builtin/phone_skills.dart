@@ -12,6 +12,7 @@ FnSkill _device({
   List<String> examples = const [],
   String Function(Map<String, dynamic> args, Map<String, dynamic> result)? summary,
   List<UiCard> Function(Map<String, dynamic> result)? cards,
+  String? Function(Map<String, dynamic> args)? check,
 }) => FnSkill(
   id: id,
   name: name,
@@ -23,6 +24,10 @@ FnSkill _device({
   platforms: platforms,
   examples: examples,
   handler: (args, ctx) async {
+    // Nothing reaches the phone unless it makes sense: required values present,
+    // choices from the list, numbers in range.
+    final problem = _validate(params, args) ?? check?.call(args);
+    if (problem != null) return SkillResult.error(problem);
     final r = await ctx.device(action, args);
     if (r['error'] != null) return SkillResult.error('${r['error']}');
     return SkillResult({
@@ -33,6 +38,45 @@ FnSkill _device({
 );
 
 String _two(int n) => n.toString().padLeft(2, '0');
+
+String? _validate(List<SkillParam> params, Map<String, dynamic> args) {
+  for (final p in params) {
+    final v = args[p.name];
+    final blank = v == null || (v is String && v.trim().isEmpty);
+    if (blank) {
+      if (p.required) return 'Missing "${p.name}": ${p.description}';
+      continue;
+    }
+    if (p.options != null && !p.options!.contains('$v')) {
+      return '"${p.name}" must be one of ${p.options!.join(', ')}, not "$v".';
+    }
+    if (p.type == ParamType.integer || p.type == ParamType.number) {
+      final n = num.tryParse('$v');
+      if (n == null) return '"${p.name}" must be a number.';
+      // Ranges written in the description, e.g. "Hour 0-23.", "Volume 0-100."
+      final range = RegExp(r'(\d+)-(\d+)').firstMatch(p.description);
+      if (range != null && (n < int.parse(range.group(1)!) || n > int.parse(range.group(2)!))) {
+        return '"${p.name}" must be between ${range.group(1)} and ${range.group(2)}, not $n.';
+      }
+    }
+    if (p.type == ParamType.boolean && v is! bool && !const {'true', 'false'}.contains('$v'.toLowerCase())) {
+      return '"${p.name}" must be true or false.';
+    }
+  }
+  return null;
+}
+
+/// Links the phone may open: web pages and the usual app hand-offs, never
+/// script, file or intent URIs.
+String? _safeUrl(Map<String, dynamic> a) {
+  final raw = a.str('url').trim();
+  final u = Uri.tryParse(raw.contains('://') || raw.contains(':') ? raw : 'https://$raw');
+  const ok = {'http', 'https', 'mailto', 'tel', 'sms', 'geo'};
+  if (u == null || !ok.contains(u.scheme.toLowerCase())) {
+    return 'Only web links (http/https) and mail, phone, SMS or map links can be opened.';
+  }
+  return null;
+}
 
 List<Skill> phoneSkills() => [
   _device(
@@ -45,6 +89,7 @@ List<Skill> phoneSkills() => [
       SkillParam('label', ParamType.string, 'Optional label.', required: false),
     ],
     examples: const ['Set a timer for 10 minutes'],
+    check: (a) => a.integer('seconds') <= 0 ? 'A timer needs a positive number of seconds.' : null,
     summary: (a, _) => 'Timer set for ${a.integer('seconds') ~/ 60} min ${a.integer('seconds') % 60} s.',
   ),
   _device(
@@ -74,6 +119,12 @@ List<Skill> phoneSkills() => [
       SkillParam('notes', ParamType.string, 'Details.', required: false),
     ],
     examples: const ['Remind me to call Sam tomorrow at 5pm'],
+    check: (a) {
+      if (DateTime.tryParse(a.str('start')) == null) return 'Start must be a date and time like 2026-11-02T15:00.';
+      final end = a.str('end').trim();
+      if (end.isNotEmpty && DateTime.tryParse(end) == null) return 'End must be a date and time like 2026-11-02T16:00.';
+      return null;
+    },
     summary: (a, _) => 'Added "${a.str('title')}" to your calendar.',
   ),
   _device(
@@ -99,6 +150,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'find_contact',
+    examples: const ['What is Sam\'s number?'],
     name: 'Find contact',
     description: 'Look up a contact by name and return their phone numbers and emails.',
     action: 'contacts.search',
@@ -107,6 +159,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'call_number',
+    examples: const ['Call Mum'],
     name: 'Call',
     description: 'Open the dialer with a phone number ready to call.',
     action: 'phone.dial',
@@ -115,6 +168,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'draft_text_message',
+    examples: const ['Text Alex that I\'m running late'],
     name: 'Draft a text',
     description: 'Open the messages app with a drafted SMS. The user sends it.',
     action: 'sms.compose',
@@ -126,6 +180,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'draft_email',
+    examples: const ['Email the landlord about the broken heater'],
     name: 'Draft an email',
     description: 'Open the mail app with a drafted email. The user sends it.',
     action: 'email.compose',
@@ -138,6 +193,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'open_app',
+    examples: const ['Open Spotify'],
     name: 'Open app',
     description: 'Open an installed app by name.',
     action: 'app.open',
@@ -147,13 +203,16 @@ List<Skill> phoneSkills() => [
   _device(
     id: 'open_url',
     name: 'Open link',
-    description: 'Open a web link or deep link.',
+    description: 'Open a web link (or a mail, phone, SMS or map link).',
     action: 'url.open',
     confirm: ConfirmPolicy.firstTime,
     params: const [SkillParam('url', ParamType.string, 'The URL.')],
+    examples: const ['Open flutter.dev'],
+    check: _safeUrl,
   ),
   _device(
     id: 'navigate_to',
+    examples: const ['Take me to the nearest pharmacy'],
     name: 'Navigate',
     description: 'Start directions to a place in the maps app.',
     action: 'maps.navigate',
@@ -179,6 +238,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'open_settings',
+    examples: const ['Open Wi-Fi settings'],
     name: 'Open settings',
     description: 'Open a system settings page.',
     action: 'settings.open',
@@ -193,6 +253,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'set_volume',
+    examples: const ['Turn the volume down to 30%'],
     name: 'Set volume',
     description: 'Set media, ring or alarm volume as a percentage.',
     action: 'volume.set',
@@ -205,6 +266,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'battery_status',
+    examples: const ['How much battery do I have?'],
     name: 'Battery',
     description: 'Get battery level and charging state.',
     action: 'battery',
@@ -212,12 +274,14 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'storage_status',
+    examples: const ['How much space is left on my phone?'],
     name: 'Storage',
     description: 'Get free and total storage on the phone.',
     action: 'storage',
   ),
   _device(
     id: 'share_text',
+    examples: const ['Share this list'],
     name: 'Share',
     description: 'Open the share sheet with some text.',
     action: 'share.text',
@@ -225,6 +289,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'copy_to_clipboard',
+    examples: const ['Copy that to the clipboard'],
     name: 'Copy',
     description: 'Copy text to the clipboard.',
     action: 'clipboard.set',
@@ -233,6 +298,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'read_clipboard',
+    examples: const ['What did I just copy?'],
     name: 'Read clipboard',
     description: 'Read the text currently on the clipboard.',
     action: 'clipboard.get',
@@ -240,6 +306,7 @@ List<Skill> phoneSkills() => [
   ),
   _device(
     id: 'get_datetime',
+    examples: const ['What day is it today?'],
     name: 'Date & time',
     description: 'Get the current local date, time, weekday and time zone.',
     action: 'datetime',

@@ -1,7 +1,7 @@
 name: phonedots
 description: "PhoneDots: an AI assistant that runs entirely on your phone."
 publish_to: 'none'
-version: 0.4.2+8
+version: 0.5.0+9
 
 environment:
   sdk: ^3.13.7

@@ -330,8 +330,10 @@ class DemoSpecialistEngine implements SpecialistEngine {
 
   static Map<String, dynamic> _regexRedact(String text) {
     final patterns = {
-      'EMAIL': RegExp(r'[\w.+-]+@[\w-]+\.[\w.]+'),
-      'PHONE': RegExp(r'\+?\d[\d\s().-]{7,}\d'),
+      // Bounded repeats keep these linear on long text (an unbounded run before
+      // "@" rescans the whole string from every position).
+      'EMAIL': RegExp(r'[\w.+-]{1,64}@[\w-]{1,63}\.[\w.]{1,63}'),
+      'PHONE': RegExp(r'\+?\d[\d\s().-]{7,20}\d'),
       'CARD': RegExp(r'\b(?:\d[ -]?){13,16}\b'),
     };
     final items = <Map<String, dynamic>>[];

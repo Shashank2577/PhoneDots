@@ -55,7 +55,8 @@ final _long = List.filled(8, _lorem).join(' ');
 const _unbroken =
     'https://example.com/a/really/long/url/with/no/spaces/that/keeps/going/and/going/and/going/forever/and/ever/'
     'until/it/is/wider/than/any/phone/screen/ever/made?utm_source=share&utm_medium=android&utm_campaign=qa_sweep';
-const _longWord = 'Pneumonoultramicroscopicsilicovolcanoconiosis_Supercalifragilisticexpialidocious_Antidisestablishmentarianism';
+const _longWord =
+    'Pneumonoultramicroscopicsilicovolcanoconiosis_Supercalifragilisticexpialidocious_Antidisestablishmentarianism';
 
 class Env {
   Env(this.services);
@@ -89,7 +90,11 @@ Future<void> _seed(AppServices s) async {
   await s.knowledge.add('A really long document title that goes on and on $_longWord', _long, source: 'notes');
   await s.knowledge.add(_longWord, _long, source: 'a_very_long_file_name_$_longWord.txt');
   await s.knowledge.add('Short', 'tiny', source: 'file.txt');
-  await s.ledger.record('model download', 'gemma-4-e2b from huggingface.co/litert-community/gemma-4-E2B-it-litert-lm', network: true);
+  await s.ledger.record(
+    'model download',
+    'gemma-4-e2b from huggingface.co/litert-community/gemma-4-E2B-it-litert-lm',
+    network: true,
+  );
   await s.ledger.record('link preview', _unbroken, network: true);
   await s.ledger.record('skill', 'send_sms to $_longWord');
   for (var i = 0; i < 6; i++) {
@@ -129,14 +134,7 @@ Future<void> _seed(AppServices s) async {
       collection: 'tech',
       status: SavedStatus.done,
     ),
-    SavedItem(
-      id: 's_reading',
-      created: now,
-      url: _unbroken,
-      platform: 'x',
-      title: _long,
-      status: SavedStatus.reading,
-    ),
+    SavedItem(id: 's_reading', created: now, url: _unbroken, platform: 'x', title: _long, status: SavedStatus.reading),
     SavedItem(
       id: 's_summarising',
       created: now.subtract(const Duration(hours: 5)),
@@ -167,11 +165,7 @@ Future<void> _seed(AppServices s) async {
       error: 'Something went wrong while summarising: $_long',
       status: SavedStatus.failed,
     ),
-    SavedItem(
-      id: 's_minimal',
-      created: now.subtract(const Duration(days: 400)),
-      status: SavedStatus.done,
-    ),
+    SavedItem(id: 's_minimal', created: now.subtract(const Duration(days: 400)), status: SavedStatus.done),
     SavedItem(
       id: 's_file',
       created: now.subtract(const Duration(days: 1)),
@@ -302,7 +296,13 @@ List<ChatMessage> _stepsChat() => [
     text: 'done',
     thinking: _lorem,
     steps: [
-      AgentStep(skillId: 'x1', skillName: 'Transcribe audio $_longWord', args: const {'a': 1}, status: StepStatus.done, ms: 12345),
+      AgentStep(
+        skillId: 'x1',
+        skillName: 'Transcribe audio $_longWord',
+        args: const {'a': 1},
+        status: StepStatus.done,
+        ms: 12345,
+      ),
       AgentStep(skillId: 'x2', skillName: 'Read page', args: const {}, via: 'router', status: StepStatus.done, ms: 12),
       AgentStep(
         skillId: 'x3',
@@ -323,11 +323,7 @@ List<ChatMessage> _stepsChat() => [
       ),
     ],
   ),
-  ChatMessage(
-    id: 'a2',
-    isUser: false,
-    error: 'Models are missing. $_long',
-  ),
+  ChatMessage(id: 'a2', isUser: false, error: 'Models are missing. $_long'),
   ChatMessage(id: 'a3', isUser: false, error: _unbroken),
   ChatMessage(id: 'u2', isUser: true, text: 'waiting'),
   ChatMessage(id: 'a4', isUser: false, streaming: true),
@@ -504,7 +500,16 @@ List<ChatMessage> _cardsB() => [
 // ---------------------------------------------------------------------------
 
 class Screen {
-  Screen(this.name, this.home, {this.after, this.prep, this.bare = false, this.nav = false, this.onboarding = false, this.keyboard = 0});
+  Screen(
+    this.name,
+    this.home, {
+    this.after,
+    this.prep,
+    this.bare = false,
+    this.nav = false,
+    this.onboarding = false,
+    this.keyboard = 0,
+  });
   final double keyboard;
   final String name;
   final Widget Function() home;
@@ -548,18 +553,23 @@ final _gatedModel = gemmaModels.firstWhere((m) => m.gated);
 
 List<Screen> _screens() => [
   Screen('onboarding-welcome', () => const Shell(), onboarding: true),
-  Screen(
-    'onboarding-setup',
-    () => const Shell(),
-    onboarding: true,
-    after: (t, e) => _tap(t, find.text("let's start")),
-  ),
+  Screen('onboarding-setup', () => const Shell(), onboarding: true, after: (t, e) => _tap(t, find.text("let's start"))),
   Screen('shell-chat', () => const Shell()),
   Screen('shell-you', () => const Shell(), prep: (s, e) => s.tab = 4),
   Screen('chat-welcome-empty', () => const ChatScreen(), nav: true, bare: true),
   Screen('chat-welcome-recent', () => const ChatScreen(), nav: true),
-  Screen('chat-long-messages', () => const ChatScreen(), nav: true, prep: (s, e) => s.chat.messages.addAll(_longChat())),
-  Screen('chat-steps-errors', () => const ChatScreen(), nav: true, prep: (s, e) => s.chat.messages.addAll(_stepsChat())),
+  Screen(
+    'chat-long-messages',
+    () => const ChatScreen(),
+    nav: true,
+    prep: (s, e) => s.chat.messages.addAll(_longChat()),
+  ),
+  Screen(
+    'chat-steps-errors',
+    () => const ChatScreen(),
+    nav: true,
+    prep: (s, e) => s.chat.messages.addAll(_stepsChat()),
+  ),
   Screen('chat-cards-a', () => const ChatScreen(), nav: true, prep: (s, e) => s.chat.messages.addAll(_cardsA())),
   Screen('chat-cards-b', () => const ChatScreen(), nav: true, prep: (s, e) => s.chat.messages.addAll(_cardsB())),
   Screen(
@@ -583,72 +593,160 @@ List<Screen> _screens() => [
     () => const ChatScreen(),
     nav: true,
     keyboard: 280,
-    prep: (s, e) => e.services.intake.value = SharedIntake(text: List.filled(6, 'line of a long draft message').join('\n')),
+    prep: (s, e) =>
+        e.services.intake.value = SharedIntake(text: List.filled(6, 'line of a long draft message').join('\n')),
   ),
-  Screen('chat-step-detail-sheet', () => const ChatScreen(), nav: true,
+  Screen(
+    'chat-step-detail-sheet',
+    () => const ChatScreen(),
+    nav: true,
     prep: (s, e) => s.chat.messages.addAll(_stepsChat()),
     after: (t, e) => _tap(t, find.text('long args')),
   ),
   Screen('chat-model-picker-sheet', () => const ChatScreen(), nav: true, after: (t, e) => _tap(t, find.text('demo'))),
   Screen('chat-attach-sheet', () => const ChatScreen(), nav: true, after: (t, e) => _tap(t, find.byTooltip('Attach'))),
-  Screen('past-chats-sheet', () => const ChatScreen(), nav: true, after: (t, e) async {
-    showPastChats(_ctx(t));
-    await _settle(t);
-  }),
-  Screen('past-chats-sheet-empty', () => const ChatScreen(), nav: true, bare: true, after: (t, e) async {
-    showPastChats(_ctx(t));
-    await _settle(t);
-  }),
+  Screen(
+    'past-chats-sheet',
+    () => const ChatScreen(),
+    nav: true,
+    after: (t, e) async {
+      showPastChats(_ctx(t));
+      await _settle(t);
+    },
+  ),
+  Screen(
+    'past-chats-sheet-empty',
+    () => const ChatScreen(),
+    nav: true,
+    bare: true,
+    after: (t, e) async {
+      showPastChats(_ctx(t));
+      await _settle(t);
+    },
+  ),
   Screen('voice', () => const ChatScreen(), nav: true, after: (t, e) => _push(t, const VoiceScreen())),
   Screen('saved-list', () => const SavedScreen(), nav: true),
   Screen('saved-empty', () => const SavedScreen(), nav: true, bare: true),
-  Screen('saved-add-link-sheet', () => const SavedScreen(), nav: true, after: (t, e) => _tap(t, find.byTooltip('Save a link'))),
-  for (final id in ['s_done_long', 's_done_short', 's_reading', 's_summarising', 's_needs_model', 's_failed', 's_minimal', 's_file'])
-    Screen('saved-detail-$id', () => const SavedScreen(), nav: true, after: (t, e) => _push(t, SavedDetailScreen(id: id))),
+  Screen(
+    'saved-add-link-sheet',
+    () => const SavedScreen(),
+    nav: true,
+    after: (t, e) => _tap(t, find.byTooltip('Save a link')),
+  ),
+  for (final id in [
+    's_done_long',
+    's_done_short',
+    's_reading',
+    's_summarising',
+    's_needs_model',
+    's_failed',
+    's_minimal',
+    's_file',
+  ])
+    Screen(
+      'saved-detail-$id',
+      () => const SavedScreen(),
+      nav: true,
+      after: (t, e) => _push(t, SavedDetailScreen(id: id)),
+    ),
   Screen('skills-list', () => const SkillsScreen(), nav: true),
   Screen('skills-recipes', () => const SkillsScreen(), nav: true, after: (t, e) => _tap(t, find.text('recipes'))),
   Screen('skills-community', () => const SkillsScreen(), nav: true, after: (t, e) => _tap(t, find.text('community'))),
-  Screen('skill-sheet-most-params', () => const SkillsScreen(), nav: true, after: (t, e) async {
-    final byParams = [...e.services.skills.builtIns]..sort((a, b) => b.params.length.compareTo(a.params.length));
-    showSkillSheet(_ctx(t), byParams.first);
-    await _settle(t);
-  }),
-  Screen('skill-sheet-longest-description', () => const SkillsScreen(), nav: true, after: (t, e) async {
-    final byLen = [...e.services.skills.builtIns]..sort((a, b) => b.description.length.compareTo(a.description.length));
-    showSkillSheet(_ctx(t), byLen.first);
-    await _settle(t);
-  }),
-  Screen('skill-sheet-recipe', () => const SkillsScreen(), nav: true, after: (t, e) async {
-    showSkillSheet(_ctx(t), RecipeSkill(e.services.skills.recipes.firstWhere((r) => r.id == 'r_long')));
-    await _settle(t);
-  }),
-  Screen('skill-sheet-community', () => const SkillsScreen(), nav: true, after: (t, e) async {
-    showSkillSheet(_ctx(t), e.services.skills.community.first);
-    await _settle(t);
-  }),
+  Screen(
+    'skill-sheet-most-params',
+    () => const SkillsScreen(),
+    nav: true,
+    after: (t, e) async {
+      final byParams = [...e.services.skills.builtIns]..sort((a, b) => b.params.length.compareTo(a.params.length));
+      showSkillSheet(_ctx(t), byParams.first);
+      await _settle(t);
+    },
+  ),
+  Screen(
+    'skill-sheet-longest-description',
+    () => const SkillsScreen(),
+    nav: true,
+    after: (t, e) async {
+      final byLen = [...e.services.skills.builtIns]
+        ..sort((a, b) => b.description.length.compareTo(a.description.length));
+      showSkillSheet(_ctx(t), byLen.first);
+      await _settle(t);
+    },
+  ),
+  Screen(
+    'skill-sheet-recipe',
+    () => const SkillsScreen(),
+    nav: true,
+    after: (t, e) async {
+      showSkillSheet(_ctx(t), RecipeSkill(e.services.skills.recipes.firstWhere((r) => r.id == 'r_long')));
+      await _settle(t);
+    },
+  ),
+  Screen(
+    'skill-sheet-community',
+    () => const SkillsScreen(),
+    nav: true,
+    after: (t, e) async {
+      showSkillSheet(_ctx(t), e.services.skills.community.first);
+      await _settle(t);
+    },
+  ),
   Screen('recipe-editor-new', () => const SkillsScreen(), nav: true, after: (t, e) => _push(t, const RecipeEditor())),
-  Screen('recipe-editor-edit', () => const SkillsScreen(), nav: true, after: (t, e) async {
-    await _push(t, RecipeEditor(recipe: e.services.skills.recipes.firstWhere((r) => r.id == 'r_long')));
-  }),
+  Screen(
+    'recipe-editor-edit',
+    () => const SkillsScreen(),
+    nav: true,
+    after: (t, e) async {
+      await _push(t, RecipeEditor(recipe: e.services.skills.recipes.firstWhere((r) => r.id == 'r_long')));
+    },
+  ),
   Screen('models', () => const ModelsScreen(), nav: true),
-  Screen('models-get-access-sheet', () => const ModelsScreen(), nav: true, after: (t, e) async {
-    showGetAccess(_ctx(t), e.services, _gatedModel);
-    await _settle(t);
-  }),
+  Screen(
+    'models-get-access-sheet',
+    () => const ModelsScreen(),
+    nav: true,
+    after: (t, e) async {
+      showGetAccess(_ctx(t), e.services, _gatedModel);
+      await _settle(t);
+    },
+  ),
   Screen('you', () => const YouScreen(), nav: true),
   Screen('you-empty', () => const YouScreen(), nav: true, bare: true),
   Screen('settings', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const SettingsScreen())),
   Screen('about', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const AboutScreen())),
   Screen('privacy', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const PrivacyScreen())),
-  Screen('privacy-empty', () => const YouScreen(), nav: true, bare: true, after: (t, e) => _push(t, const PrivacyScreen())),
+  Screen(
+    'privacy-empty',
+    () => const YouScreen(),
+    nav: true,
+    bare: true,
+    after: (t, e) => _push(t, const PrivacyScreen()),
+  ),
   Screen('memory', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const MemoryScreen())),
-  Screen('memory-empty', () => const YouScreen(), nav: true, bare: true, after: (t, e) => _push(t, const MemoryScreen())),
+  Screen(
+    'memory-empty',
+    () => const YouScreen(),
+    nav: true,
+    bare: true,
+    after: (t, e) => _push(t, const MemoryScreen()),
+  ),
   Screen('knowledge', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const KnowledgeScreen())),
-  Screen('knowledge-doc-sheet', () => const YouScreen(), nav: true, after: (t, e) async {
-    await _push(t, const KnowledgeScreen());
-    await _tap(t, find.byType(Door), optional: true);
-  }),
-  Screen('knowledge-empty', () => const YouScreen(), nav: true, bare: true, after: (t, e) => _push(t, const KnowledgeScreen())),
+  Screen(
+    'knowledge-doc-sheet',
+    () => const YouScreen(),
+    nav: true,
+    after: (t, e) async {
+      await _push(t, const KnowledgeScreen());
+      await _tap(t, find.byType(Door), optional: true);
+    },
+  ),
+  Screen(
+    'knowledge-empty',
+    () => const YouScreen(),
+    nav: true,
+    bare: true,
+    after: (t, e) => _push(t, const KnowledgeScreen()),
+  ),
   Screen('lab', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const LabScreen())),
 ];
 
@@ -662,8 +760,7 @@ class Cfg {
   final bool dark;
   final double scale;
   final Voice voice;
-  String get label =>
-      '${size.width.toInt()}x${size.height.toInt()} ${dark ? 'dark' : 'light'} x$scale ${voice.name}';
+  String get label => '${size.width.toInt()}x${size.height.toInt()} ${dark ? 'dark' : 'light'} x$scale ${voice.name}';
 }
 
 const _sizes = [Size(320, 568), Size(360, 690), Size(412, 915), Size(800, 1280)];
@@ -720,7 +817,13 @@ Finding _classify(FlutterErrorDetails d) {
   final stack = d.stack?.toString() ?? '';
   final sm = RegExp(r'package:phonedots/[^\s:)]+\.dart:\d+:\d+').firstMatch(stack);
   final cm = RegExp(r'creator: ([^\n]*)').firstMatch(both);
-  final chain = cm?.group(1)?.split('←').map((e) => e.trim().replaceAll(RegExp(r'#[0-9a-f]{5}.*'), '')).where((e) => e != '⋯').take(12).join(' < ');
+  final chain = cm
+      ?.group(1)
+      ?.split('←')
+      .map((e) => e.trim().replaceAll(RegExp(r'#[0-9a-f]{5}.*'), ''))
+      .where((e) => e != '⋯')
+      .take(12)
+      .join(' < ');
   final loc = m != null ? _shortLoc(m.group(1)!) : (chain ?? sm?.group(0) ?? 'unknown');
   final f = Finding(kind, loc, both);
   final px = RegExp(r'overflowed by ([\d.]+) pixels').firstMatch(text);
@@ -773,8 +876,14 @@ Widget _app(AppState st, Screen sc, Cfg c, GlobalKey boundary) {
 }
 
 /// Pumps [sc] under [c]; returns findings (also merged into [_all]).
-Future<List<Finding>> _run(WidgetTester t, Screen sc, Cfg c,
-    {String? png, bool scrollSweep = true, void Function(WidgetTester t)? probe}) async {
+Future<List<Finding>> _run(
+  WidgetTester t,
+  Screen sc,
+  Cfg c, {
+  String? png,
+  bool scrollSweep = true,
+  void Function(WidgetTester t)? probe,
+}) async {
   final env = sc.bare ? await _bareEnv(t) : await _seededEnv(t);
   final settings = env.services.settings
     ..themeMode = c.dark ? ThemeMode.dark : ThemeMode.light
@@ -800,7 +909,11 @@ Future<List<Finding>> _run(WidgetTester t, Screen sc, Cfg c,
     await t.pumpWidget(_app(st, sc, c, boundary));
     await _settle(t);
     if (sc.after != null) await sc.after!(t, env);
-    if (_trace && sc.name == 'models') print('models ram=${env.services.models.device.totalRamMb} gb=${find.textContaining('GB memory').evaluate().length} ${c.label}');
+    if (_trace && sc.name == 'models') {
+      print(
+        'models ram=${env.services.models.device.totalRamMb} gb=${find.textContaining('GB memory').evaluate().length} ${c.label}',
+      );
+    }
     if (scrollSweep) await _scrollSweep(t);
     probe?.call(t);
     if (png != null) {
@@ -876,7 +989,9 @@ void main() {
       b.writeln('  at ${f.shortLocation}');
       b.writeln('  full chain: ${f.location}');
       b.writeln('  screens: ${f.screens.join(', ')}');
-      b.writeln('  sizes: ${f.configs.map((c) => c.split(' ').first).toSet().join(', ')}; scales: ${f.configs.map((c) => c.split(' ')[2]).toSet().join(', ')}');
+      b.writeln(
+        '  sizes: ${f.configs.map((c) => c.split(' ').first).toSet().join(', ')}; scales: ${f.configs.map((c) => c.split(' ')[2]).toSet().join(', ')}',
+      );
       b.writeln('  configs (${f.configs.length}): ${f.configs.join(' | ')}');
       b.writeln('  ${f.detail.split('\n').take(40).join('\n  ')}\n');
     }
@@ -889,7 +1004,9 @@ void main() {
     await t.pumpWidget(
       const Directionality(
         textDirection: TextDirection.ltr,
-        child: Align(child: Text('iiiiiiiiii', style: TextStyle(fontFamily: 'Inter', fontSize: 20))),
+        child: Align(
+          child: Text('iiiiiiiiii', style: TextStyle(fontFamily: 'Inter', fontSize: 20)),
+        ),
       ),
     );
     // Ahem would be exactly 10 * 20 = 200 wide.
@@ -931,108 +1048,128 @@ void main() {
     'onboarding-welcome',
   ];
 
-  const a11yContrast = {'chat-welcome-recent', 'chat-cards-a', 'saved-list', 'saved-detail-s_done_long', 'models', 'settings'};
+  const a11yContrast = {
+    'chat-welcome-recent',
+    'chat-cards-a',
+    'saved-list',
+    'saved-detail-s_done_long',
+    'models',
+    'settings',
+  };
 
   for (final dark in [false, true]) {
-    testWidgets('a11y: tap targets, labels and contrast (${dark ? 'dark' : 'light'})', timeout: const Timeout(Duration(minutes: 5)), (t) async {
-      final problems = <String, Set<String>>{};
-      final handle = t.ensureSemantics();
-      try {
-        for (final name in a11yScreens) {
-          final sc = _screens().firstWhere((s) => s.name == name);
-          for (final (size, scale) in const [(Size(412, 915), 1.0), (Size(360, 690), 1.6)]) {
-            // Contrast analysis walks every pixel and is slow: a few screens, one size.
-            final contrast = scale == 1.0 && a11yContrast.contains(name);
-            final c = Cfg(size, dark, scale, Voice.neat);
-            final env = sc.bare ? await _bareEnv(t) : await _seededEnv(t);
-            env.services.settings
-              ..themeMode = dark ? ThemeMode.dark : ThemeMode.light
-              ..voice = c.voice.name
-              ..onboarded = !sc.onboarding;
-            t.view.physicalSize = size;
-            t.view.devicePixelRatio = 1.0;
-            t.platformDispatcher.textScaleFactorTestValue = scale;
-            final st = AppState(env.services);
-            final old = FlutterError.onError;
-            FlutterError.onError = (_) {};
-            try {
-              sc.prep?.call(st, env);
-              await t.pumpWidget(_app(st, sc, c, GlobalKey()));
-              await _settle(t);
-              if (sc.after != null) await sc.after!(t, env);
-              final where = '$name ${c.label}';
-              if (_trace) print('a11y $where');
+    testWidgets(
+      'a11y: tap targets, labels and contrast (${dark ? 'dark' : 'light'})',
+      timeout: const Timeout(Duration(minutes: 5)),
+      (t) async {
+        final problems = <String, Set<String>>{};
+        final handle = t.ensureSemantics();
+        try {
+          for (final name in a11yScreens) {
+            final sc = _screens().firstWhere((s) => s.name == name);
+            for (final (size, scale) in const [(Size(412, 915), 1.0), (Size(360, 690), 1.6)]) {
+              // Contrast analysis walks every pixel and is slow: a few screens, one size.
+              final contrast = scale == 1.0 && a11yContrast.contains(name);
+              final c = Cfg(size, dark, scale, Voice.neat);
+              final env = sc.bare ? await _bareEnv(t) : await _seededEnv(t);
+              env.services.settings
+                ..themeMode = dark ? ThemeMode.dark : ThemeMode.light
+                ..voice = c.voice.name
+                ..onboarded = !sc.onboarding;
+              t.view.physicalSize = size;
+              t.view.devicePixelRatio = 1.0;
+              t.platformDispatcher.textScaleFactorTestValue = scale;
+              final st = AppState(env.services);
+              final old = FlutterError.onError;
+              FlutterError.onError = (_) {};
+              try {
+                sc.prep?.call(st, env);
+                await t.pumpWidget(_app(st, sc, c, GlobalKey()));
+                await _settle(t);
+                if (sc.after != null) await sc.after!(t, env);
+                final where = '$name ${c.label}';
+                if (_trace) print('a11y $where');
 
-              // DoodleButtons: labelled and big enough.
-              for (final e in find.byType(DoodleButton).evaluate()) {
-                final w = e.widget as DoodleButton;
-                if (w.tooltip.trim().isEmpty) problems.putIfAbsent('DoodleButton without tooltip', () => {}).add(where);
-                final box = e.renderObject! as RenderBox;
-                if (box.size.width < 44 || box.size.height < 44) {
-                  problems.putIfAbsent('DoodleButton smaller than 44dp (${w.tooltip}: ${box.size})', () => {}).add(where);
-                }
-              }
-              // HandNav entries.
-              if (sc.nav) {
-                for (final l in ['chat', 'saved', 'skills', 'models', 'you']) {
-                  final label = find.descendant(of: find.byType(HandNav), matching: find.text(l));
-                  final p = find.ancestor(of: label, matching: find.byType(Pressable));
-                  if (label.evaluate().isNotEmpty && p.evaluate().isNotEmpty) {
-                    final s = t.getSize(p.first);
-                    if (s.width < 44 || s.height < 44) problems.putIfAbsent('HandNav "$l" smaller than 44dp ($s)', () => {}).add(where);
+                // DoodleButtons: labelled and big enough.
+                for (final e in find.byType(DoodleButton).evaluate()) {
+                  final w = e.widget as DoodleButton;
+                  if (w.tooltip.trim().isEmpty) {
+                    problems.putIfAbsent('DoodleButton without tooltip', () => {}).add(where);
+                  }
+                  final box = e.renderObject! as RenderBox;
+                  if (box.size.width < 44 || box.size.height < 44) {
+                    problems
+                        .putIfAbsent('DoodleButton smaller than 44dp (${w.tooltip}: ${box.size})', () => {})
+                        .add(where);
                   }
                 }
-              }
-              // Material guideline checks.
-              for (final (gname, g) in <(String, AccessibilityGuideline)>[
-                ('androidTapTargetGuideline (48dp)', androidTapTargetGuideline),
-                ('iOSTapTargetGuideline (44pt)', iOSTapTargetGuideline),
-                ('labeledTapTargetGuideline', labeledTapTargetGuideline),
-                if (contrast) ('textContrastGuideline (AA)', textContrastGuideline),
-              ]) {
-                final sw = Stopwatch()..start();
-                final r = await g.evaluate(t);
-                if (_trace) print('   $gname ${sw.elapsedMilliseconds}ms');
-                // Read-only selectable text (long-press to copy) is not a button; with a one-letter
-                // fixture value it measures tiny. Every other failing node still counts.
-                final onlySelectableText = (r.reason ?? '')
-                    .split(RegExp(r'(?=SemanticsNode#)'))
-                    .where((n) => n.contains('SemanticsNode#'))
-                    .every((n) => n.contains('isReadOnly') && n.contains('isTextField'));
-                if (!r.passed && !onlySelectableText) {
-                  final reason = (r.reason ?? '')
-                      .replaceAll(RegExp(r'SemanticsNode#\d+\(Rect\.fromLTRB\([^)]*\),?\s*'), 'node(')
-                      .replaceAll(RegExp(r'See also:.*'), '')
-                      .split('\n')
-                      .where((l) => l.trim().isNotEmpty)
-                      .take(3)
-                      .join(' / ');
-                  problems.putIfAbsent('$gname: $reason', () => {}).add(where);
+                // HandNav entries.
+                if (sc.nav) {
+                  for (final l in ['chat', 'saved', 'skills', 'models', 'you']) {
+                    final label = find.descendant(of: find.byType(HandNav), matching: find.text(l));
+                    final p = find.ancestor(of: label, matching: find.byType(Pressable));
+                    if (label.evaluate().isNotEmpty && p.evaluate().isNotEmpty) {
+                      final s = t.getSize(p.first);
+                      if (s.width < 44 || s.height < 44) {
+                        problems.putIfAbsent('HandNav "$l" smaller than 44dp ($s)', () => {}).add(where);
+                      }
+                    }
+                  }
                 }
+                // Material guideline checks.
+                for (final (gname, g) in <(String, AccessibilityGuideline)>[
+                  ('androidTapTargetGuideline (48dp)', androidTapTargetGuideline),
+                  ('iOSTapTargetGuideline (44pt)', iOSTapTargetGuideline),
+                  ('labeledTapTargetGuideline', labeledTapTargetGuideline),
+                  if (contrast) ('textContrastGuideline (AA)', textContrastGuideline),
+                ]) {
+                  final sw = Stopwatch()..start();
+                  final r = await g.evaluate(t);
+                  if (_trace) print('   $gname ${sw.elapsedMilliseconds}ms');
+                  // Read-only selectable text (long-press to copy) is not a button; with a one-letter
+                  // fixture value it measures tiny. Every other failing node still counts.
+                  final onlySelectableText = (r.reason ?? '')
+                      .split(RegExp(r'(?=SemanticsNode#)'))
+                      .where((n) => n.contains('SemanticsNode#'))
+                      .every((n) => n.contains('isReadOnly') && n.contains('isTextField'));
+                  if (!r.passed && !onlySelectableText) {
+                    final reason = (r.reason ?? '')
+                        .replaceAll(RegExp(r'SemanticsNode#\d+\(Rect\.fromLTRB\([^)]*\),?\s*'), 'node(')
+                        .replaceAll(RegExp(r'See also:.*'), '')
+                        .split('\n')
+                        .where((l) => l.trim().isNotEmpty)
+                        .take(3)
+                        .join(' / ');
+                    problems.putIfAbsent('$gname: $reason', () => {}).add(where);
+                  }
+                }
+              } finally {
+                FlutterError.onError = old;
+                st.chat.dispose();
+                t.view.reset();
+                t.platformDispatcher.clearTextScaleFactorTestValue();
+                env.services.intake.value = null;
               }
-            } finally {
-              FlutterError.onError = old;
-              st.chat.dispose();
-              t.view.reset();
-              t.platformDispatcher.clearTextScaleFactorTestValue();
-              env.services.intake.value = null;
+              await t.pumpWidget(const SizedBox());
+              t.takeException();
             }
-            await t.pumpWidget(const SizedBox());
-            t.takeException();
           }
+        } finally {
+          if (_trace) print('a11y dispose');
+          handle.dispose();
         }
-      } finally {
-        if (_trace) print('a11y dispose');
-        handle.dispose();
-      }
-      final msg = problems.entries
-          .map((e) => '  - ${e.key}\n      on: ${e.value.take(5).join(' | ')}${e.value.length > 5 ? ' … (${e.value.length})' : ''}')
-          .join('\n');
-      Directory(_out).createSync(recursive: true);
-      File('$_out/a11y_${dark ? 'dark' : 'light'}.txt').writeAsStringSync(msg);
-      if (_trace) print('a11y done');
-      if (problems.isNotEmpty) fail('accessibility problems (${dark ? 'dark' : 'light'}):\n$msg');
-    });
+        final msg = problems.entries
+            .map(
+              (e) =>
+                  '  - ${e.key}\n      on: ${e.value.take(5).join(' | ')}${e.value.length > 5 ? ' … (${e.value.length})' : ''}',
+            )
+            .join('\n');
+        Directory(_out).createSync(recursive: true);
+        File('$_out/a11y_${dark ? 'dark' : 'light'}.txt').writeAsStringSync(msg);
+        if (_trace) print('a11y done');
+        if (problems.isNotEmpty) fail('accessibility problems (${dark ? 'dark' : 'light'}):\n$msg');
+      },
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -1042,28 +1179,57 @@ void main() {
   // with the body copy.
   // -------------------------------------------------------------------------
 
-  testWidgets('alignment: Column0 children start at the gutter', timeout: const Timeout(Duration(minutes: 3)), (t) async {
+  testWidgets('alignment: Column0 children start at the gutter', timeout: const Timeout(Duration(minutes: 3)), (
+    t,
+  ) async {
     final off = <String, Set<String>>{};
-    for (final name in ['onboarding-welcome', 'onboarding-setup', 'chat-welcome-recent', 'saved-list', 'skills-list', 'models', 'you', 'settings', 'privacy']) {
+    for (final name in [
+      'onboarding-welcome',
+      'onboarding-setup',
+      'chat-welcome-recent',
+      'saved-list',
+      'skills-list',
+      'models',
+      'you',
+      'settings',
+      'privacy',
+    ]) {
       final sc = _screens().firstWhere((s) => s.name == name);
       for (final size in const [Size(360, 690), Size(412, 915)]) {
-        await _run(t, sc, Cfg(size, false, 1.0, Voice.neat), scrollSweep: false, probe: (t) {
-          final w = size.width;
-          final expected = ((w - (maxColumn + gutter * 2)) / 2).clamp(0, w) + gutter;
-          for (final e in find.byType(Column0).evaluate()) {
-            final box = e.renderObject;
-            if (box is! RenderBox || !box.attached) continue;
-            // The child of Column0 sits inside Center > ConstrainedBox > Padding.
-            RenderBox? inner;
-            e.visitChildElements((c) => c.visitChildElements((c2) => c2.visitChildElements((c3) => c3.visitChildElements((c4) => inner = c4.renderObject as RenderBox?))));
-            if (inner == null || !inner!.hasSize || inner!.size.width < 1) continue;
-            final dx = inner!.localToGlobal(Offset.zero).dx;
-            if ((dx - expected).abs() > 1.5 && dx > 0 && dx < w) {
-              final label = (e.widget as Column0).child.runtimeType.toString();
-              off.putIfAbsent('$label starts ${dx.toStringAsFixed(0)}dp from the edge, body text starts ${expected.toStringAsFixed(0)}dp (width ${inner!.size.width.toStringAsFixed(0)})', () => {}).add('$name ${size.width.toInt()}x${size.height.toInt()}');
+        await _run(
+          t,
+          sc,
+          Cfg(size, false, 1.0, Voice.neat),
+          scrollSweep: false,
+          probe: (t) {
+            final w = size.width;
+            final expected = ((w - (maxColumn + gutter * 2)) / 2).clamp(0, w) + gutter;
+            for (final e in find.byType(Column0).evaluate()) {
+              final box = e.renderObject;
+              if (box is! RenderBox || !box.attached) continue;
+              // The child of Column0 sits inside Center > ConstrainedBox > Padding.
+              RenderBox? inner;
+              e.visitChildElements(
+                (c) => c.visitChildElements(
+                  (c2) => c2.visitChildElements(
+                    (c3) => c3.visitChildElements((c4) => inner = c4.renderObject as RenderBox?),
+                  ),
+                ),
+              );
+              if (inner == null || !inner!.hasSize || inner!.size.width < 1) continue;
+              final dx = inner!.localToGlobal(Offset.zero).dx;
+              if ((dx - expected).abs() > 1.5 && dx > 0 && dx < w) {
+                final label = (e.widget as Column0).child.runtimeType.toString();
+                off
+                    .putIfAbsent(
+                      '$label starts ${dx.toStringAsFixed(0)}dp from the edge, body text starts ${expected.toStringAsFixed(0)}dp (width ${inner!.size.width.toStringAsFixed(0)})',
+                      () => {},
+                    )
+                    .add('$name ${size.width.toInt()}x${size.height.toInt()}');
+              }
             }
-          }
-        });
+          },
+        );
       }
     }
     final msg = off.entries.map((e) => '  - ${e.key}\n      on: ${e.value.take(6).join(' | ')}').join('\n');
@@ -1103,7 +1269,14 @@ void main() {
     ];
     for (final (name, c) in shots) {
       final sc = _screens().firstWhere((s) => s.name == name);
-      await _run(t, sc, c, png: '${name}_${c.size.width.toInt()}x${c.size.height.toInt()}_${c.dark ? 'dark' : 'light'}_x${c.scale}_${c.voice.name}', scrollSweep: false);
+      await _run(
+        t,
+        sc,
+        c,
+        png:
+            '${name}_${c.size.width.toInt()}x${c.size.height.toInt()}_${c.dark ? 'dark' : 'light'}_x${c.scale}_${c.voice.name}',
+        scrollSweep: false,
+      );
     }
   });
 }

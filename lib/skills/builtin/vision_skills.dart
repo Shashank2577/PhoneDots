@@ -135,6 +135,7 @@ List<Skill> visionSkills() => [
   ),
   FnSkill(
     id: 'check_image_safety',
+    examples: const ['Is this image safe to share?'],
     name: 'Check image safety',
     description: 'Detect nudity or explicit content in an image before sharing (Moderator).',
     kind: SkillKind.model,

@@ -340,8 +340,12 @@ class _SkillDetailState extends State<_SkillDetail> {
 class _Recipes extends StatelessWidget {
   const _Recipes();
 
+  // Rebuilds whenever recipes are saved or deleted (it's const, so the parent alone won't).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: AppScope.services(context).skills, builder: (context, _) => _list(context));
+
+  Widget _list(BuildContext context) {
     final s = AppScope.services(context);
     final p = context.pal;
     return Column(
@@ -451,7 +455,10 @@ class _CommunityState extends State<_Community> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: AppScope.services(context).skills, builder: (context, _) => _list(context));
+
+  Widget _list(BuildContext context) {
     final s = AppScope.services(context);
     final installed = s.skills.community;
     final featured = sampleCommunitySkills

@@ -38,6 +38,7 @@ List<Skill> knowledgeSkills() => [
   ),
   FnSkill(
     id: 'add_to_knowledge',
+    examples: const ['Save this to my files'],
     name: 'Save to my files',
     description: 'Save text or an attached document into the searchable personal knowledge base.',
     kind: SkillKind.knowledge,
@@ -70,12 +71,15 @@ List<Skill> knowledgeSkills() => [
     ],
     examples: const ['Remember that I am vegetarian'],
     handler: (args, ctx) async {
-      await ctx.remember(args.str('fact'));
-      return SkillResult({'summary': 'Got it. I will remember: ${args.str('fact')}'});
+      final fact = args.str('fact').trim();
+      if (fact.isEmpty) return SkillResult.error('There is nothing to remember: the fact is empty.');
+      await ctx.remember(fact);
+      return SkillResult({'summary': 'Got it. I will remember: $fact'});
     },
   ),
   FnSkill(
     id: 'recall_memory',
+    examples: const ['What do you remember about my diet?'],
     name: 'Recall',
     description: 'Look up what the user previously asked to be remembered.',
     kind: SkillKind.knowledge,
@@ -91,6 +95,7 @@ List<Skill> knowledgeSkills() => [
   ),
   FnSkill(
     id: 'forget_memory',
+    examples: const ['Forget that I live in Leeds'],
     name: 'Forget',
     description: 'Delete a remembered fact.',
     kind: SkillKind.knowledge,
@@ -111,10 +116,16 @@ List<Skill> knowledgeSkills() => [
     examples: const ['What is 18% of 2450?'],
     handler: (args, ctx) async {
       try {
-        final v = Calculator.format(Calculator.evaluate(args.str('expression')));
+        final raw = Calculator.evaluate(args.str('expression'));
+        if (!raw.isFinite) {
+          return SkillResult.error('No finite answer: ${args.str('expression')} is undefined or too large.');
+        }
+        final v = Calculator.format(raw);
         return SkillResult({'result': v, 'summary': '${args.str('expression')} = **$v**'});
       } on FormatException catch (e) {
         return SkillResult.error('Invalid expression: ${e.message}');
+      } on StackOverflowError {
+        return SkillResult.error('Invalid expression: too deeply nested');
       }
     },
   ),
@@ -131,8 +142,10 @@ List<Skill> knowledgeSkills() => [
     ],
     examples: const ['Convert 5 miles to km'],
     handler: (args, ctx) async {
+      final value = num.tryParse('${args['value'] ?? ''}'.trim());
+      if (value == null || !value.isFinite) return SkillResult.error('The value to convert must be a number.');
       try {
-        final v = Units.convert(args.number('value'), args.str('from'), args.str('to'));
+        final v = Units.convert(value.toDouble(), args.str('from'), args.str('to'));
         final out = Calculator.format(double.parse(v.toStringAsPrecision(6)));
         return SkillResult({
           'result': out,
@@ -145,6 +158,7 @@ List<Skill> knowledgeSkills() => [
   ),
   FnSkill(
     id: 'date_calc',
+    examples: const ['How many days until 25 December?'],
     name: 'Date maths',
     description: 'Add days to a date, or count the days between two dates.',
     kind: SkillKind.knowledge,
@@ -155,16 +169,31 @@ List<Skill> knowledgeSkills() => [
       SkillParam('end', ParamType.string, 'End date YYYY-MM-DD to count days until.', required: false),
     ],
     handler: (args, ctx) async {
+      // Calendar dates in UTC, so a daylight-saving change never shifts a day.
+      DateTime? day(String raw) {
+        final m = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})').firstMatch(raw.trim());
+        if (m == null) return null;
+        final y = int.parse(m.group(1)!), mo = int.parse(m.group(2)!), d = int.parse(m.group(3)!);
+        final dt = DateTime.utc(y, mo, d);
+        return dt.year == y && dt.month == mo && dt.day == d ? dt : null; // rejects 2026-02-30
+      }
+
       final now = DateTime.now();
-      final start = DateTime.tryParse(args.str('start')) ?? DateTime(now.year, now.month, now.day);
+      final startRaw = args.str('start').trim();
+      final start = startRaw.isEmpty ? DateTime.utc(now.year, now.month, now.day) : day(startRaw);
+      if (start == null) return SkillResult.error('Start date must look like YYYY-MM-DD, got "$startRaw".');
       String fmt(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
       const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      final end = DateTime.tryParse(args.str('end'));
-      if (end != null) {
+      final endRaw = args.str('end').trim();
+      if (endRaw.isNotEmpty) {
+        final end = day(endRaw);
+        if (end == null) return SkillResult.error('End date must look like YYYY-MM-DD, got "$endRaw".');
         final days = end.difference(start).inDays;
         return SkillResult({'days': days, 'summary': '$days days from ${fmt(start)} to ${fmt(end)}.'});
       }
-      final d = start.add(Duration(days: args.integer('add_days')));
+      final add = args.integer('add_days');
+      if (add.abs() > 3650000) return SkillResult.error('That is too many days to add (max about 10,000 years).');
+      final d = start.add(Duration(days: add));
       return SkillResult({
         'date': fmt(d),
         'weekday': weekdays[d.weekday - 1],
