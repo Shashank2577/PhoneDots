@@ -64,7 +64,7 @@ final class LlmBridge: NSObject, FlutterStreamHandler {
     let args = call.arguments as? [String: Any] ?? [:]
     if call.method == "deviceProfile" {
       result([
-        "platform": "ios",
+        "platform": Self.platformName,
         "totalRamMb": Int(ProcessInfo.processInfo.physicalMemory / 1_048_576),
         "model": Self.machine(),
         "gpu": true,
@@ -77,7 +77,7 @@ final class LlmBridge: NSObject, FlutterStreamHandler {
       guard let self else { return }
       do {
         switch call.method {
-        case "load": try self.load(args); self.reply(result, nil)
+        case "load": try await self.load(args); self.reply(result, nil)
         case "unload":
           let id = args["modelId"] as? String ?? ""
           self.lock.withLock {
@@ -98,12 +98,12 @@ final class LlmBridge: NSObject, FlutterStreamHandler {
         case "loadEmbedder":
           self.embedDims = args["dimensions"] as? Int ?? 256
           let e = EmbeddingEngine(config: EmbeddingEngineConfig(modelPath: args["path"] as! String, backend: .cpu()))
-          try e.initialize()
+          try await e.initialize()
           self.embedder = e
           self.reply(result, nil)
         case "embed":
           guard let e = self.embedder else { throw NSError(domain: "llm", code: 1, userInfo: [NSLocalizedDescriptionKey: "Embedder not loaded"]) }
-          let r = try e.computeEmbedding(contents: [.text(args["text"] as? String ?? "")], options: EmbeddingOptions(normalize: true, outputSize: self.embedDims))
+          let r = try await e.computeEmbedding(contents: [.text(args["text"] as? String ?? "")], options: EmbeddingOptions(normalize: true, outputSize: self.embedDims))
           self.reply(result, r.embedding.map { Double($0) })
         default:
           DispatchQueue.main.async { result(FlutterMethodNotImplemented) }
@@ -117,14 +117,21 @@ final class LlmBridge: NSObject, FlutterStreamHandler {
     #endif
   }
 
+  #if os(macOS)
+  private static let platformName = "macos"
+  #else
+  private static let platformName = "ios"
+  #endif
+
   private func reply(_ result: @escaping FlutterResult, _ value: Any?) {
     DispatchQueue.main.async { result(value) }
   }
 
   #if canImport(LiteRTLM)
-  private func load(_ a: [String: Any]) throws {
+  // Engine and EmbeddingEngine are actors in LiteRT-LM's Swift API: every call is awaited.
+  private func load(_ a: [String: Any]) async throws {
     let id = a["modelId"] as! String
-    let make: (Bool) throws -> Engine = { gpu in
+    let make: (Bool) async throws -> Engine = { gpu in
       let config = try EngineConfig(
         modelPath: a["path"] as! String,
         backend: gpu ? .gpu : .cpu(),
@@ -134,15 +141,15 @@ final class LlmBridge: NSObject, FlutterStreamHandler {
         cacheDir: NSTemporaryDirectory()
       )
       let engine = Engine(engineConfig: config)
-      try engine.initialize()
+      try await engine.initialize()
       return engine
     }
     let wantsGpu = (a["backend"] as? String) == "gpu"
     let engine: Engine
     do {
-      engine = try make(wantsGpu)
+      engine = try await make(wantsGpu)
     } catch where wantsGpu {
-      engine = try make(false)
+      engine = try await make(false)
     }
     lock.withLock { engines[id] = engine }
   }
@@ -197,7 +204,7 @@ final class LlmBridge: NSObject, FlutterStreamHandler {
           ),
           automaticToolCalling: false
         )
-        let s = Session(conversation: try engine.createConversation(with: config), modelId: modelId, key: key, synced: history.count - 1)
+        let s = Session(conversation: try await engine.createConversation(with: config), modelId: modelId, key: key, synced: history.count - 1)
         lock.withLock { sessions[sessionId] = s }
         session = s
       }
