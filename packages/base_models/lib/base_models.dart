@@ -11,6 +11,7 @@ library;
 
 export 'src/catalog.dart';
 export 'src/generated/platform.g.dart';
+export 'src/keep_awake.dart';
 export 'src/model_spec.dart';
 export 'src/model_state.dart';
 export 'src/model_store.dart';

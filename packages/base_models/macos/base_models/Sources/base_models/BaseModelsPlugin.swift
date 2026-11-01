@@ -32,8 +32,36 @@ public class BaseModelsPlugin: NSObject, FlutterPlugin {
       } catch {
         result(nil)
       }
+    case "keepAwakeBegin":
+      let args = call.arguments as? [String: Any]
+      KeepAwake.begin(args?["key"] as? String ?? "work", args?["text"] as? String ?? "working")
+      result(nil)
+    case "keepAwakeUpdate":
+      result(nil)
+    case "keepAwakeEnd":
+      KeepAwake.end((call.arguments as? [String: Any])?["key"] as? String ?? "work")
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+}
+
+
+/// While a model downloads or the AI writes an answer, the Mac neither sleeps
+/// nor slows the app down (App Nap).
+enum KeepAwake {
+  private static var activities: [String: NSObjectProtocol] = [:]
+  private static let lock = NSLock()
+
+  static func begin(_ key: String, _ text: String) {
+    lock.lock(); defer { lock.unlock() }
+    guard activities[key] == nil else { return }
+    activities[key] = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: text)
+  }
+
+  static func end(_ key: String) {
+    lock.lock(); defer { lock.unlock() }
+    if let a = activities.removeValue(forKey: key) { ProcessInfo.processInfo.endActivity(a) }
   }
 }

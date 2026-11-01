@@ -62,6 +62,23 @@ class BaseModelsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     post { result.error("sibling", e.message ?: e.javaClass.simpleName, null) }
                 }
             }
+            "keepAwakeBegin" -> {
+                KeepAwake.begin(
+                    context,
+                    call.argument<String>("key")!!,
+                    call.argument<String>("text") ?: "working",
+                    if (call.argument<Boolean>("ai") == true) KeepAwake.Kind.AI else KeepAwake.Kind.DOWNLOAD,
+                )
+                result.success(null)
+            }
+            "keepAwakeUpdate" -> {
+                KeepAwake.update(context, call.argument<String>("key")!!, call.argument<Double>("progress"), call.argument<String>("text"))
+                result.success(null)
+            }
+            "keepAwakeEnd" -> {
+                KeepAwake.end(context, call.argument<String>("key")!!)
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }

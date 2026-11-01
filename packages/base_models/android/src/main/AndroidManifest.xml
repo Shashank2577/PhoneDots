@@ -11,6 +11,13 @@
     <uses-permission android:name="${baseModelsPermission}" />
     <!-- Model downloads. Flutter only declares INTERNET in debug/profile manifests. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- KeepAwake: an ongoing notification while a model downloads or the AI
+         writes an answer, so Android doesn't pause the app or sleep mid-way. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <intent>
@@ -19,6 +26,14 @@
     </queries>
 
     <application>
+        <service
+            android:name="dev.baseplatform.base_models.KeepAwakeService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="On-device AI writing an answer the user asked for; it stops when the answer is done." />
+        </service>
         <provider
             android:name="dev.baseplatform.base_models.BaseModelsProvider"
             android:authorities="${applicationId}.basemodels"

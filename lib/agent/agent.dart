@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:base_models/base_models.dart' show KeepAwake;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -80,6 +81,9 @@ class ChatController extends ChangeNotifier {
     });
     busy = true;
     _stopRequested = false;
+    // Loading Gemma and answering take a while: an ongoing notification (Android),
+    // or the screen kept on (iOS), so the answer isn't cut off when the phone sleeps.
+    if (!services.isDemo) await KeepAwake.begin('answer', 'writing an answer', ai: true);
     final user = ChatMessage(id: _uuid.v4(), isUser: true, text: text.trim(), attachments: attachments);
     final reply = ChatMessage(id: _uuid.v4(), isUser: false, streaming: true);
     messages
@@ -105,6 +109,7 @@ class ChatController extends ChangeNotifier {
       reply.streaming = false;
       reply.phase = null;
       busy = false;
+      if (!services.isDemo) await KeepAwake.end('answer');
       if (reply.error != null) appLog.warn('agent', 'reply ended with an error', {'error': reply.error});
       await services.conversations.save(conversation);
       notifyListeners();

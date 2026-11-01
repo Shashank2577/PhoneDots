@@ -18,7 +18,7 @@ class CrashReporter {
   final Ledger ledger;
   final http.Client _client;
 
-  static const appVersion = '0.6.0';
+  static const appVersion = '0.7.0';
 
   bool get enabled {
     final u = Uri.tryParse(settings.crashReportUrl.trim());

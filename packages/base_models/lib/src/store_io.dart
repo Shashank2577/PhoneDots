@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'generated/platform.g.dart';
+import 'keep_awake.dart';
 import 'model_spec.dart';
 import 'model_state.dart';
 import 'model_store.dart';
@@ -248,8 +249,13 @@ class IoModelStore extends ModelStore {
   }
 
   void _set(String id, ModelState s) {
+    final before = _states[id];
     _states[id] = s;
     notifyListeners();
+    // The notification follows the progress, one step per percent.
+    if (options.useNativeLocation && s.status == ModelStatus.downloading && _installing.contains(id) && (before?.progress ?? -1) * 100 ~/ 1 != s.progress * 100 ~/ 1) {
+      unawaited(KeepAwake.update('model:$id', s.progress));
+    }
   }
 
   @override
@@ -306,6 +312,8 @@ class IoModelStore extends ModelStore {
       await refresh();
       if (stateOf(spec.id).isReady && await _claim(spec.id)) return;
       _installing.add(spec.id);
+      // An ongoing notification on Android (screen kept on, on iOS) until the install ends.
+      if (options.useNativeLocation) unawaited(KeepAwake.begin('model:${spec.id}', 'getting ${spec.name}'));
       _log('${spec.id}: installing (${spec.source == ModelSource.sdk ? 'through its SDK' : '${spec.files.length} file(s)'})');
       _set(spec.id, ModelState(ModelStatus.downloading, progress: 0, users: stateOf(spec.id).users));
       try {
@@ -331,6 +339,7 @@ class IoModelStore extends ModelStore {
         rethrow;
       }
     } finally {
+      if (options.useNativeLocation) unawaited(KeepAwake.end('model:${spec.id}'));
       if (identical(_cancels[spec.id], cancel)) _cancels.remove(spec.id);
       if (locked) {
         try {
