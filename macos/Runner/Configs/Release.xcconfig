@@ -1,2 +1,6 @@
 #include "../../Flutter/Flutter-Release.xcconfig"
 #include "Warnings.xcconfig"
+
+// Apple silicon only: desert-ant-core uses Float16, which Intel Macs lack.
+ARCHS = arm64
+EXCLUDED_ARCHS = x86_64
