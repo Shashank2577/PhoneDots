@@ -1,5 +1,8 @@
 name: Android release
 
+# One release: the Android APK, plus unsigned iOS (.ipa) and macOS (.zip) apps
+# from apple-build.yml, built in parallel and published together.
+
 on:
   push:
     tags: ['v*']
@@ -14,6 +17,11 @@ permissions:
   contents: write
 
 jobs:
+  apple:
+    uses: ./.github/workflows/apple-build.yml
+    with:
+      name: ${{ github.event.inputs.tag || github.ref_name }}
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -61,19 +69,40 @@ jobs:
           sha256sum "PhoneDots-$TAG-arm64.apk" > "PhoneDots-$TAG-arm64.apk.sha256"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phonedots-android
+          path: PhoneDots-*-arm64.apk*
+
+  publish:
+    needs: [build, apple]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - id: apk
+        run: |
+          echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+          ls -la dist
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.apk.outputs.tag }}
           target_commitish: ${{ github.sha }}
           name: PhoneDots ${{ steps.apk.outputs.tag }}
           prerelease: true
-          files: |
-            PhoneDots-${{ steps.apk.outputs.tag }}-arm64.apk
-            PhoneDots-${{ steps.apk.outputs.tag }}-arm64.apk.sha256
+          files: dist/*
           body: |
-            Test build for arm64 Android phones (Android 8.0+, 8 GB RAM recommended for Gemma 4 E2B).
+            **Android** (`.apk`): arm64 phones, Android 8.0+, 8 GB RAM recommended for Gemma 4 E2B.
 
-            **Install:** download the APK on your phone, open it and allow installs from your browser. Later builds update in place (the vendor's test signing key, shared with Burrow, so the two apps also share downloaded models).
+            **iPhone** (`-ios-unsigned.ipa`, iOS 18+): not signed, so install it yourself with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) and a free Apple ID: download the .ipa on your computer, open it in Sideloadly (or AltStore), sign in with your Apple ID and install to your iPhone, then on the iPhone trust your Apple ID under Settings → General → VPN & Device Management. A free Apple ID signs for 7 days: install it again after that. Without a paid Apple Developer account the iPhone app keeps its own models (the shared App Group needs one), so it doesn't share them with other apps.
+
+            **Mac** (`-macos.zip`, macOS 14+, Apple silicon only): unzip and move PhoneDots to Applications. It isn't notarised, so the first time right-click it → Open (or run `xattr -dr com.apple.quarantine /Applications/PhoneDots.app`).
+
+            **Android install:** download the APK on your phone, open it and allow installs from your browser. Later builds update in place (the vendor's test signing key, shared with Burrow, so the two apps also share downloaded models).
 
             **Something wrong?** You → diagnostics → copy (or share the log), and paste it into your report.
 

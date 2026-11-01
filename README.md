@@ -2,7 +2,7 @@
 
 **An AI assistant that runs entirely on your phone.** Google's Gemma models are the brain, Desert Ant's specialist models are the hands, and *skills* connect them to your phone, your files and each other. No account, no cloud, and it works in airplane mode.
 
-Flutter app for Android and iOS, with native bridges to [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) and [desert-ant-core](https://github.com/Desert-Ant-Labs/desert-ant-core). Inspired by [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery).
+Flutter app for Android, iOS and macOS, with native bridges to [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) and [desert-ant-core](https://github.com/Desert-Ant-Labs/desert-ant-core). Inspired by [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery).
 
 <p>
 <img src="docs/screenshots/welcome.png" width="190">
@@ -119,10 +119,16 @@ flutter run -d <android-device> --release
 
 **Reporting a problem.** You → diagnostics shows each step with your models (download or copy from another app, HTTP status, checksum, load time), model and skill timings, and every error or crash. Tap **copy** (or **share the log**) and paste it into the report.
 
-**iOS** (iOS 18+, Xcode 26): add the Swift packages once, as described in [docs/IOS_SETUP.md](docs/IOS_SETUP.md), then:
+**iPhone and Mac test builds.** Every release also has an unsigned iPhone app (`-ios-unsigned.ipa`) and a Mac app (`-macos.zip`), built on GitHub's macOS runners:
+
+- **iPhone (iOS 18+):** install the .ipa yourself with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io) and a free Apple ID, then trust your Apple ID on the iPhone (Settings → General → VPN & Device Management). A free Apple ID's signature lasts 7 days, so install it again after that. Without a paid Apple Developer account the app can't join the shared App Group, so it keeps its own models instead of sharing them with your other apps.
+- **Mac (macOS 14+, Apple silicon):** unzip, move PhoneDots to Applications, and the first time right-click → Open (it isn't notarised), or run `xattr -dr com.apple.quarantine /Applications/PhoneDots.app`. Flashlight and battery skills don't exist on a Mac; sharing copies to the clipboard.
+
+**Building for iOS or macOS yourself** (Xcode 26): nothing to add by hand. The bridges are the `phonedots_native` plugin (`packages/phonedots_native`), whose Swift package pulls in LiteRT-LM and desert-ant-core; see [docs/IOS_SETUP.md](docs/IOS_SETUP.md).
 
 ```bash
-flutter run -d <iphone> --release
+flutter config --enable-swift-package-manager
+flutter run -d <iphone-or-macos> --release
 ```
 
 ## Status
@@ -131,7 +137,7 @@ flutter run -d <iphone> --release
 |---|---|
 | Dart app, agent, skills, UI | Done. `flutter analyze` is clean and 23 tests pass (unit, end-to-end agent loop, widget). |
 | Android native bridge | Builds into an APK (`flutter build apk`) against LiteRT-LM 0.19.0 and desert-ant-core 4.2.1. Not yet run on a physical device. Both SDKs ship `libLiteRt.so` and the APK keeps one copy, so check on a device that Gemma and the specialists both load. If they don't, align the LiteRT versions. |
-| iOS native bridge | Written against the LiteRT-LM and desert-ant-core Swift APIs. Not compiled here (needs macOS/Xcode). |
+| iOS and macOS native bridges | `packages/phonedots_native`, shared by both. Built on GitHub's macOS runners for every release (unsigned). Not yet run on a physical iPhone or Mac. |
 | Share extension on iOS | Not built. Android share intake works. |
 
 ## Licences

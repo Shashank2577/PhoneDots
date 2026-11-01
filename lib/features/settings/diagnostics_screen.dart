@@ -32,7 +32,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     final s = AppScope.services(context);
     final d = s.models.device;
     return {
-      'app': 'PhoneDots 0.7.0',
+      'app': 'PhoneDots 0.8.0',
       'platform': s.platform,
       'modelStore': AppServices.sharedModelsPath ?? 'none (demo)',
       'device': d.model,
