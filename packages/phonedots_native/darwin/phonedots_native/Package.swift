@@ -17,7 +17,9 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "FlutterFramework", path: "../FlutterFramework"),
-        .package(url: "https://github.com/google-ai-edge/LiteRT-LM.git", from: "0.19.0"),
+        // Exactly 0.18.1: the 0.19.0 tag's Swift wrapper calls a newer C API than
+        // the prebuilt v0.18.1 binary it downloads, so it doesn't compile.
+        .package(url: "https://github.com/google-ai-edge/LiteRT-LM.git", exact: "0.18.1"),
         .package(url: "https://github.com/Desert-Ant-Labs/desert-ant-core.git", from: "4.2.1"),
     ],
     targets: [
