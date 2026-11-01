@@ -7,3 +7,4 @@ analyzer:
     - ios/**
     - web/**
     - packages/**   # synced from baseApp, checked there
+    - macos/**

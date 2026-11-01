@@ -159,7 +159,7 @@ void main() {
       ..._matches(_src('$_kt/DeviceBridge.kt'), RegExp(r'action == "([a-z.]+)"')),
     };
     final swiftActions = _matches(
-      _src('ios/Runner/DeviceBridge.swift'),
+      _src('packages/phonedots_native/darwin/phonedots_native/Sources/phonedots_native/DeviceBridge.swift'),
       RegExp(r'case ((?:"[a-zA-Z.]+"(?:,\s*)?)+):'),
     ).expand((s) => RegExp(r'"([a-zA-Z.]+)"').allMatches(s).map((m) => m.group(1)!)).toSet();
 
@@ -249,7 +249,7 @@ void main() {
 
     // Fixed: find_contact promises "phone numbers and emails"; both platforms now return emails.
     test('contacts.search returns emails on Android and iOS', () {
-      expect(_src('ios/Runner/DeviceBridge.swift'), contains('"emails"'));
+      expect(_src('packages/phonedots_native/darwin/phonedots_native/Sources/phonedots_native/DeviceBridge.swift'), contains('"emails"'));
       expect(_src('$_kt/DeviceBridge.kt'), contains('"emails"'));
       expect(services.skills.byId('find_contact')!.description, contains('emails'));
     });
@@ -618,8 +618,8 @@ void main() {
     // BUG: iOS has no share intake at all (AppDelegate answers `ready` and never calls `shared`),
     // and Info.plist declares no share extension, so "share to PhoneDots" does not exist on iOS.
     test('BUG: iOS intake is a stub', () {
-      expect(_src('ios/Runner/AppDelegate.swift'), contains('result(nil)'));
-      expect(_src('ios/Runner/AppDelegate.swift'), isNot(contains('"shared"')));
+      expect(_src('packages/phonedots_native/darwin/phonedots_native/Sources/phonedots_native/PhoneDotsNativePlugin.swift'), contains('result(nil)'));
+      expect(_src('packages/phonedots_native/darwin/phonedots_native/Sources/phonedots_native/PhoneDotsNativePlugin.swift'), isNot(contains('"shared"')));
     });
   });
 

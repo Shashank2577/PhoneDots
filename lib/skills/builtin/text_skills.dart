@@ -209,7 +209,7 @@ List<Skill> textSkills() => [
     params: const [_text],
     handler: (args, ctx) async {
       Map<String, dynamic>? r;
-      if (ctx.platform == 'ios') {
+      if (ctx.platform == 'ios' || ctx.platform == 'macos') {
         r = await ctx.specialist('desertant.title', 'describe', {'text': args.str('text')});
         if (r['error'] != null) r = null;
       }

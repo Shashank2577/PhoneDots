@@ -1,4 +1,8 @@
+#if os(iOS)
 import Flutter
+#elseif os(macOS)
+import FlutterMacOS
+#endif
 import Foundation
 
 #if canImport(Voz)

@@ -511,6 +511,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
+  phonedots_native:
+    dependency: "direct main"
+    description:
+      path: "packages/phonedots_native"
+      relative: true
+    source: path
+    version: "0.1.0"
   platform:
     dependency: transitive
     description:

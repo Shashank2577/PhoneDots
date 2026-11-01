@@ -1,0 +1,22 @@
+name: phonedots_native
+description: PhoneDots' native bridges on iOS and macOS (LiteRT-LM, Desert Ant, device actions), with the SDKs as Swift Package dependencies so the build pulls them in.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.7
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: PhoneDotsNativePlugin
+        sharedDarwinSource: true
+      macos:
+        pluginClass: PhoneDotsNativePlugin
+        sharedDarwinSource: true

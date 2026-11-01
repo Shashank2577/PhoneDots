@@ -266,7 +266,7 @@ List<Skill> audioSkills() => [
     category: SkillCategory.audio,
     params: const [_audioParam],
     requiresModels: const ['desertant.uhm'],
-    platforms: const {'ios'},
+    platforms: const {'ios', 'macos'},
     handler: (args, ctx) async {
       final a = ctx.attachment(args['audio']);
       final missing = _needAudio(a);

@@ -459,7 +459,7 @@ void main() {
         for (final m in k.requiresModels) {
           expect(modelById(m), isNotNull, reason: '${k.id} requires unknown model $m');
         }
-        expect(const {'android', 'ios'}.containsAll(k.platforms), isTrue, reason: k.id);
+        expect(const {'android', 'ios', 'macos'}.containsAll(k.platforms), isTrue, reason: k.id);
       }
     });
 

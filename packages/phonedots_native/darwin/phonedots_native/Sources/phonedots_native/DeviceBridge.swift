@@ -1,11 +1,18 @@
 import AVFoundation
 import Contacts
 import EventKit
+#if os(iOS)
 import Flutter
 import UIKit
+#elseif os(macOS)
+import AppKit
+import FlutterMacOS
+#endif
 
-/// Phone actions on iOS. Sending and calling open the system composer; iOS
-/// does not let apps set timers, alarms or volume, so those return a clear error.
+/// Phone actions on iOS (and the ones a Mac has). Sending and calling open the
+/// system composer; iOS does not let apps set timers, alarms or volume, so
+/// those return a clear error. On a Mac there's no flashlight or battery API
+/// to use, and sharing copies to the clipboard.
 final class DeviceBridge: NSObject {
   private let events = EKEventStore()
   private let contacts = CNContactStore()
@@ -26,7 +33,11 @@ final class DeviceBridge: NSObject {
 
   @MainActor
   private func open(_ url: String, _ done: String) async -> [String: Any] {
+    #if os(iOS)
     guard let u = URL(string: url), await UIApplication.shared.open(u) else { return ["error": "No app on this phone can handle that."] }
+    #else
+    guard let u = URL(string: url), NSWorkspace.shared.open(u) else { return ["error": "No app on this Mac can handle that."] }
+    #endif
     return ["ok": true, "message": done]
   }
 
@@ -98,6 +109,7 @@ final class DeviceBridge: NSObject {
     case "maps.navigate":
       let mode = ["walking": "w", "transit": "r", "cycling": "c"][s("mode")] ?? "d"
       return await open("maps://?daddr=\(enc(s("destination")))&dirflg=\(mode)", "Directions opened")
+    #if os(iOS)
     case "settings.open": return await open(UIApplication.openSettingsURLString, "Settings opened")
     case "torch":
       guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return ["error": "No flashlight"] }
@@ -127,6 +139,20 @@ final class DeviceBridge: NSObject {
       vc.popoverPresentationController?.sourceView = root.view
       root.present(vc, animated: true)
       return ["ok": true, "message": "Share sheet opened"]
+    #else
+    case "settings.open": return await open("x-apple.systempreferences:", "System Settings opened")
+    case "torch", "battery":
+      return ["error": "A Mac has no \(action == "torch" ? "flashlight" : "battery reading") PhoneDots can use."]
+    case "storage":
+      let values = try? URL(fileURLWithPath: NSHomeDirectory()).resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey])
+      let free = Double(values?.volumeAvailableCapacityForImportantUsage ?? 0) / 1e9
+      let total = Double(values?.volumeTotalCapacity ?? 0) / 1e9
+      return ["free_gb": String(format: "%.1f", free), "total_gb": String(format: "%.1f", total), "summary": String(format: "%.1f GB free of %.0f GB.", free, total)]
+    case "share.text":
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(s("text"), forType: .string)
+      return ["ok": true, "message": "Copied to the clipboard"]
+    #endif
     default:
       return ["error": "Unknown action \(action)"]
     }

@@ -78,6 +78,8 @@ class AppServices {
     return switch (defaultTargetPlatform) {
       TargetPlatform.android => 'android',
       TargetPlatform.iOS => 'ios',
+      // The Mac app uses the same Swift bridges as iOS (packages/phonedots_native).
+      TargetPlatform.macOS => 'macos',
       _ => 'demo',
     };
   }
