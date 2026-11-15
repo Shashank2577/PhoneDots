@@ -23,7 +23,7 @@ class SectionLabel extends StatelessWidget {
     this.label, {
     super.key,
     this.trailing,
-    this.padding = const EdgeInsets.fromLTRB(gutter, 22, gutter, 6),
+    this.padding = const EdgeInsets.fromLTRB(gutter, 40, gutter, 12),
   });
   final String label;
   final Widget? trailing;
@@ -36,7 +36,7 @@ class SectionLabel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(
-          child: Text(label, style: Hand.title.copyWith(fontSize: 27, color: context.pal.ink)),
+          child: Text(label, style: Hand.title.copyWith(color: context.pal.ink), textScaler: Hand.scaler(context)),
         ),
         ?trailing,
       ],
@@ -123,24 +123,18 @@ class EmptyState extends StatelessWidget {
   );
 }
 
-/// Note shown in the web preview, where a demo engine replaces the models.
-class DemoBanner extends StatelessWidget {
-  const DemoBanner({super.key});
+/// Said once in the web preview, where a demo engine replaces the models;
+/// after that the model line under the chat says "Demo engine".
+class DemoNote extends StatelessWidget {
+  const DemoNote({super.key, required this.onDone});
+  final VoidCallback onDone;
 
   @override
-  Widget build(BuildContext context) => Column0(
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          DoodleIcon(Doodle.flask, size: 18, color: context.pal.pencil, stroke: 1.6),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Meta('preview: a demo engine stands in for the models. Install on a phone to run Gemma.'),
-          ),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => DoneNote(
+    'This preview runs a demo engine. Install PhoneDots on a phone to run Gemma.',
+    doodle: Doodle.flask,
+    action: 'got it',
+    onAction: onDone,
   );
 }
 
@@ -163,17 +157,17 @@ Future<bool> confirmDialog(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: Hand.title.copyWith(color: context.pal.ink)),
+            Text(title, style: Hand.title.copyWith(color: context.pal.ink), textScaler: Hand.scaler(context)),
             if (body != null)
               Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Body(body, color: context.pal.pencil),
+                padding: const EdgeInsets.only(top: 8),
+                child: Body(body),
               ),
             const SizedBox(height: 20),
             InkButton(confirm, onTap: () => Navigator.pop(c, true), danger: destructive, expand: true),
             const SizedBox(height: 4),
             Center(
-              child: HandLink('not now', onTap: () => Navigator.pop(c, false), color: context.pal.pencil),
+              child: HandLink('not now', onTap: () => Navigator.pop(c, false)),
             ),
           ],
         ),
@@ -186,3 +180,71 @@ Future<bool> confirmDialog(
 void toast(BuildContext context, String message) => ScaffoldMessenger.of(context)
   ..hideCurrentSnackBar()
   ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
+
+/// A sheet that asks for a line or two of text (a fact to remember, a note):
+/// a title, the fields and one ink pill. Returns the texts, or null.
+Future<List<String>?> askSheet(
+  BuildContext context, {
+  required String title,
+  required List<({String hint, int lines})> fields,
+  String confirm = 'save',
+}) => showModalBottomSheet<List<String>>(
+  context: context,
+  isScrollControlled: true,
+  builder: (_) => _AskSheet(title: title, fields: fields, confirm: confirm),
+);
+
+class _AskSheet extends StatefulWidget {
+  const _AskSheet({required this.title, required this.fields, required this.confirm});
+  final String title;
+  final List<({String hint, int lines})> fields;
+  final String confirm;
+
+  @override
+  State<_AskSheet> createState() => _AskSheetState();
+}
+
+class _AskSheetState extends State<_AskSheet> {
+  late final _c = [for (final _ in widget.fields) TextEditingController()];
+
+  @override
+  void dispose() {
+    for (final c in _c) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 20 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.title, style: Hand.title.copyWith(color: context.pal.ink), textScaler: Hand.scaler(context)),
+          const SizedBox(height: 12),
+          for (final (i, f) in widget.fields.indexed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TextField(
+                controller: _c[i],
+                autofocus: i == 0,
+                minLines: f.lines,
+                maxLines: f.lines == 1 ? 1 : f.lines + 4,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(hintText: f.hint),
+              ),
+            ),
+          const SizedBox(height: 6),
+          InkButton(
+            widget.confirm,
+            expand: true,
+            onTap: () => Navigator.pop(context, [for (final c in _c) c.text]),
+          ),
+        ],
+      ),
+    ),
+  );
+}

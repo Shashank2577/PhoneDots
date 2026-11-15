@@ -73,7 +73,7 @@ class AttachmentChip extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 150),
             child: Text(
               a.name,
-              style: Hand.small.copyWith(color: p.ink),
+              style: context.type.caption.copyWith(color: p.ink),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -111,7 +111,7 @@ class _UserMessage extends StatelessWidget {
               decoration: BoxDecoration(color: p.smudge, borderRadius: BorderRadius.circular(18)),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: SelectableText(m.text, style: context.text.bodyLarge),
+                child: SelectableText(m.text, style: context.type.body),
               ),
             ),
         ],
@@ -120,6 +120,9 @@ class _UserMessage extends StatelessWidget {
   }
 }
 
+/// The answer comes first, with no bubble. What it did on the way (thinking,
+/// skills, timings) folds into one caption line under the answer; while it
+/// works, that line is live above the growing answer.
 class _AssistantMessage extends StatelessWidget {
   const _AssistantMessage(this.v);
   final MessageView v;
@@ -127,27 +130,40 @@ class _AssistantMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = v.message;
-    final p = context.pal;
-    final waiting = m.streaming && m.text.isEmpty && m.steps.isEmpty && m.thinking.isEmpty;
+    final running = m.steps.where((s) => s.status == StepStatus.running).toList();
+    final live = m.streaming
+        ? (running.isNotEmpty
+              ? '${running.last.skillName}: ${running.last.progress ?? 'working…'}'
+              : m.text.isEmpty
+              ? (m.phase ?? (m.thinking.isNotEmpty ? 'Thinking…' : null))
+              : null)
+        : null;
+    final waiting = m.streaming && m.text.isEmpty;
     return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 4),
+      padding: const EdgeInsets.only(top: 16, bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (m.thinking.isNotEmpty) _Thinking(m.thinking),
-          for (final s in m.steps) StepTile(s),
-          if (waiting)
-            Row(
-              children: [
-                const HoppingDots(),
-                if (m.phase != null) ...[const SizedBox(width: 10), Expanded(child: Meta(m.phase!, maxLines: 2))],
-              ],
+          if (waiting || live != null)
+            Semantics(
+              liveRegion: true,
+              child: Pressable(
+                onTap: m.steps.isEmpty && m.thinking.isEmpty ? null : () => showTrace(context, m),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 40),
+                  child: Row(
+                    children: [
+                      if (running.isNotEmpty) const Scribbling(size: 16) else const HoppingDots(),
+                      if (live != null) ...[
+                        const SizedBox(width: 10),
+                        Expanded(child: Caption(live, maxLines: 2)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
-          if (m.text.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(top: m.steps.isEmpty ? 0 : 8),
-              child: LiteMarkdown(m.text),
-            ),
+          if (m.text.isNotEmpty) Prose(m.text),
           for (final c in m.cards) ResultCard(c),
           if (m.error != null)
             Padding(
@@ -155,14 +171,7 @@ class _AssistantMessage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      DoodleIcon(Doodle.exclaim, size: 22, color: p.redPen, stroke: 2.6),
-                      const SizedBox(width: 6),
-                      Expanded(child: Body(m.error!)),
-                    ],
-                  ),
+                  Warning(m.error!),
                   if (m.error!.contains('Models') && v.onOpenModels != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
@@ -178,6 +187,8 @@ class _AssistantMessage extends StatelessWidget {
   }
 }
 
+/// Under an answer: "2 steps · 1.7 s" (opens the trace), the model and its
+/// speed, and copy, try again and share, each 48 to touch.
 class _Footer extends StatelessWidget {
   const _Footer(this.v);
   final MessageView v;
@@ -185,51 +196,115 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = v.message;
-    final demo = AppScope.services(context).isDemo;
+    final p = context.pal;
+    final s = AppScope.services(context);
+    final demo = s.isDemo;
     final model = m.modelId == null ? null : modelById(m.modelId!);
     final tps = demo ? 0 : m.stats?.effectiveTokensPerSec ?? 0;
-    final who = demo ? 'demo engine' : model?.name.toLowerCase();
-    return Row(
-      children: [
-        if (who != null)
-          Meta('$who${tps > 0 ? ' · ${tps.toStringAsFixed(1)} tok/s' : ''}', color: context.pal.graphite),
-        const Spacer(),
-        if (m.text.isNotEmpty)
-          DoodleButton(
-            Doodle.share,
-            tooltip: 'Copy',
-            size: 18,
-            color: context.pal.pencil,
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: m.text));
-              toast(context, 'copied');
-            },
+    final who = demo ? 'Demo engine' : model?.name;
+    final failed = m.steps.where((x) => x.status == StepStatus.failed || x.status == StepStatus.declined).length;
+    final ms = m.steps.fold<int>(0, (a, x) => a + x.ms) + (m.stats?.totalMs ?? 0);
+    final trace = m.steps.isEmpty && m.thinking.isEmpty
+        ? null
+        : [
+            if (m.steps.isNotEmpty) '${m.steps.length} ${m.steps.length == 1 ? 'step' : 'steps'}',
+            if (m.steps.isEmpty) 'thought first',
+            if (failed > 0) '$failed not done',
+            if (ms > 0) formatMs(ms),
+          ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (trace != null)
+                  Semantics(
+                    button: true,
+                    label: '$trace. Show what it did',
+                    excludeSemantics: true,
+                    child: Pressable(
+                      onTap: () => showTrace(context, m),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: minTap),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DoodleIcon(
+                              failed > 0 ? Doodle.exclaim : Doodle.tick,
+                              size: 16,
+                              color: failed > 0 ? p.redPen : p.pencil,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: HandUnderline(
+                                color: p.pencil,
+                                seed: trace.length,
+                                child: Caption(trace, maxLines: 1),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (who != null) Caption('$who${tps > 0 ? ' · ${tps.toStringAsFixed(1)} tok/s' : ''}', maxLines: 1),
+              ],
+            ),
           ),
-        if (v.isLast && v.onRetry != null)
-          DoodleButton(Doodle.curl, tooltip: 'Try again', size: 18, color: context.pal.pencil, onTap: v.onRetry),
-      ],
+          if (m.text.isNotEmpty)
+            DoodleButton(
+              Doodle.copy,
+              tooltip: 'Copy',
+              size: 20,
+              color: p.pencil,
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: m.text));
+                toast(context, 'copied');
+              },
+            ),
+          if (v.isLast && v.onRetry != null)
+            DoodleButton(Doodle.curl, tooltip: 'Try again', size: 20, color: p.pencil, onTap: v.onRetry),
+          if (m.text.isNotEmpty)
+            DoodleButton(
+              Doodle.share,
+              tooltip: 'Share',
+              size: 20,
+              color: p.pencil,
+              onTap: () => s.device.invoke('share.text', {'text': m.text}),
+            ),
+        ],
+      ),
     );
   }
 }
 
-class _Thinking extends StatelessWidget {
-  const _Thinking(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Theme(
-    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-    child: ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      title: Text('thinking', style: Hand.small.copyWith(color: context.pal.pencil)),
-      leading: DoodleIcon(Doodle.squiggle, size: 18, color: context.pal.pencil),
-      childrenPadding: const EdgeInsets.only(left: 8, bottom: 8),
-      children: [Meta(text)],
+/// What the assistant did for one answer: its thinking and each skill call.
+void showTrace(BuildContext context, ChatMessage m) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  builder: (c) => DraggableScrollableSheet(
+    expand: false,
+    initialChildSize: 0.6,
+    builder: (_, controller) => ListView(
+      controller: controller,
+      padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 32),
+      children: [
+        const PageIntro('what it did', 'Every step ran on this phone. Tap a step to see what went in and out.'),
+        if (m.thinking.isNotEmpty) ...[
+          const SectionHead('thinking', first: true),
+          Prose(m.thinking, style: c.type.body),
+        ],
+        if (m.steps.isNotEmpty) ...[
+          SectionHead('steps', first: m.thinking.isEmpty),
+          for (final s in m.steps) StepTile(s),
+        ],
+      ],
     ),
-  );
-}
+  ),
+);
 
 /// One skill call, pencilled into the reply: a drawn tick when done.
 class StepTile extends StatelessWidget {
@@ -249,7 +324,7 @@ class StepTile extends StatelessWidget {
       StepStatus.running => const Scribbling(size: 16),
       StepStatus.done => const DrawnDoodle(Doodle.tick, size: 18),
       StepStatus.failed => DoodleIcon(Doodle.close, size: 16, color: p.redPen),
-      StepStatus.declined => DoodleIcon(Doodle.close, size: 16, color: p.graphite),
+      StepStatus.declined => DoodleIcon(Doodle.close, size: 16, color: p.pencil),
     };
     return Pressable(
       onTap: () => _showDetails(context),
@@ -270,15 +345,15 @@ class StepTile extends StatelessWidget {
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  step.skillName.toLowerCase(),
-                  style: Hand.label.copyWith(color: p.ink),
+                  step.skillName,
+                  style: context.type.rowTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (step.via == 'router') ...[const SizedBox(width: 8), const HandTag('fast path')],
               const SizedBox(width: 8),
-              Expanded(child: Meta(label, maxLines: 2, color: step.status == StepStatus.failed ? p.redPen : null)),
+              Expanded(child: Caption(label, maxLines: 2, align: TextAlign.end)),
             ],
           ),
         ),
@@ -298,11 +373,9 @@ class StepTile extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 32),
           children: [
-            PageIntro(
-              step.skillName.toLowerCase(),
-              '${step.skillId} · via ${step.via} · ${formatMs(step.ms)} · ${step.status.name}',
-            ),
-            const SectionHead('what went in', padding: EdgeInsets.only(bottom: 6)),
+            Text(step.skillName, style: context.type.contentTitle),
+            Caption('${step.skillId} · via ${step.via} · ${formatMs(step.ms)} · ${step.status.name}'),
+            const SectionHead('what went in', first: true),
             _Code(enc.convert(step.args)),
             const SectionHead('what came out'),
             _Code(enc.convert(step.result)),
@@ -322,9 +395,6 @@ class _Code extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(color: context.pal.smudge, borderRadius: BorderRadius.circular(radius)),
-    child: SelectableText(
-      text,
-      style: const TextStyle(fontFamily: 'monospace', fontSize: 12).copyWith(color: context.pal.ink),
-    ),
+    child: SelectableText(text, style: context.type.mono),
   );
 }

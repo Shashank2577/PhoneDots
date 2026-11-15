@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../app_state.dart';
+import '../../core/app_log.dart';
+import '../../core/crash_reporter.dart';
 import '../../core/models/model_catalog.dart';
+import '../../core/util/format.dart';
 import '../../theme/theme.dart';
 import '../../widgets/hand.dart';
-import '../../core/app_log.dart';
 import '../lab/lab_screen.dart';
 import '../memory/memory_screen.dart';
+import '../models/models_screen.dart';
 import '../privacy/privacy_screen.dart';
+import '../skills/skills_screen.dart';
 import 'diagnostics_screen.dart';
 
-/// The "you" tab: everything that is not chat, skills or models.
+/// The "you" tab: what it knows, what it can do, and the app itself.
 class YouScreen extends StatelessWidget {
   const YouScreen({super.key});
 
@@ -18,56 +22,79 @@ class YouScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
     void push(Widget w) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => w));
+    String count(int n, String one, String many) => '$n ${n == 1 ? one : many}';
     return ListenableBuilder(
-      listenable: Listenable.merge([s.memory, s.knowledge, s.ledger, appLog]),
+      listenable: Listenable.merge([s.memory, s.knowledge, s.ledger, s.skills, s.models, appLog]),
       builder: (context, _) => HandPage(
         wordmark: true,
         children: [
-          const PageIntro(
-            'you',
-            'What PhoneDots remembers, what it has done, and how it behaves. All of it stays here.',
-            doodle: Doodle.person,
+          const PageIntro('you', 'What it knows, what it can do, and how it behaves. All of it stays here.'),
+          const SectionHead('what it knows', first: true),
+          Door(
+            'memory',
+            meta: s.memory.facts.isEmpty
+                ? 'Nothing yet'
+                : '${count(s.memory.facts.length, 'thing', 'things')} you asked it to remember',
+            onTap: () => push(const MemoryScreen()),
           ),
-          for (final (i, d) in [
-            (
-              Doodle.heart,
-              'memory',
-              '${s.memory.facts.length} things you asked it to remember',
-              () => push(const MemoryScreen()),
-            ),
-            (
-              Doodle.folder,
-              'my files',
-              '${s.knowledge.docs.length} documents it can search',
-              () => push(const KnowledgeScreen()),
-            ),
-            (
-              Doodle.lock,
-              'privacy',
-              '${s.ledger.networkEvents} network events, each one listed',
-              () => push(const PrivacyScreen()),
-            ),
-            (Doodle.flask, 'lab', 'try prompts, measure speed', () => push(const LabScreen())),
-            (
-              Doodle.search,
-              'diagnostics',
-              appLog.errorCount == 0
-                  ? 'what it did, step by step'
-                  : '${appLog.errorCount} problems logged · share the log',
-              () => push(const DiagnosticsScreen()),
-            ),
-            (
-              Doodle.gear,
-              'settings',
-              'light or dark, handwriting, how the assistant works',
-              () => push(const SettingsScreen()),
-            ),
-            (Doodle.book, 'about', 'Gemma, Desert Ant and the licences', () => push(const AboutScreen())),
-          ].indexed)
-            Enter(
-              index: i,
-              child: Door(d.$2, leading: d.$1, meta: d.$3, onTap: d.$4),
-            ),
+          Door(
+            'my files',
+            meta: '${count(s.knowledge.docs.length, 'document', 'documents')} it can search',
+            onTap: () => push(const KnowledgeScreen()),
+          ),
+          const SectionHead('what it can do'),
+          Door(
+            'skills',
+            meta: '${s.skills.enabled.length} on · recipes · community skills',
+            onTap: () => openSkills(context),
+          ),
+          Door(
+            'models',
+            meta: '${formatBytes(s.models.storageUsed)} on this phone',
+            onTap: () => openModels(context),
+          ),
+          const SectionHead('the app'),
+          Door('settings', meta: 'Light or dark, handwriting, about', onTap: () => push(const SettingsScreen())),
+          Door(
+            'privacy',
+            meta: '${count(s.ledger.networkEvents, 'network request', 'network requests')}, each one listed',
+            onTap: () => push(const PrivacyScreen()),
+          ),
+          Door(
+            'under the hood',
+            meta: appLog.errorCount == 0
+                ? 'Diagnostics and the lab'
+                : '${count(appLog.errorCount, 'problem', 'problems')} logged · diagnostics and the lab',
+            alert: appLog.errorCount > 0,
+            onTap: () => push(const UnderTheHoodScreen()),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Diagnostics and the lab: for when something is wrong, or for the curious.
+class UnderTheHoodScreen extends StatelessWidget {
+  const UnderTheHoodScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    void push(Widget w) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => w));
+    return ListenableBuilder(
+      listenable: appLog,
+      builder: (context, _) => HandPage(
+        children: [
+          const PageIntro('under the hood', 'How PhoneDots works, step by step, and a bench to try the model on.'),
+          Door(
+            'diagnostics',
+            meta: appLog.errorCount == 0
+                ? 'What it did, step by step'
+                : '${appLog.errorCount} problems logged · share the log',
+            alert: appLog.errorCount > 0,
+            onTap: () => push(const DiagnosticsScreen()),
+          ),
+          Door('lab', meta: 'Try prompts, measure speed', onTap: () => push(const LabScreen())),
         ],
       ),
     );
@@ -107,9 +134,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const PageIntro(
             'settings',
             'How PhoneDots looks and how the assistant works. Changes apply straight away.',
-            doodle: Doodle.gear,
           ),
-          const SectionHead('light or dark'),
+          if (st.typeNotice) ...[
+            DoneNote(
+              'Reading text is now a plain font. Change it under handwriting.',
+              action: 'got it',
+              onAction: () => st.update((x) => x.typeNotice = false),
+            ),
+            const SizedBox(height: 8),
+          ],
+          const SectionHead('light or dark', first: true),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -127,41 +161,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
             ],
           ),
-          const SectionHead('handwriting'),
-          const Meta('Headlines are always hand-lettered. Pick how the quieter text underneath reads.'),
-          const SizedBox(height: 8),
+          const SectionHead(
+            'handwriting',
+            note: 'Headlines and buttons stay hand-lettered. Pick how the text you read looks.',
+          ),
           for (final v in Voice.values)
-            Pressable(
-              onTap: () => st.update((x) => x.voice = v.name),
-              scale: 0.99,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    SizedBox(width: 26, child: st.voice == v.name ? const DrawnDoodle(Doodle.tick, size: 20) : null),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          MarkedText(
-                            v.label,
-                            mark: st.voice == v.name ? v.label : null,
-                            style: Hand.label.copyWith(fontSize: 23),
-                          ),
-                          Text(
-                            'Nothing you say leaves this phone.',
-                            style: TextStyle(
-                              fontFamily: v.family,
-                              fontVariations: v.variations,
-                              fontSize: 15 * v.scale,
-                              color: p.pencil,
-                            ),
-                          ),
-                        ],
+            Semantics(
+              button: true,
+              selected: Voice.byName(st.voice) == v,
+              child: Pressable(
+                onTap: () => st.update((x) => x.voice = v.name),
+                scale: 0.99,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 32,
+                        child: Voice.byName(st.voice) == v ? const DrawnDoodle(Doodle.tick, size: 22) : null,
                       ),
-                    ),
-                    Meta(v.note.split(',').first),
-                  ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(v.label, style: Hand.door.copyWith(color: p.ink), textScaler: Hand.scaler(context)),
+                            Text(
+                              'Nothing you say leaves this phone.',
+                              style: context.type.body.copyWith(fontFamily: v.family, fontVariations: v.variations),
+                            ),
+                            Caption(v.note),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -192,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (v) => st.update((x) => x.webReader = v),
           ),
           const SizedBox(height: 8),
-          const Meta(
+          const Body(
             'Optional free keys, stored on this phone only. Everything works without them.\n'
             '• YouTube Data API key: full video details even when YouTube rate-limits the page. '
             'Free at console.cloud.google.com (enable "YouTube Data API v3", create an API key). '
@@ -237,10 +271,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           Text(
             'creativity · ${st.temperature.toStringAsFixed(1)}',
-            style: Hand.label.copyWith(fontSize: 23, color: p.ink),
+            style: Hand.door.copyWith(color: p.ink),
+            textScaler: Hand.scaler(context),
           ),
           Slider(value: st.temperature, max: 1.2, divisions: 12, onChanged: (v) => st.update((x) => x.temperature = v)),
-          Text('steps per answer · ${st.maxSteps}', style: Hand.label.copyWith(fontSize: 23, color: p.ink)),
+          Text(
+            'steps per answer · ${st.maxSteps}',
+            style: Hand.door.copyWith(color: p.ink),
+            textScaler: Hand.scaler(context),
+          ),
           const Meta('How many skills it may chain before it has to answer.'),
           Slider(
             value: st.maxSteps.toDouble(),
@@ -249,7 +288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             divisions: 11,
             onChanged: (v) => st.update((x) => x.maxSteps = v.round()),
           ),
-          const SectionHead('hugging face'),
+          const SectionHead('Hugging Face'),
           const Meta('Only needed for gated models. Stored on this phone only.'),
           const SizedBox(height: 8),
           TextField(
@@ -277,49 +316,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          HandLink('show the welcome again', color: p.pencil, onTap: () => st.update((x) => x.onboarded = false)),
+          HandLink('show the welcome again', onTap: () => st.update((x) => x.onboarded = false)),
+          const SectionHead('about'),
+          Body('PhoneDots ${CrashReporter.appVersion}. An assistant that lives on your phone.'),
+          for (final (title, body) in _about) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 2),
+              child: Text(title, style: context.type.rowTitle),
+            ),
+            Body(body),
+          ],
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PillButton(
+              'open-source licences',
+              onTap: () => showLicensePage(context: context, applicationName: 'PhoneDots'),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) => HandPage(
-    children: [
-      const PageIntro('about', 'PhoneDots 0.8. An assistant that lives on your phone.', doodle: Doodle.book),
-      for (final (title, body) in [
-        (
-          'gemma',
-          'Gemma 4, FunctionGemma and EmbeddingGemma, under the Gemma Terms of Use (ai.google.dev/gemma/terms). Run with LiteRT-LM (Apache 2.0).',
-        ),
-        (
-          'desert ant',
-          'Specialist models by Desert Ant Labs, free up to 100k monthly active devices. Voz uses NVIDIA Parakeet TDT 0.6B v3 weights under CC BY 4.0.',
-        ),
-        (
-          'the look',
-          'The hand-drawn minimal design system from Burrow (Android-Showcase). Caveat, Inter, Nunito, Shantell Sans and Patrick Hand under the SIL Open Font License.',
-        ),
-        (
-          'inspiration',
-          'Google AI Edge Gallery (Apache 2.0): ask image, audio scribe, prompt lab, agent skills and mobile actions in one assistant.',
-        ),
-      ]) ...[SectionHead(title), Body(body, color: context.pal.pencil)],
-      const SizedBox(height: 20),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: PillButton(
-          'open-source licences',
-          onTap: () => showLicensePage(context: context, applicationName: 'PhoneDots'),
-        ),
-      ),
-    ],
-  );
-}
+const _about = [
+  (
+    'Gemma',
+    'Gemma 4, FunctionGemma and EmbeddingGemma, under the Gemma Terms of Use (ai.google.dev/gemma/terms). Run with LiteRT-LM (Apache 2.0).',
+  ),
+  (
+    'Desert Ant',
+    'Specialist models by Desert Ant Labs, free up to 100k monthly active devices. Voz uses NVIDIA Parakeet TDT 0.6B v3 weights under CC BY 4.0.',
+  ),
+  (
+    'The look',
+    'The hand-drawn minimal design system from Burrow (Android-Showcase). Caveat, Inter, Nunito and Shantell Sans under the SIL Open Font License.',
+  ),
+  (
+    'Inspiration',
+    'Google AI Edge Gallery (Apache 2.0): ask image, audio scribe, prompt lab, agent skills and mobile actions in one assistant.',
+  ),
+];
 
 /// One-tap links to the page where a key or token is made.
 class _KeyLinks extends StatelessWidget {
@@ -333,7 +371,7 @@ class _KeyLinks extends StatelessWidget {
       spacing: 12,
       children: [
         for (final (label, url) in links)
-          HandLink('$label ↗', color: context.pal.ink, onTap: () => s.device.invoke('url.open', {'url': url})),
+          HandLink('$label ↗', onTap: () => s.device.invoke('url.open', {'url': url})),
       ],
     );
   }

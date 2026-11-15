@@ -238,13 +238,27 @@ Future<void> _tap(WidgetTester tester, Finder f, [int ms = 500]) async {
   await _settle(tester, ms);
 }
 
+/// The tabs are chat, saved and you; skills and models open from "you".
 Future<void> _tab(WidgetTester tester, String label) async {
-  await tester.tap(find.text(label).last);
+  if (label == 'skills' || label == 'models') return _door(tester, label);
+  // Back to the shell first: pushed pages cover the tab words.
+  tester.state<NavigatorState>(find.byType(Navigator).first).popUntil((r) => r.isFirst);
+  await _settle(tester);
+  await tester.tap(find.descendant(of: find.byType(HandNav), matching: find.text(label)));
   await _settle(tester);
 }
 
 Future<void> _door(WidgetTester tester, String label) async {
   await _tab(tester, 'you');
+  // Diagnostics and the lab live under "under the hood"; about is the end of settings.
+  if (label == 'lab' || label == 'diagnostics') {
+    await _tap(tester, find.widgetWithText(Door, 'under the hood'));
+  }
+  if (label == 'about') {
+    await _tap(tester, find.widgetWithText(Door, 'settings'));
+    await _reveal(tester, find.text('open-source licences'));
+    return;
+  }
   await _tap(tester, find.widgetWithText(Door, label));
 }
 
@@ -334,7 +348,6 @@ Future<void> _loadFonts() async {
     'Inter': ['inter_regular', 'inter_medium', 'inter_semibold'],
     'Nunito': ['nunito_regular', 'nunito_semibold'],
     'ShantellSans': ['shantell_variable'],
-    'PatrickHand': ['patrickhand_regular'],
   };
   for (final e in files.entries) {
     final loader = FontLoader(e.key);
@@ -883,7 +896,7 @@ void main() {
     test('defaults', () {
       final s = AppSettings(MemoryJsonStore());
       expect(s.themeMode, ThemeMode.system);
-      expect(s.voice, 'neat');
+      expect(s.voice, 'friendly');
       expect(s.hfToken, '');
       expect(s.thinking, isFalse);
       expect(s.useRouter, isTrue);
@@ -900,12 +913,32 @@ void main() {
       expect(s.grantedSkills, isEmpty);
     });
 
+    test('type 2 migration: old installs move to the plain voice once; removed voices map to neat', () async {
+      final store = MemoryJsonStore();
+      await store.write('settings', {'voice': 'neat', 'onboarded': true});
+      final a = AppSettings(store);
+      await a.load();
+      expect(a.voice, 'friendly');
+      expect(a.typeNotice, isTrue);
+      expect(((await store.read('settings')) as Map)['typeVersion'], AppSettings.typeVersion);
+      // The choice made after the move stands.
+      await a.update((x) => x.voice = 'neat');
+      final b = AppSettings(store);
+      await b.load();
+      expect(b.voice, 'neat');
+      await store.write('settings', {...((await store.read('settings')) as Map), 'voice': 'handwritten'});
+      final c = AppSettings(store);
+      await c.load();
+      expect(c.voice, 'neat');
+      expect(Voice.byName('loose'), Voice.neat);
+    });
+
     test('every field round-trips through a fresh instance', () async {
       final store = MemoryJsonStore();
       final a = AppSettings(store);
       await a.update((x) {
         x.themeMode = ThemeMode.dark;
-        x.voice = 'handwritten';
+        x.voice = 'formal';
         x.hfToken = 'hf_tok';
         x.plannerId = 'gemma-4-e4b';
         x.routerId = 'other-router';
@@ -927,7 +960,7 @@ void main() {
       final b = AppSettings(store);
       await b.load();
       expect(b.themeMode, ThemeMode.dark);
-      expect(b.voice, 'handwritten');
+      expect(b.voice, 'formal');
       expect(b.hfToken, 'hf_tok');
       expect(b.plannerId, 'gemma-4-e4b');
       expect(b.routerId, 'other-router');
@@ -1305,7 +1338,7 @@ void main() {
     testWidgets('welcome -> setup -> download -> start -> shell', (tester) async {
       final app = await _boot(tester, onboarded: false);
       expect(find.textContaining('your assistant'), findsWidgets);
-      expect(find.text('nothing leaves this phone'), findsOneWidget);
+      expect(find.text('Nothing leaves this phone'), findsOneWidget);
       _noError(tester, 'welcome');
 
       // privacy link then back
@@ -1320,7 +1353,7 @@ void main() {
       expect(find.textContaining('about '), findsWidgets);
 
       await _tap(tester, find.text('download the models'));
-      expect(find.text('downloading, carry on while it runs'), findsOneWidget);
+      expect(find.text('Downloading. Carry on while it runs.'), findsOneWidget);
       expect(find.text('start'), findsOneWidget);
       for (final id in ['gemma-4-e2b', 'functiongemma-270m-mobile-actions', 'embeddinggemma-2-text-270m']) {
         expect(app.services.models.state(id).status, ModelStatus.downloading, reason: id);
@@ -1359,14 +1392,12 @@ void main() {
       expect(s2.settings.onboarded, isTrue);
     });
 
-    testWidgets('five tabs, each shows its page, and tab state is kept', (tester) async {
+    testWidgets('three tabs, each shows its page; skills and models open from you', (tester) async {
       final app = await _boot(tester);
       expect(find.text('record a meeting'), findsOneWidget);
       for (final (label, marker) in [
         ('saved', 'nothing saved yet'),
-        ('skills', 'transcribe audio'),
-        ('models', 'the models'),
-        ('you', 'privacy'),
+        ('you', 'what it knows'),
         ('chat', 'record a meeting'),
       ]) {
         await _tab(tester, label);
@@ -1374,6 +1405,13 @@ void main() {
         _noError(tester, 'tab $label');
       }
       expect(app.state.tab, 0);
+      for (final (door, marker) in [('skills', 'voice & audio'), ('models', 'Gemma 4 E2B')]) {
+        await _door(tester, door);
+        expect(find.textContaining(marker), findsWidgets, reason: door);
+        _noError(tester, door);
+        await _back(tester);
+      }
+      expect(app.state.tab, AppState.youTab);
     });
 
     testWidgets('"show the welcome again" returns to onboarding', (tester) async {
@@ -1404,7 +1442,14 @@ void main() {
         expect(find.textContaining(marker), findsWidgets, reason: door);
         _noError(tester, door);
         await _back(tester);
-        expect(find.widgetWithText(Door, door), findsOneWidget);
+        if (door == 'lab') await _back(tester);
+        final parent = switch (door) {
+          'lab' => 'under the hood',
+          'about' => 'settings',
+          _ => door,
+        };
+        await _reveal(tester, find.widgetWithText(Door, parent));
+        expect(find.widgetWithText(Door, parent), findsOneWidget);
       });
     }
 
@@ -1413,7 +1458,9 @@ void main() {
       await _tab(tester, 'you');
       expect(find.textContaining('2 things you asked'), findsOneWidget);
       expect(find.textContaining('2 documents it can search'), findsOneWidget);
-      expect(find.textContaining('3 network events'), findsOneWidget);
+      await _reveal(tester, find.textContaining('3 network requests'));
+      expect(find.textContaining('3 network requests'), findsOneWidget);
+      await _reveal(tester, find.textContaining('things you asked'));
       await app.services.memory.add('new fact');
       await _settle(tester, 200);
       expect(find.textContaining('3 things you asked'), findsOneWidget);
@@ -1427,10 +1474,10 @@ void main() {
       await _door(tester, 'settings');
       await _tap(tester, find.text('dark'));
       expect(app.services.settings.themeMode, ThemeMode.dark);
-      expect(Theme.of(tester.element(find.text('light or dark'))).brightness, Brightness.dark);
+      expect(Theme.of(tester.element(find.text('like the phone'))).brightness, Brightness.dark);
       await _tap(tester, find.text('light'));
       expect(app.services.settings.themeMode, ThemeMode.light);
-      expect(Theme.of(tester.element(find.text('light or dark'))).brightness, Brightness.light);
+      expect(Theme.of(tester.element(find.text('like the phone'))).brightness, Brightness.light);
       await _tap(tester, find.text('like the phone'));
       expect(app.services.settings.themeMode, ThemeMode.system);
       _noError(tester, 'theme');
@@ -1585,7 +1632,7 @@ void main() {
     testWidgets('about screen and licence page open', (tester) async {
       await _boot(tester);
       await _door(tester, 'about');
-      expect(find.text('gemma'), findsWidgets);
+      expect(find.text('Gemma'), findsWidgets);
       await _tap(tester, find.text('open-source licences'));
       expect(find.byType(LicensePage), findsOneWidget);
       _noError(tester, 'licences');
@@ -1597,91 +1644,68 @@ void main() {
     testWidgets('rows, roles, RAM note, download -> ready -> use -> delete', (tester) async {
       final app = await _boot(tester);
       await _tab(tester, 'models');
-      expect(find.text('the models'), findsOneWidget);
-      expect(find.textContaining('gemma 4 e2b'), findsWidgets);
+      expect(find.text('Gemma 4 E2B'), findsOneWidget);
       expect(find.text('brain'), findsOneWidget);
       expect(find.text('router'), findsOneWidget);
       expect(find.text('search'), findsOneWidget);
-      expect(find.textContaining('0 B on this phone'), findsOneWidget);
+      expect(find.textContaining('0 B on this phone'), findsWidgets);
       // 8 GB demo device: E4B (10 GB) shows a RAM warning but still offers download.
       expect(find.text('thinks'), findsNothing);
       expect(find.textContaining('needs 10 GB memory'), findsOneWidget);
-      expect(find.textContaining('download the 3 recommended'), findsOneWidget);
+      // Three or fewer missing: each row keeps its own pill, no "download all".
+      expect(find.textContaining('download all'), findsNothing);
 
-      final e2b = find.ancestor(of: find.textContaining('gemma 4 e2b ·'), matching: find.byType(ModelTile)).first;
+      final e2b = find.ancestor(of: find.text('Gemma 4 E2B'), matching: find.byType(ModelTile)).first;
       await _tap(tester, find.descendant(of: e2b, matching: find.text('download')), 200);
-      expect(find.textContaining('downloading'), findsWidgets);
+      expect(find.textContaining('Downloading'), findsWidgets);
       await _settle(tester, 1500);
       expect(app.services.models.isReady('gemma-4-e2b'), isTrue);
-      expect(find.text('on this phone'), findsWidgets);
-      expect(find.textContaining('download the 2 recommended'), findsOneWidget);
+      expect(find.text('On this phone'), findsWidgets);
 
       // second planner -> "use" switches the brain
       await _tap(
         tester,
         find.descendant(
-          of: find.ancestor(of: find.textContaining('gemma 3 270m ·'), matching: find.byType(ModelTile)).first,
+          of: find.ancestor(of: find.text('Gemma 3 270M'), matching: find.byType(ModelTile)).first,
           matching: find.text('download'),
         ),
         200,
       );
       await _settle(tester, 1500);
-      final g3 = find.ancestor(of: find.textContaining('gemma 3 270m ·'), matching: find.byType(ModelTile)).first;
+      final g3 = find.ancestor(of: find.text('Gemma 3 270M'), matching: find.byType(ModelTile)).first;
       await _tap(tester, find.descendant(of: g3, matching: find.text('use')));
       expect(app.services.settings.plannerId, 'gemma-3-270m');
       expect(find.text('use'), findsOneWidget, reason: 'now e2b offers "use"');
 
       // delete asks for confirmation; "not now" keeps it
       await _tap(tester, find.descendant(of: g3, matching: find.byTooltip('Delete')));
-      expect(find.text('delete gemma 3 270m?'), findsOneWidget);
+      expect(find.text('delete Gemma 3 270M?'), findsOneWidget);
       await _tap(tester, find.text('not now'));
       expect(app.services.models.isReady('gemma-3-270m'), isTrue);
       await _tap(tester, find.descendant(of: g3, matching: find.byTooltip('Delete')));
       await _tap(tester, find.text('delete').last);
       expect(app.services.models.isReady('gemma-3-270m'), isFalse);
-      expect(find.textContaining('not downloaded yet'), findsWidgets);
+      expect(find.descendant(of: g3, matching: find.text('download')), findsOneWidget);
       _noError(tester, 'models');
     });
 
-    testWidgets('"download N recommended" starts exactly the missing recommended models', (tester) async {
+    testWidgets('each missing model has its own download under its text', (tester) async {
       final app = await _boot(tester);
       await _tab(tester, 'models');
-      await _tap(tester, find.textContaining('recommended'), 200);
-      for (final id in ['gemma-4-e2b', 'functiongemma-270m-mobile-actions', 'embeddinggemma-2-text-270m']) {
-        expect(app.services.models.state(id).status, ModelStatus.downloading, reason: id);
-      }
-      expect(app.services.models.state('gemma-4-e4b').status, ModelStatus.absent);
-      await _settle(tester, 1500);
-      expect(find.textContaining('recommended'), findsNothing);
-    });
-
-    // BUG: models_screen.dart counts every missing recommended model but skips those that do not fit.
-    testWidgets('recommended button count matches what it will download on a small phone', (tester) async {
-      final app = await _boot(tester);
-      app.services.models.device = const DeviceProfile(platform: 'demo', totalRamMb: 4000);
-      app.services.models.notifyListeners();
-      await _tab(tester, 'models');
-      final label = find.textContaining('recommended');
-      expect(label, findsOneWidget);
-      final shown = int.parse(
-        RegExp(r'download the (\d+) recommended').firstMatch(tester.widget<Text>(label).data!)!.group(1)!,
-      );
-      await _tap(tester, label, 200);
-      final started = [
-        'gemma-4-e2b',
-        'functiongemma-270m-mobile-actions',
-        'embeddinggemma-2-text-270m',
-      ].where((id) => app.services.models.state(id).status == ModelStatus.downloading).length;
-      // BUG: the button advertises every missing recommended model but silently skips those that
-      // don't fit in RAM (Gemma 4 E2B needs 6 GB), so on a 4 GB phone it says 3 and starts 2.
-      expect(started, shown);
+      final fg = find.ancestor(of: find.text('FunctionGemma 270M'), matching: find.byType(ModelTile)).first;
+      // The pill sits below the name, not beside it.
+      final name = tester.getRect(find.text('FunctionGemma 270M'));
+      final pill = tester.getRect(find.descendant(of: fg, matching: find.text('download')));
+      expect(pill.top, greaterThan(name.bottom));
+      await _tap(tester, find.descendant(of: fg, matching: find.text('download')), 200);
+      expect(app.services.models.state('functiongemma-270m-mobile-actions').status, ModelStatus.downloading);
       await _settle(tester, 1500);
     });
 
     testWidgets('get-access sheet: token, check, ok, download; links tappable', (tester) async {
       final app = await _boot(tester);
       await _tab(tester, 'models');
-      final ctx = tester.element(find.text('the models'));
+      final ctx = tester.element(find.text('Gemma 4 E2B'));
       showGetAccess(ctx, app.services, modelById('functiongemma-270m-mobile-actions')!);
       await _settle(tester, 500);
       expect(find.text('get access'), findsWidgets);
@@ -1693,7 +1717,7 @@ void main() {
       await _settle(tester, 500);
       expect(app.services.settings.hfToken, 'hf_abc');
       expect(find.textContaining("You're in"), findsOneWidget);
-      await _tap(tester, find.text('download functiongemma 270m'), 200);
+      await _tap(tester, find.text('download FunctionGemma 270M'), 200);
       expect(app.services.models.state('functiongemma-270m-mobile-actions').status, ModelStatus.downloading);
       await _settle(tester, 1500);
       _noError(tester, 'get access');
@@ -1704,7 +1728,7 @@ void main() {
       // for a gated, absent model in demo offers a plain download (demo has no gate).
       await _boot(tester);
       await _tab(tester, 'models');
-      final fg = find.ancestor(of: find.textContaining('functiongemma 270m ·'), matching: find.byType(ModelTile)).first;
+      final fg = find.ancestor(of: find.text('FunctionGemma 270M'), matching: find.byType(ModelTile)).first;
       expect(find.descendant(of: fg, matching: find.text('download')), findsOneWidget);
       expect(find.textContaining('needs a free Hugging Face OK'), findsWidgets);
     });
@@ -1796,15 +1820,16 @@ void main() {
       await _door(tester, 'memory');
       await _tap(tester, find.text('remember something'));
       await tester.enterText(find.byType(TextField), 'Allergic to peanuts');
-      await _tap(tester, find.text('Save'));
+      await _tap(tester, find.text('remember it'));
       expect(find.text('Allergic to peanuts'), findsOneWidget);
       expect(find.text('nothing remembered'), findsNothing);
       await _tap(tester, find.text('remember something'));
       await tester.enterText(find.byType(TextField), 'allergic to PEANUTS');
-      await _tap(tester, find.text('Save'));
+      await _tap(tester, find.text('remember it'));
       expect(app.services.memory.facts.length, 1);
       await _tap(tester, find.text('remember something'));
-      await _tap(tester, find.text('Cancel'));
+      await tester.tapAt(const Offset(5, 5));
+      await _settle(tester);
       expect(app.services.memory.facts.length, 1);
       await _tap(tester, find.byTooltip('Forget'));
       expect(app.services.memory.facts, isEmpty);
@@ -1814,18 +1839,18 @@ void main() {
     testWidgets('my files: new note, search, open doc, remove', (tester) async {
       final app = await _boot(tester);
       await _door(tester, 'my files');
-      expect(find.textContaining('searching by keyword'), findsOneWidget);
+      expect(find.textContaining('Searching by keyword'), findsOneWidget);
       await _tap(tester, find.byTooltip('New note'));
       await tester.enterText(find.widgetWithText(TextField, 'Title'), '');
       await tester.enterText(find.widgetWithText(TextField, 'Text'), 'The wifi password is swordfish');
-      await _tap(tester, find.text('Save'));
+      await _tap(tester, find.text('save'));
       expect(app.services.knowledge.docs.single.title, 'Note');
-      expect(find.text('note'), findsWidgets);
+      expect(find.text('Note'), findsWidgets);
 
       // blank text note is ignored
       await _tap(tester, find.byTooltip('New note'));
       await tester.enterText(find.widgetWithText(TextField, 'Text'), '   ');
-      await _tap(tester, find.text('Save'));
+      await _tap(tester, find.text('save'));
       expect(app.services.knowledge.docs.length, 1);
 
       await tester.enterText(find.widgetWithText(TextField, 'search every file…'), 'wifi password');
@@ -1833,7 +1858,7 @@ void main() {
       expect(find.text('found'), findsOneWidget);
       expect(find.textContaining('% match'), findsOneWidget);
 
-      await _tap(tester, find.widgetWithText(Door, 'note'));
+      await _tap(tester, find.widgetWithText(ItemRow, 'Note'));
       expect(find.textContaining('swordfish'), findsWidgets);
       await tester.tapAt(const Offset(5, 5));
       await _settle(tester);
@@ -1862,11 +1887,11 @@ void main() {
       await _door(tester, 'lab');
       await _tap(tester, find.text('translate'));
       expect(
-        tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction')).controller!.text,
+        tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction (optional)')).controller!.text,
         'Translate into French.',
       );
       await _tap(tester, find.text('free'));
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction')).controller!.text, '');
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction (optional)')).controller!.text, '');
 
       // empty prompt: run does nothing
       await _tap(tester, find.text('run'), 200);
@@ -1903,7 +1928,7 @@ void main() {
   group('voice screen', () {
     testWidgets('opens from chat, shows idle state, tap without mic is handled', (tester) async {
       await _boot(tester);
-      await _tap(tester, find.byTooltip('Talk'));
+      await _tap(tester, find.bySemanticsLabel('Talk'));
       await _settle(tester, 500);
       expect(find.text('tap to talk'), findsOneWidget);
       expect(find.textContaining('Say it out loud'), findsOneWidget);
@@ -1928,7 +1953,7 @@ void main() {
           final found = <String>[];
           final app = await _boot(tester, size: size, theme: theme, seed: _seedRich, collect: true);
           // Long names exercise wrapping.
-          await app.services.settings.update((x) => x.voice = 'handwritten');
+          await app.services.settings.update((x) => x.voice = 'neat');
           await _settle(tester, 200);
 
           for (final label in ['chat', 'saved', 'skills', 'models', 'you']) {
@@ -1937,7 +1962,9 @@ void main() {
           }
           // models with downloads in progress and ready
           await _tab(tester, 'models');
-          await tester.tap(find.textContaining('recommended').first, warnIfMissed: false);
+          for (final e in find.text('download').evaluate().toList()) {
+            await tester.tap(find.byWidget(e.widget), warnIfMissed: false);
+          }
           await _settle(tester, 300);
           _collect(tester, 'models downloading @$sizeName ${theme.name}', found);
           await _settle(tester, 1500);
@@ -1957,6 +1984,7 @@ void main() {
           await _settle(tester, 500);
           _collect(tester, 'get access @$sizeName ${theme.name}', found);
           await _back(tester);
+          await _back(tester);
 
           for (final door in ['memory', 'my files', 'privacy', 'lab', 'settings', 'about']) {
             await _door(tester, door);
@@ -1975,10 +2003,11 @@ void main() {
             if (door == 'my files') {
               await _tap(tester, find.byTooltip('New note'));
               _collect(tester, 'new note dialog @$sizeName ${theme.name}', found);
-              await _tap(tester, find.text('Cancel'));
+              await tester.tapAt(const Offset(5, 5));
+              await _settle(tester);
               await _tap(
                 tester,
-                find.widgetWithText(Door, 'a really quite long document title that needs wrapping onto lines'),
+                find.widgetWithText(ItemRow, 'A really quite long document title that needs wrapping onto lines'),
               );
               _collect(tester, 'doc sheet @$sizeName ${theme.name}', found);
               await tester.tapAt(const Offset(5, 5));
@@ -1987,7 +2016,8 @@ void main() {
             if (door == 'memory') {
               await _tap(tester, find.text('remember something'));
               _collect(tester, 'remember dialog @$sizeName ${theme.name}', found);
-              await _tap(tester, find.text('Cancel'));
+              await tester.tapAt(const Offset(5, 5));
+              await _settle(tester);
             }
             if (door == 'privacy') {
               await _tap(tester, find.text('forget').first);
@@ -1995,6 +2025,7 @@ void main() {
               await _tap(tester, find.text('not now'));
             }
             await _back(tester);
+            if (door == 'lab') await _back(tester);
           }
           _stopCollect();
           expect(found.toSet(), isEmpty, reason: 'layout errors:\n${found.toSet().join('\n')}');

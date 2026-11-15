@@ -73,31 +73,13 @@ class _OnboardingState extends State<Onboarding> {
       ),
       const SizedBox(height: 28),
       for (final (i, (d, title, meta)) in [
-        (Doodle.lock, 'nothing leaves this phone', 'no account, no cloud, no tracking'),
-        (Doodle.tick, 'it asks first', 'before it calls, texts, emails or reads your contacts'),
-        (Doodle.close, 'delete means delete', 'one tap forgets a chat, a memory or everything'),
+        (Doodle.lock, 'Nothing leaves this phone', 'No account, no cloud, no tracking.'),
+        (Doodle.tick, 'It asks first', 'Before it calls, texts, emails or reads your contacts.'),
+        (Doodle.close, 'Delete means delete', 'One tap forgets a chat, a memory or everything.'),
       ].indexed)
         Enter(
           index: 2 + i,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DoodleIcon(d, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: Hand.label.copyWith(fontSize: 24, color: context.pal.ink)),
-                      Meta(meta),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: ItemRow(title: title, meta: meta, leading: DoodleIcon(d, size: 24)),
         ),
     ],
   );
@@ -106,6 +88,7 @@ class _OnboardingState extends State<Onboarding> {
     final s = AppScope.services(context);
     final starter = [for (final id in _starter) ?modelById(id)].where((m) => m.supports(s.platform)).toList();
     final total = starter.fold<int>(0, (a, m) => a + m.approxBytes);
+    final size = formatBytes(total);
     return HandPage(
       onBack: () => setState(() => _page = 0),
       bottom: InkButton(
@@ -116,27 +99,27 @@ class _OnboardingState extends State<Onboarding> {
       ),
       children: [
         const Enter(
-          child: MarkedText('you decide what PhoneDots downloads.', mark: 'you decide', style: Hand.headline),
+          child: MarkedText('you decide what PhoneDots downloads.', style: Hand.headline),
         ),
         const SizedBox(height: 8),
         const Enter(
           index: 1,
           child: Body('The models download once. Wi-Fi is best. After that PhoneDots works with no internet at all.'),
         ),
-        const HandDivider(padding: EdgeInsets.symmetric(vertical: 18)),
+        const SizedBox(height: 16),
         Enter(
           index: 2,
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.end,
-            spacing: 10,
-            children: [
-              Text('one-time setup', style: Hand.title.copyWith(fontSize: 27, color: context.pal.ink)),
-              Padding(padding: const EdgeInsets.only(bottom: 4), child: Meta('about ${formatBytes(total)}')),
-            ],
+          child: MarkedText(
+            'one download, about $size',
+            mark: size,
+            style: context.type.rowTitle,
           ),
         ),
-        const SizedBox(height: 6),
-        Enter(index: 3, child: Meta(starter.map((m) => m.name.toLowerCase()).join('  ·  '))),
+        const SizedBox(height: 4),
+        Enter(
+          index: 3,
+          child: Meta('Gemma, the quick router, search and the specialists for speech, speakers and redaction.'),
+        ),
         const SizedBox(height: 14),
         Enter(
           index: 4,
@@ -147,7 +130,7 @@ class _OnboardingState extends State<Onboarding> {
                     children: [
                       DrawnDoodle(Doodle.tick, size: 22),
                       SizedBox(width: 8),
-                      Expanded(child: Body('downloading, carry on while it runs')),
+                      Expanded(child: Body('Downloading. Carry on while it runs.')),
                     ],
                   )
                 : PillButton('download the models', leading: Doodle.plus, onTap: _download),
@@ -157,7 +140,7 @@ class _OnboardingState extends State<Onboarding> {
         const Enter(
           index: 5,
           child: Meta(
-            'Gemma files come from Hugging Face and are checked against their SHA-256. You can add or remove models any time under models.',
+            'Gemma files come from Hugging Face and are checked against their SHA-256. You can add or remove models any time under you, then models.',
           ),
         ),
       ],

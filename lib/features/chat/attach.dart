@@ -58,17 +58,16 @@ class Attach {
             children: [
               const PageIntro('add something', 'It stays on this phone. Models read it right here.'),
               for (final (key, doodle, label, meta) in [
-                ('camera', Doodle.camera, 'take a photo', 'ask about it, read text in it'),
-                ('photo', Doodle.image, 'pick a photo', 'from your gallery'),
-                ('record', Doodle.mic, 'record audio', 'a meeting, a voice note'),
-                ('audio', Doodle.wave, 'an audio file', 'transcribe it, find who spoke'),
-                ('document', Doodle.doc, 'a text file', 'summarize it, save it to my files'),
+                ('camera', Doodle.camera, 'take a photo', 'Ask about it, read the text in it'),
+                ('photo', Doodle.image, 'pick a photo', 'From your gallery'),
+                ('record', Doodle.mic, 'record audio', 'A meeting, a voice note'),
+                ('audio', Doodle.wave, 'an audio file', 'Transcribe it, find who spoke'),
+                ('document', Doodle.doc, 'a text file', 'Summarise it, save it to my files'),
               ])
                 Door(
                   label,
                   leading: doodle,
                   meta: meta,
-                  style: Hand.label.copyWith(fontSize: 24),
                   onTap: () => Navigator.pop(c, key),
                 ),
             ],
@@ -152,7 +151,7 @@ class _RecorderSheetState extends State<RecorderSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_error != null)
-              Text(_error!, style: context.text.bodyMedium, textAlign: TextAlign.center)
+              Body(_error!, align: TextAlign.center)
             else ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -161,22 +160,21 @@ class _RecorderSheetState extends State<RecorderSheet> {
                   const SizedBox(width: 10),
                   Text(
                     formatDuration(_seconds.toDouble()),
-                    style: context.text.displaySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                    style: Hand.display.copyWith(color: p.ink, fontFeatures: const [FontFeature.tabularFigures()]),
+                    textScaler: Hand.scaler(context),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              Text('Recording on device. Nothing is uploaded.', style: context.text.bodySmall),
+              const Body('Recording on this phone. Nothing is uploaded.', align: TextAlign.center),
             ],
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(onPressed: () => _finish(false), child: const Text('Cancel')),
-                ),
+                HandLink('cancel', onTap: () => _finish(false)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: FilledButton(onPressed: _recording ? () => _finish(true) : null, child: const Text('Done')),
+                  child: InkButton('done', expand: true, onTap: _recording ? () => _finish(true) : null),
                 ),
               ],
             ),

@@ -35,7 +35,6 @@ class _LabState extends State<_Lab> {
             _tab == 0
                 ? 'Talk to the model directly, with your own instructions and settings.'
                 : 'Measure how fast the brain runs on this phone.',
-            doodle: Doodle.flask,
           ),
         ),
         Column0(
@@ -134,7 +133,6 @@ class _PromptLabState extends State<_PromptLab> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.pal;
     return ListView(
       padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 40),
       children: [
@@ -143,9 +141,9 @@ class _PromptLabState extends State<_PromptLab> {
           runSpacing: 6,
           children: [
             for (final t in _templates.keys)
-              HandTag(
+              ChoicePill(
                 t.toLowerCase(),
-                marked: _template == t,
+                selected: _template == t,
                 onTap: () => setState(() {
                   _template = t;
                   _system.text = _templates[t]!;
@@ -157,21 +155,21 @@ class _PromptLabState extends State<_PromptLab> {
         TextField(
           controller: _system,
           maxLines: null,
-          decoration: const InputDecoration(labelText: 'System instruction'),
+          decoration: const InputDecoration(hintText: 'System instruction (optional)'),
         ),
         const SizedBox(height: 10),
         TextField(
           controller: _prompt,
           minLines: 3,
           maxLines: 10,
-          decoration: const InputDecoration(labelText: 'Prompt'),
+          decoration: const InputDecoration(hintText: 'Prompt'),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
             SizedBox(
-              width: 110,
-              child: Text('Temperature ${_temperature.toStringAsFixed(1)}', style: context.text.bodySmall),
+              width: 130,
+              child: Body('Temperature ${_temperature.toStringAsFixed(1)}'),
             ),
             Expanded(
               child: Slider(
@@ -185,7 +183,7 @@ class _PromptLabState extends State<_PromptLab> {
         ),
         Row(
           children: [
-            SizedBox(width: 110, child: Text('Top-K $_topK', style: context.text.bodySmall)),
+            SizedBox(width: 130, child: Body('Top-K $_topK')),
             Expanded(
               child: Slider(
                 value: _topK.toDouble(),
@@ -201,20 +199,19 @@ class _PromptLabState extends State<_PromptLab> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Text(_error!, style: TextStyle(color: p.danger)),
+            child: Warning(_error!),
           ),
         if (_output.isNotEmpty || _stats != null) ...[
           const SectionHead('what it said'),
           Panel(
             color: context.pal.smudge,
-            child: SelectableText(_output, style: context.text.bodyMedium),
+            child: SelectableText(_output, style: context.type.reading),
           ),
           if (_stats != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
+              child: Caption(
                 'First token ${formatMs(_stats!.timeToFirstTokenMs)} · ${_stats!.effectiveTokensPerSec.toStringAsFixed(1)} tok/s · ${_stats!.outputTokens} tokens',
-                style: context.text.bodySmall,
               ),
             ),
         ],
@@ -298,7 +295,6 @@ class _BenchmarkState extends State<_Benchmark> {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
-    final p = context.pal;
     final best = _results.isEmpty ? null : _results.first;
     return ListView(
       padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 40),
@@ -309,11 +305,10 @@ class _BenchmarkState extends State<_Benchmark> {
             children: [
               Text(
                 s.isDemo ? 'Demo engine' : (modelById(s.settings.plannerId)?.name ?? '—'),
-                style: context.text.titleMedium,
+                style: context.type.rowTitle,
               ),
-              Text(
+              Caption(
                 '${s.models.device.model.isEmpty ? s.platform : s.models.device.model} · ${s.settings.useGpu ? 'GPU' : 'CPU'}',
-                style: context.text.bodySmall,
               ),
               const SizedBox(height: 16),
               Row(
@@ -327,9 +322,9 @@ class _BenchmarkState extends State<_Benchmark> {
               if (_running)
                 Column(
                   children: [
-                    LinearProgressIndicator(value: _done / _prompts.length),
+                    HandProgress(_done / _prompts.length),
                     const SizedBox(height: 8),
-                    Text('Prompt ${_done + 1} of ${_prompts.length}', style: context.text.bodySmall),
+                    Caption('Prompt ${_done + 1} of ${_prompts.length}'),
                   ],
                 )
               else
@@ -337,7 +332,7 @@ class _BenchmarkState extends State<_Benchmark> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(_error!, style: TextStyle(color: p.danger)),
+                  child: Warning(_error!),
                 ),
             ],
           ),
@@ -345,11 +340,10 @@ class _BenchmarkState extends State<_Benchmark> {
         if (_results.length > 1) ...[
           const SectionHead('earlier runs'),
           for (final r in _results.skip(1))
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(r.model),
-              subtitle: Text(timeAgo(r.time)),
-              trailing: Text('${r.tps.toStringAsFixed(1)} tok/s', style: context.text.bodyMedium),
+            ItemRow(
+              title: r.model,
+              caption: timeAgo(r.time),
+              trailing: Body('${r.tps.toStringAsFixed(1)} tok/s'),
             ),
         ],
       ],
@@ -367,8 +361,8 @@ class _Metric extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(value, style: context.text.headlineMedium),
-        Text(label, style: context.text.bodySmall),
+        Text(value, style: context.type.contentTitle),
+        Caption(label),
       ],
     ),
   );

@@ -9,6 +9,7 @@ import '../../app_state.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
 import '../../widgets/hand.dart';
+import '../../widgets/rich_text.dart';
 
 enum _Phase { idle, listening, transcribing, thinking, speaking }
 
@@ -144,23 +145,16 @@ class _VoiceScreenState extends State<VoiceScreen> with SingleTickerProviderStat
                 const PageIntro(
                   'talk',
                   'Say it out loud. Voz writes it down on this phone, and the reply is read back to you.',
-                  doodle: Doodle.mic,
                 ),
                 if (_heard.isNotEmpty) ...[
-                  const SectionHead('you said', padding: EdgeInsets.only(bottom: 4)),
-                  Text(_heard, style: Hand.title.copyWith(fontSize: 28, color: p.ink)),
+                  const SectionHead('you said', first: true),
+                  SelectableText(_heard, style: context.type.reading),
                 ],
-                if (_reply.isNotEmpty) ...[const SectionHead('phonedots'), Body(_reply)],
+                if (_reply.isNotEmpty) ...[const SectionHead('phonedots'), Prose(_reply)],
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
-                    child: Row(
-                      children: [
-                        DoodleIcon(Doodle.exclaim, size: 20, color: p.redPen, stroke: 2.6),
-                        const SizedBox(width: 6),
-                        Expanded(child: Body(_error!)),
-                      ],
-                    ),
+                    child: Warning(_error!),
                   ),
               ],
             ),
@@ -209,7 +203,7 @@ class _VoiceScreenState extends State<VoiceScreen> with SingleTickerProviderStat
             ),
           ),
           const SizedBox(height: 8),
-          MarkedText(label, mark: active ? 'listening' : null, style: Hand.label.copyWith(fontSize: 23)),
+          MarkedText(label, mark: active ? 'listening' : null, style: Hand.label),
           const SizedBox(height: 20),
         ],
       ),

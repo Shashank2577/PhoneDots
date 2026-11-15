@@ -10,8 +10,18 @@ class AppSettings extends ChangeNotifier {
 
   ThemeMode themeMode = ThemeMode.system;
 
-  /// Body font voice (see Voice in theme.dart): formal, friendly, neat, loose, handwritten.
-  String voice = 'neat';
+  /// Reading font voice (see Voice in theme.dart): friendly, formal or neat.
+  String voice = 'friendly';
+
+  /// The type system the stored [voice] was chosen under. Version 2 (tokens
+  /// 2.0.0) moved reading text to a plain font; see [load].
+  static const typeVersion = 2;
+
+  /// Say once, on the settings page, that reading text changed font.
+  bool typeNotice = false;
+
+  /// The demo-engine note on the chat page was seen and put away.
+  bool demoNoteSeen = false;
   String hfToken = '';
   String plannerId = 'gemma-4-e2b';
   String routerId = 'functiongemma-270m-mobile-actions';
@@ -52,6 +62,8 @@ class AppSettings extends ChangeNotifier {
     if (j == null) return;
     themeMode = ThemeMode.values.asNameMap()[j['themeMode']] ?? ThemeMode.system;
     voice = j['voice'] as String? ?? voice;
+    typeNotice = j['typeNotice'] as bool? ?? false;
+    demoNoteSeen = j['demoNoteSeen'] as bool? ?? false;
     hfToken = j['hfToken'] as String? ?? '';
     plannerId = j['plannerId'] as String? ?? plannerId;
     routerId = j['routerId'] as String? ?? routerId;
@@ -71,14 +83,32 @@ class AppSettings extends ChangeNotifier {
     onboarded = j['onboarded'] as bool? ?? false;
     disabledSkills = {...(j['disabledSkills'] as List? ?? const []).cast<String>()};
     grantedSkills = {...(j['grantedSkills'] as List? ?? const []).cast<String>()};
+    // Every install from before 0.9 has the handwritten "neat" voice stored, so
+    // changing only the default would fix nothing: move them to the plain
+    // reading font once and say so. After that the person's choice stands;
+    // the two removed voices map to "neat hand".
+    if (j['typeVersion'] != typeVersion) {
+      voice = 'friendly';
+      typeNotice = true;
+      await _save();
+    } else if (voice == 'loose' || voice == 'handwritten') {
+      voice = 'neat';
+      await _save();
+    }
   }
 
   Future<void> update(void Function(AppSettings s) change) async {
     change(this);
     notifyListeners();
-    await _store.write(_key, {
+    await _save();
+  }
+
+  Future<void> _save() => _store.write(_key, {
       'themeMode': themeMode.name,
       'voice': voice,
+      'typeVersion': typeVersion,
+      'typeNotice': typeNotice,
+      'demoNoteSeen': demoNoteSeen,
       'hfToken': hfToken,
       'plannerId': plannerId,
       'routerId': routerId,
@@ -99,5 +129,4 @@ class AppSettings extends ChangeNotifier {
       'disabledSkills': disabledSkills.toList(),
       'grantedSkills': grantedSkills.toList(),
     });
-  }
 }

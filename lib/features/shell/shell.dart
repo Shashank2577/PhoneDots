@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../app_state.dart';
+import '../../theme/theme.dart';
 import '../../widgets/hand.dart';
 import '../chat/chat_screen.dart';
-import '../models/models_screen.dart';
+import '../privacy/privacy_screen.dart';
 import '../saved/saved_screen.dart';
 import '../settings/settings_screen.dart';
-import '../skills/skills_screen.dart';
 import 'onboarding.dart';
 
 class Shell extends StatelessWidget {
@@ -19,20 +19,43 @@ class Shell extends StatelessWidget {
       listenable: state.services.settings,
       builder: (context, _) {
         if (!state.services.settings.onboarded) return const Onboarding();
-        return Scaffold(
-          // Tabs keep their state; switching slides the new page up a little.
-          body: _TabSwitch(
+        final wide = MediaQuery.sizeOf(context).width >= railBreakpoint;
+        // While typing, every line goes to what is being typed.
+        final typing = MediaQuery.viewInsetsOf(context).bottom > 0;
+        final pages = _TabSwitch(
+          index: state.tab,
+          child: IndexedStack(
             index: state.tab,
-            child: IndexedStack(
-              index: state.tab,
-              children: const [ChatScreen(), SavedScreen(), SkillsScreen(), ModelsScreen(), YouScreen()],
+            children: const [ChatScreen(), SavedScreen(), YouScreen()],
+          ),
+        );
+        void push(Widget w) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => w));
+        if (wide) {
+          return Scaffold(
+            body: RailScope(
+              rail: true,
+              child: Row(
+                children: [
+                  HandRail(
+                    index: state.tab,
+                    onTap: state.goTo,
+                    labels: AppState.tabs,
+                    footer: [
+                      DoodleButton(Doodle.gear, tooltip: 'Settings', onTap: () => push(const SettingsScreen())),
+                      DoodleButton(Doodle.lock, tooltip: 'Privacy', onTap: () => push(const PrivacyScreen())),
+                    ],
+                  ),
+                  Expanded(child: pages),
+                ],
+              ),
             ),
-          ),
-          bottomNavigationBar: HandNav(
-            index: state.tab,
-            onTap: state.goTo,
-            labels: const ['chat', 'saved', 'skills', 'models', 'you'],
-          ),
+          );
+        }
+        return Scaffold(
+          body: pages,
+          bottomNavigationBar: typing
+              ? null
+              : HandNav(index: state.tab, onTap: state.goTo, labels: AppState.tabs),
         );
       },
     );

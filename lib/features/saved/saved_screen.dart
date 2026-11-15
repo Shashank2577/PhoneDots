@@ -9,6 +9,7 @@ import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hand.dart';
 import '../../widgets/local_image.dart';
+import '../../widgets/rich_text.dart';
 
 Doodle platformDoodle(String platform) => switch (platform) {
   'youtube' || 'tiktok' => Doodle.play,
@@ -96,9 +97,7 @@ class _SavedScreenState extends State<SavedScreen> {
           children: [
             const PageIntro(
               'saved',
-              'Share a post, reel, video or screenshot to PhoneDots. Gemma reads it and files it, right here on the phone.',
-              mark: 'right here',
-              doodle: Doodle.heart,
+              'Share a post, video or screenshot to PhoneDots and Gemma files it, right here on the phone.',
             ),
             if (s.saved.items.isNotEmpty) ...[
               TextField(
@@ -106,29 +105,34 @@ class _SavedScreenState extends State<SavedScreen> {
                 decoration: InputDecoration(
                   hintText: 'search what you saved',
                   prefixIcon: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: DoodleIcon(Doodle.search, size: 18, color: p.pencil),
+                    padding: const EdgeInsets.all(14),
+                    child: DoodleIcon(Doodle.search, size: 20, color: p.pencil),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
               if (collections.isNotEmpty)
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ChoicePill(
-                      'everything',
-                      selected: _collection == null,
-                      onTap: () => setState(() => _collection = null),
-                    ),
-                    for (final c in collections)
+                // One line of filters that scrolls sideways.
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    children: [
                       ChoicePill(
-                        c,
-                        selected: _collection == c,
-                        onTap: () => setState(() => _collection = _collection == c ? null : c),
+                        'everything',
+                        selected: _collection == null,
+                        onTap: () => setState(() => _collection = null),
                       ),
-                  ],
+                      for (final c in collections) ...[
+                        const SizedBox(width: 8),
+                        ChoicePill(
+                          c,
+                          selected: _collection == c,
+                          onTap: () => setState(() => _collection = _collection == c ? null : c),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               const SizedBox(height: 8),
             ],
@@ -158,6 +162,7 @@ class _SavedScreenState extends State<SavedScreen> {
   }
 }
 
+/// One saved post: its title, the summary, and where and when it came from.
 class _SavedRow extends StatelessWidget {
   const _SavedRow(this.item, {required this.onTap});
   final SavedItem item;
@@ -167,67 +172,29 @@ class _SavedRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final status = statusLine(item);
-    return Pressable(
-      onTap: onTap,
-      scale: 0.99,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: DoodleIcon(platformDoodle(item.platform), size: 20, color: p.pencil),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.displayTitle,
-                        style: Hand.label.copyWith(fontSize: 23, color: p.ink),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (item.summary != null) Meta(item.summary!, maxLines: 2),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          if (item.busy) ...[const HoppingDots(size: 5), const SizedBox(width: 6)],
-                          Expanded(
-                            child: Meta(
-                              [
-                                if (status.isNotEmpty) status,
-                                if (item.collection != null) item.collection!,
-                                if (item.author != null) item.author!,
-                                timeAgo(item.created),
-                              ].join(' · '),
-                              color: item.status == SavedStatus.failed ? p.redPen : null,
-                              maxLines: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (item.imagePath != null) ...[
-                  const SizedBox(width: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: localImage(item.imagePath!, width: 56, height: 56),
-                  ),
-                ],
-              ],
-            ),
-            const HandDivider(padding: EdgeInsets.only(top: 10)),
-          ],
+    return Column(
+      children: [
+        ItemRow(
+          title: item.displayTitle,
+          meta: item.summary,
+          caption: [
+            if (status.isNotEmpty) status,
+            if (item.collection != null) item.collection!,
+            if (item.author != null) item.author!,
+            timeAgo(item.created),
+          ].join(' · '),
+          captionColor: item.status == SavedStatus.failed ? p.redPen : null,
+          leading: DoodleIcon(platformDoodle(item.platform), size: 24, color: p.pencil),
+          trailing: item.imagePath != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: localImage(item.imagePath!, width: 56, height: 56),
+                )
+              : null,
+          onTap: onTap,
         ),
-      ),
+        HandDivider(padding: EdgeInsets.zero, seed: item.id.hashCode & 0xff),
+      ],
     );
   }
 }
@@ -250,6 +217,10 @@ class SavedDetailScreen extends StatelessWidget {
           );
         }
         final status = statusLine(item);
+        final read = [
+          if (item.sharedText.isNotEmpty) item.sharedText,
+          if ((item.body ?? '').isNotEmpty) item.body!,
+        ];
         return HandPage(
           actions: [
             DoodleButton(
@@ -266,10 +237,10 @@ class SavedDetailScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                DoodleIcon(platformDoodle(item.platform), size: 18, color: p.pencil),
+                DoodleIcon(platformDoodle(item.platform), size: 20, color: p.pencil),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Meta(
+                  child: Caption(
                     [
                       item.platform,
                       if (item.kind != 'link') item.kind,
@@ -281,7 +252,7 @@ class SavedDetailScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Text(item.displayTitle, style: Hand.headline.copyWith(fontSize: 34, color: p.ink)),
+            SelectableText(item.displayTitle, style: context.type.contentTitle),
             if (item.imagePath != null) ...[
               const SizedBox(height: 12),
               ClipRRect(
@@ -289,110 +260,76 @@ class SavedDetailScreen extends StatelessWidget {
                 child: localImage(item.imagePath!, width: double.infinity, height: 220),
               ),
             ],
-            if (item.sharedText.isNotEmpty) ...[
-              const SectionHead('shared with it'),
-              SelectableText(item.sharedText, style: context.text.bodyMedium?.copyWith(color: p.pencil)),
-            ],
-            if ((item.body ?? '').isNotEmpty) ...[
-              SectionHead('what we read', note: '${item.body!.length} characters'),
-              FullText(item.body!),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: HandLink(
-                  'copy the text',
-                  color: p.pencil,
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: item.body!));
-                    toast(context, 'copied');
-                  },
-                ),
-              ),
-            ] else if ((item.description ?? '').isNotEmpty) ...[
-              const SectionHead('caption'),
-              SelectableText(item.description!, style: context.text.bodyMedium?.copyWith(color: p.pencil)),
-            ] else if (!item.busy && item.url != null) ...[
-              const SizedBox(height: 12),
-              const Meta(
-                'The site shared no text for this post. Share a screenshot or a screen recording and PhoneDots will read that.',
-              ),
-            ],
             if (item.busy) ...[
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   const HoppingDots(),
                   const SizedBox(width: 10),
-                  Expanded(child: Meta('$status…')),
+                  Expanded(child: Caption('${status[0].toUpperCase()}${status.substring(1)}…')),
                 ],
               ),
             ],
-            if (item.summary != null) ...[const SectionHead('summary', mark: true), Body(item.summary!)],
+            // The summary first; the raw text it came from is behind a link at the bottom.
+            if (item.summary != null) ...[const SizedBox(height: 16), Prose(item.summary!)],
+            // Until there is a summary, the post's own caption stands in for it.
+            if (item.summary == null && (item.description ?? '').isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Prose(item.description!),
+            ],
             if (item.points.isNotEmpty) ...[
               const SectionHead('key points'),
               for (final pt in item.points)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: 3),
-                        child: DoodleIcon(Doodle.tick, size: 16, color: p.pencil),
+                        padding: const EdgeInsets.only(top: 4),
+                        child: DoodleIcon(Doodle.tick, size: 18, color: p.pencil),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(child: Body(pt)),
+                      const SizedBox(width: 10),
+                      Expanded(child: SelectableText(pt, style: context.type.reading)),
                     ],
                   ),
                 ),
             ],
-            if (item.summary != null)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: HandLink(
-                  'copy the summary',
-                  color: p.pencil,
-                  onTap: () {
-                    Clipboard.setData(
-                      ClipboardData(
-                        text: [
-                          item.displayTitle,
-                          item.summary!,
-                          for (final pt in item.points) '• $pt',
-                          if (item.url != null) item.url!,
-                        ].join('\n'),
-                      ),
-                    );
-                    toast(context, 'copied');
-                  },
-                ),
-              ),
             if (item.status == SavedStatus.needsModel || item.status == SavedStatus.failed) ...[
-              const SizedBox(height: 14),
-              Body(item.error ?? 'Not summarised yet.', color: item.status == SavedStatus.failed ? p.redPen : p.pencil),
+              const SizedBox(height: 16),
+              item.status == SavedStatus.failed
+                  ? Warning(item.error ?? 'Could not summarise this.')
+                  : Body(item.error ?? 'Not summarised yet.'),
+            ],
+            if (read.isEmpty && !item.busy && item.url != null && item.summary == null) ...[
+              const SizedBox(height: 12),
+              const Body(
+                'The site shared no text for this post. Share a screenshot or a screen recording and PhoneDots will read that.',
+              ),
             ],
             if (item.tags.isNotEmpty || item.collection != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  if (item.collection != null) HandTag(item.collection!, marked: true),
+                  if (item.collection != null) HandTag(item.collection!),
                   for (final t in item.tags) HandTag('#$t'),
                 ],
               ),
             ],
             if (item.sources.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Meta('read from: ${item.sources.join(', ')} · summarised on this phone'),
+              Caption('Read from ${item.sources.join(', ')} · summarised on this phone'),
             ],
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 if (item.url != null)
                   PillButton(
-                    'open',
+                    'open the original',
                     leading: Doodle.arrow,
                     onTap: () => s.device.invoke('url.open', {'url': item.url}),
                   ),
@@ -423,20 +360,82 @@ class SavedDetailScreen extends StatelessWidget {
                     );
                   },
                 ),
-                if (!item.busy)
-                  PillButton(
-                    item.summary == null ? 'summarise' : 'summarise again',
-                    leading: Doodle.pen,
-                    onTap: () => s.summarizer.resummarise(item),
-                  ),
               ],
             ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (item.summary != null)
+                  HandLink(
+                    'copy the summary',
+                    onTap: () {
+                      Clipboard.setData(
+                        ClipboardData(
+                          text: [
+                            item.displayTitle,
+                            item.summary!,
+                            for (final pt in item.points) '• $pt',
+                            if (item.url != null) item.url!,
+                          ].join('\n'),
+                        ),
+                      );
+                      toast(context, 'copied');
+                    },
+                  ),
+                if (!item.busy)
+                  HandLink(
+                    item.summary == null ? 'summarise' : 'summarise again',
+                    onTap: () => s.summarizer.resummarise(item),
+                  ),
+                if (read.isNotEmpty)
+                  HandLink('what we read', onTap: () => _showRead(context, item)),
+              ],
+            ),
+            if (read.isNotEmpty)
+              Caption('${read.fold<int>(0, (a, t) => a + t.length)} characters of text, kept on this phone'),
           ],
         );
       },
     );
   }
 }
+
+/// The raw text PhoneDots read for a post: what was shared with it, and the page or caption.
+void _showRead(BuildContext context, SavedItem item) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  builder: (c) => DraggableScrollableSheet(
+    expand: false,
+    initialChildSize: 0.8,
+    builder: (_, controller) => ListView(
+      controller: controller,
+      padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 32),
+      children: [
+        const PageIntro('what we read', 'The text Gemma summarised, as it came from the site.'),
+        if (item.sharedText.isNotEmpty) ...[
+          const SectionHead('shared with it', first: true),
+          SelectableText(item.sharedText, style: context.type.body),
+        ],
+        if ((item.body ?? '').isNotEmpty) ...[
+          SectionHead('the page', first: item.sharedText.isEmpty),
+          FullText(item.body!),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: HandLink(
+              'copy the text',
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: item.body!));
+                toast(context, 'copied');
+              },
+            ),
+          ),
+        ],
+      ],
+    ),
+  ),
+);
 
 /// Long text (a README, an article, a transcript) folded to a few lines until tapped.
 class FullText extends StatefulWidget {
@@ -461,7 +460,7 @@ class _FullTextState extends State<FullText> {
           alignment: Alignment.topCenter,
           child: SelectableText(
             !_open && long ? '${widget.text.substring(0, 2500)}…' : widget.text,
-            style: context.text.bodyMedium?.copyWith(color: context.pal.pencil),
+            style: context.type.body,
           ),
         ),
         if (long)
@@ -499,7 +498,7 @@ class _AddLinkSheetState extends State<_AddLinkSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('save a link', style: Hand.title.copyWith(color: context.pal.ink)),
+        Text('save a link', style: Hand.title.copyWith(color: context.pal.ink), textScaler: Hand.scaler(context)),
         const Meta('Or share it to PhoneDots from any app.'),
         const SizedBox(height: 12),
         TextField(

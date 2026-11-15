@@ -8,28 +8,48 @@ Flutter app for Android, iOS and macOS, with native bridges to [LiteRT-LM](https
 <img src="docs/screenshots/welcome.png" width="190">
 <img src="docs/screenshots/home.png" width="190">
 <img src="docs/screenshots/chat.png" width="190">
-<img src="docs/screenshots/skills.png" width="190">
+<img src="docs/screenshots/saved.png" width="190">
 </p>
 <p>
+<img src="docs/screenshots/skills.png" width="190">
 <img src="docs/screenshots/models.png" width="190">
 <img src="docs/screenshots/you.png" width="190">
 <img src="docs/screenshots/home-dark.png" width="190">
 <img src="docs/screenshots/chat-dark.png" width="190">
 </p>
 
-*Screenshots from the web preview, which runs the demo engine.*
+*Screenshots from the demo engine (the web and desktop preview).*
 
 ## Look and feel
 
-PhoneDots uses **Burrow's "hand-drawn minimal" design system** (from [Android-Showcase](https://github.com/Shashank2577/Android-Showcase), `design/burrow-a/theme`), ported to Flutter so both apps feel like one family:
+PhoneDots uses **Burrow's "hand-drawn minimal" design system** (from [Android-Showcase](https://github.com/Shashank2577/Android-Showcase), `design/burrow-a/theme`), in its readable form (tokens 2.0.0, baseApp `design/REVIEW.md`):
 
-- White paper and ink (a warm "night notebook" in dark mode), with one marker-yellow swipe per screen and red pen only for destructive things.
-- Caveat hand-lettering for headings over a quieter body voice you choose in settings (formal, friendly, neat hand, loose hand or all handwritten).
-- No cards: content sits on the paper, separated by wobbly hairlines. Pages open with a name and a one-line purpose; "doors" with circled arrows lead somewhere; the bottom bar is four words with a drawn ring.
-- Burrow's doodle icon set, ink-pill primary buttons, outlined pills, drawn switches with a tick, and visible buttons instead of hidden gestures.
+- White paper and ink (a warm "night notebook" in dark mode), one marker-yellow swipe per screen on a fact, and red pen only for destructive things and the `!` in front of a warning.
+- **You read in a plain face, you tap in hand-lettering.** Answers, summaries, model names, titles, memory facts, sizes and dates are set in the reading voice: Nunito by default, or Inter or Shantell Sans ("neat hand") in settings. Caveat is for the app's own short words only (page titles, section heads, buttons, links, the tab words) and is never smaller than 24.
+- Sentences are ink; pencil grey is only for short meta lines and captions; nothing readable is under 13. Long text (answers, summaries) is 17/26 and never wider than 600.
+- No cards: content sits on the paper, separated by wobbly hairlines. Pages open with a name and one sentence; "doors" with circled arrows lead to places in the app, plain rows with a small arrow open content.
+- One ink pill per screen for the main action; outlined pills and underlined links for the rest; every target is at least 48 dp. A disabled button is a smudge pill with a graphite label, never a faded one.
 - Calm motion: a light squish and haptic tick on press, rows rising in as they scroll into view, the nav ring drawing itself, ticks drawing on.
 
-Tokens, fonts and components live in `lib/theme/theme.dart` and `lib/widgets/hand.dart`.
+Tokens and type roles live in `lib/theme/theme.dart` (`context.type.reading`, `.rowTitle`, `.body`, `.meta`, `.caption`, …), components in `lib/widgets/hand.dart` (`ItemRow`, `Door`, `PageIntro`, `InkButton`, …) and long text in `lib/widgets/rich_text.dart` (`Prose`).
+
+## Screens
+
+Three words along the bottom: **chat · saved · you**. Skills and models are things you set up, so they live under "you". On a window 1000 or more wide (a Mac) the same words are a rail on the left, with settings and privacy at its foot, and pages sit beside it.
+
+| Screen | What it is for | Main action |
+|---|---|---|
+| **chat** | Ask anything. Empty: a greeting, four suggestions (record a meeting, ask about a photo, mask before you share, search my files) and "what else can it do?" (skills). In a conversation the answer comes first; thinking and skill steps fold into one line under it ("2 steps · 1.7 s") that opens the trace. The model line above the composer opens the model picker. | The composer: the mic when it's empty (voice mode), send when you've typed |
+| past chats (the clock, top right) | Carry on an old chat, copy this one, start a new one | Pick a chat |
+| **saved** | Everything shared into PhoneDots: title, summary and source per row, filters on one line. A post opens with its summary first, key points, tags, and "what we read" (the raw text) behind a link. | "open the original" |
+| **you** | Three groups: *what it knows* (memory, my files), *what it can do* (skills, models), *the app* (settings, privacy, under the hood) | Doors to each |
+| memory | The facts you asked it to remember, in your words | "remember something" |
+| my files | Notes and imports it can search | Search |
+| skills | Skills in folded groups ("writing · 12") with a switch each, recipes and community skills | Tap a skill to try it |
+| models | Each model with its name, size, what it does and its state on its own line; "download all" when many are missing | Download |
+| settings | Light or dark, the reading voice (three, each with a live sample), the assistant, saved posts, keys, and about with the licences | — |
+| privacy | What is kept, a "forget" link per kind of data, and every action it took | — |
+| under the hood | Diagnostics (the log, crash reports) and the lab (prompt lab, speed test) | Share the log / run |
 
 ## What it does
 
@@ -52,7 +72,7 @@ Tokens, fonts and components live in `lib/theme/theme.dart` and `lib/widgets/han
 ## Architecture
 
 ```
-Surfaces    Chat · Voice · Skills/Recipes · Models · Lab · Privacy · Share sheet
+Surfaces    chat · saved · you (memory, files, skills, models, settings, privacy, diagnostics, lab) · voice · share sheet
    │
 Agent       lib/agent/agent.dart
             FunctionGemma router (fast path) → Gemma planner tool loop → permission gate → skills
@@ -88,7 +108,7 @@ Gemma files and checksums are pinned in `lib/core/models/model_catalog.dart`, an
 **One download per device.** Models live in the base platform's shared model store (`base_models`, synced from baseApp into `packages/base_models`), not in PhoneDots' own folder:
 
 - **iOS:** one folder in the App Group `group.com.showcase.shared`, used in place by every app of the vendor. Your Apple team needs that App Group; without it PhoneDots keeps its models to itself.
-- **Android:** each app keeps its own copy, and copies a model from a sibling app that has it instead of downloading it (the Models tab says "already on this phone in another app"). Siblings must be signed with the same key. Desert Ant weights go to `<store>/desertant.<key>`.
+- **Android:** each app keeps its own copy, and copies a model from a sibling app that has it instead of downloading it (the models page offers "copy, no download"). Siblings must be signed with the same key. Desert Ant weights go to `<store>/desertant.<key>`.
 - A model is deleted only when the last app using it lets go. Models downloaded by an older PhoneDots move into the store on first start, without downloading again.
 
 ## Run it
@@ -117,7 +137,7 @@ flutter run -d <android-device> --release
 
 **Test builds (APK).** Every push builds one: Actions → the run → Artifacts → `phonedots-apk`. Tagged builds (`v*`) go to Releases. Every build, debug and release, is signed with the vendor's public test key (`android/app/phonedots-test.jks`, the same key Burrow uses and baseApp keeps as `signing/showcase-test.jks`), so a new build updates in place over an older one and PhoneDots and Burrow share downloaded models. Earlier PhoneDots test builds used this same key, so they update in place too. Publishing to a store needs your own key: see baseApp `signing/README.md` (no developer account needed to make one); CI uses it once the `ANDROID_KEYSTORE_*` secrets exist.
 
-**Reporting a problem.** You → diagnostics shows each step with your models (download or copy from another app, HTTP status, checksum, load time), model and skill timings, and every error or crash. Tap **copy** (or **share the log**) and paste it into the report.
+**Reporting a problem.** You → under the hood → diagnostics shows each step with your models (download or copy from another app, HTTP status, checksum, load time), model and skill timings, and every error or crash. Tap **copy** (or **share the log**) and paste it into the report.
 
 **iPhone and Mac test builds.** Every release also has an unsigned iPhone app (`-ios-unsigned.ipa`) and a Mac app (`-macos.zip`), built on GitHub's macOS runners:
 
@@ -135,7 +155,7 @@ flutter run -d <iphone-or-macos> --release
 
 | Area | State |
 |---|---|
-| Dart app, agent, skills, UI | Done. `flutter analyze` is clean and 23 tests pass (unit, end-to-end agent loop, widget). |
+| Dart app, agent, skills, UI | Done. `flutter analyze` is clean and about 930 tests pass (unit, end-to-end agent loop, widget, layout sweeps). |
 | Android native bridge | Builds into an APK (`flutter build apk`) against LiteRT-LM 0.19.0 and desert-ant-core 4.2.1. Not yet run on a physical device. Both SDKs ship `libLiteRt.so` and the APK keeps one copy, so check on a device that Gemma and the specialists both load. If they don't, align the LiteRT versions. |
 | iOS and macOS native bridges | `packages/phonedots_native`, shared by both. Built on GitHub's macOS runners for every release (unsigned). Not yet run on a physical iPhone or Mac. |
 | Share extension on iOS | Not built. Android share intake works. |

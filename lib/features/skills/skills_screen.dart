@@ -33,6 +33,10 @@ Doodle categoryDoodle(SkillCategory c) => switch (c) {
   SkillCategory.community => Doodle.people,
 };
 
+/// Opens the skills page (it lives under "you").
+void openSkills(BuildContext context) =>
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SkillsScreen()));
+
 class SkillsScreen extends StatefulWidget {
   const SkillsScreen({super.key});
 
@@ -44,27 +48,27 @@ class _SkillsScreenState extends State<SkillsScreen> {
   int _segment = 0;
   String _query = '';
 
+  /// Groups opened by hand; a search opens every group with a match.
+  final Set<SkillCategory> _open = {};
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
     return HandPage(
-      wordmark: true,
       body: ListenableBuilder(
         listenable: Listenable.merge([s.skills, s.settings, s.models]),
         builder: (context, _) => ListView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: const EdgeInsets.only(bottom: 32),
+          padding: const EdgeInsets.only(top: 8, bottom: 32),
           children: [
             Column0(
               child: PageIntro(
                 'skills',
                 switch (_segment) {
-                  0 => 'Everything the assistant can do. Switch any of them off, or tap one to try it.',
+                  0 => '${s.skills.enabled.length} of them are on. Switch any of them off, or tap one to try it.',
                   1 => 'Recipes chain skills into one tap. The assistant can run them by name too.',
                   _ => 'Skills other people wrote, as plain JSON. They can\'t run code.',
                 },
-                mark: _segment == 0 ? '${s.skills.enabled.length}' : null,
-                doodle: Doodle.spark,
               ),
             ),
             Column0(
@@ -124,20 +128,72 @@ class _SkillsScreenState extends State<SkillsScreen> {
           ),
         ),
         for (final e in groups.entries) ...[
-          Column0(child: SectionHead(categoryLabels[e.key]!.toLowerCase(), note: '${e.value.length}')),
-          for (var i = 0; i < e.value.length; i++)
-            Column0(
-              child: Enter(
-                index: i,
-                child: SkillTile(skill: e.value[i]),
-              ),
+          Column0(
+            child: _GroupHead(
+              '${categoryLabels[e.key]!.toLowerCase()} · ${e.value.length}',
+              open: q.isNotEmpty || _open.contains(e.key),
+              onTap: q.isNotEmpty
+                  ? null
+                  : () => setState(() => _open.contains(e.key) ? _open.remove(e.key) : _open.add(e.key)),
             ),
+          ),
+          if (q.isNotEmpty || _open.contains(e.key))
+            for (var i = 0; i < e.value.length; i++)
+              Column0(
+                child: Enter(
+                  index: i,
+                  child: SkillTile(skill: e.value[i]),
+                ),
+              ),
         ],
+        if (groups.isEmpty) const Column0(child: HandEmpty(title: 'nothing matches', doodle: Doodle.search)),
       ],
     );
   }
 }
 
+/// A group of skills, folded until tapped: "writing · 7".
+class _GroupHead extends StatelessWidget {
+  const _GroupHead(this.text, {required this.open, this.onTap});
+  final String text;
+  final bool open;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: onTap != null,
+    expanded: open,
+    child: Pressable(
+      onTap: onTap,
+      scale: 0.99,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  text,
+                  style: Hand.title.copyWith(color: context.pal.ink),
+                  textScaler: Hand.scaler(context),
+                ),
+              ),
+              if (onTap != null)
+                AnimatedRotation(
+                  turns: open ? 0.25 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: DoodleIcon(Doodle.arrow, size: 22, color: context.pal.pencil),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// One skill: its name (tap to read about it and try it) and a switch.
 class SkillTile extends StatelessWidget {
   const SkillTile({super.key, required this.skill});
   final Skill skill;
@@ -145,48 +201,49 @@ class SkillTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
-    final p = context.pal;
     final missing = skill.requiresModels.where((m) => !s.models.isReady(m)).toList();
-    return Pressable(
-      onTap: () => showSkillSheet(context, skill),
-      scale: 0.985,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            DoodleIcon(categoryDoodle(skill.category), color: p.pencil),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(skill.name.toLowerCase(), style: Hand.label.copyWith(fontSize: 23, color: p.ink)),
+    return Row(
+      children: [
+        Expanded(
+          child: Semantics(
+            button: true,
+            child: Pressable(
+              onTap: () => showSkillSheet(context, skill),
+              scale: 0.985,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      skill.name.toLowerCase(),
+                      style: Hand.door.copyWith(color: context.pal.ink),
+                      textScaler: Hand.scaler(context),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Meta(
+                        missing.isEmpty
+                            ? skill.description
+                            : 'Needs ${missing.map((m) => modelById(m)?.name ?? m).join(', ')}',
+                        maxLines: 2,
                       ),
-                      const SizedBox(width: 6),
-                      DoodleIcon(Doodle.arrow, size: 16, color: p.graphite),
-                    ],
-                  ),
-                  Meta(
-                    missing.isEmpty
-                        ? skill.description
-                        : 'needs ${missing.map((m) => modelById(m)?.name ?? m).join(', ')}',
-                    maxLines: 2,
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            HandSwitch(
-              value: s.skills.isEnabled(skill),
-              label: 'use ${skill.name}',
-              onChanged: (v) => s.skills.setEnabled(skill, v),
-            ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(width: 12),
+        HandSwitch(
+          value: s.skills.isEnabled(skill),
+          label: 'use ${skill.name}',
+          onChanged: (v) => s.skills.setEnabled(skill, v),
+        ),
+      ],
     );
   }
 }
@@ -288,19 +345,17 @@ class _SkillDetailState extends State<_SkillDetail> {
                   if (s.models.isReady(id))
                     const DoodleIcon(Doodle.tick, size: 18)
                   else
-                    DoodleIcon(Doodle.close, size: 16, color: p.graphite),
+                    DoodleIcon(Doodle.close, size: 16, color: p.pencil),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: Text((modelById(id)?.name ?? id).toLowerCase(), style: Hand.label.copyWith(color: p.ink)),
-                  ),
-                  Meta(s.models.isReady(id) ? 'on this phone' : 'not downloaded yet'),
+                  Expanded(child: Text(modelById(id)?.name ?? id, style: context.type.rowTitle)),
+                  Caption(s.models.isReady(id) ? 'On this phone' : 'Not downloaded yet'),
                 ],
               ),
             ),
         ],
         if (k.examples.isNotEmpty) ...[
           const SectionHead('say'),
-          for (final e in k.examples) Body('“$e”', color: p.pencil),
+          for (final e in k.examples) Padding(padding: const EdgeInsets.only(bottom: 4), child: Body('“$e”')),
         ],
         if (k.params.isNotEmpty) ...[
           const SectionHead('try it'),
@@ -369,11 +424,10 @@ class _Recipes extends StatelessWidget {
             child: Enter(
               index: i,
               child: Panel(
-                child: Door(
-                  r.name.toLowerCase(),
-                  style: Hand.label.copyWith(fontSize: 25),
-                  meta:
-                      '${r.description}\n${[for (final st in r.steps) (s.skills.byId(st.skillId)?.name ?? st.skillId).toLowerCase()].join('  →  ')}',
+                child: ItemRow(
+                  title: r.name,
+                  meta: r.description,
+                  caption: [for (final st in r.steps) s.skills.byId(st.skillId)?.name ?? st.skillId].join('  →  '),
                   onTap: () => showSkillSheet(context, RecipeSkill(r)),
                   trailing: r.builtIn
                       ? null
@@ -490,10 +544,10 @@ class _CommunityState extends State<_Community> {
           const Column0(child: SectionHead('installed')),
           for (final c in installed)
             Column0(
-              child: Door(
-                c.name.toLowerCase(),
-                style: Hand.label.copyWith(fontSize: 25),
-                meta: '${c.description} · by ${c.author}',
+              child: ItemRow(
+                title: c.name,
+                meta: c.description,
+                caption: 'By ${c.author}',
                 onTap: () => showSkillSheet(context, c),
                 trailing: DoodleButton(
                   Doodle.trash,
@@ -509,12 +563,12 @@ class _CommunityState extends State<_Community> {
           const Column0(child: SectionHead('worth trying')),
           for (final c in featured)
             Column0(
-              child: Door(
-                c.name.toLowerCase(),
-                style: Hand.label.copyWith(fontSize: 25),
+              child: ItemRow(
+                title: c.name,
                 meta: c.description,
+                caption: 'By ${c.author}',
                 onTap: () => _review(c),
-                trailing: PillButton('install', onTap: () => _review(c)),
+                trailing: HandLink('install', onTap: () => _review(c)),
               ),
             ),
         ],

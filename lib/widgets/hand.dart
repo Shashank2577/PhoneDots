@@ -319,24 +319,33 @@ class _DrawnDoodleState extends State<DrawnDoodle> with SingleTickerProviderStat
 
 // ── Text ───────────────────────────────────────────────────────────────────
 
-/// Text with a marker swipe behind the first occurrence of [mark].
+/// Text with a marker swipe behind the first occurrence of [mark]. The
+/// marker goes on a fact: a number or a word or two, never a sentence.
 class MarkedText extends StatelessWidget {
-  const MarkedText(this.text, {super.key, this.mark, this.style, this.color, this.maxLines});
+  const MarkedText(this.text, {super.key, this.mark, this.style, this.color, this.maxLines, this.textScaler});
   final String text;
   final String? mark;
   final TextStyle? style;
   final Color? color;
   final int? maxLines;
+  final TextScaler? textScaler;
 
   @override
   Widget build(BuildContext context) {
+    assert(mark == null || mark!.length <= 16, 'The marker goes on a fact of at most 16 characters: "$mark"');
     final p = context.pal;
     final s = (style ?? Hand.title).copyWith(color: color ?? style?.color ?? p.ink);
+    final scaler = textScaler ?? (s.fontFamily == caveat ? Hand.scaler(context) : MediaQuery.textScalerOf(context));
     final start = mark == null ? -1 : text.indexOf(mark!);
     if (start < 0) {
-      return Text(text, style: s, maxLines: maxLines, overflow: maxLines == null ? null : TextOverflow.ellipsis);
+      return Text(
+        text,
+        style: s,
+        maxLines: maxLines,
+        textScaler: scaler,
+        overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      );
     }
-    final scaler = MediaQuery.textScalerOf(context);
     return LayoutBuilder(
       builder: (context, box) {
         final tp = TextPainter(
@@ -362,6 +371,7 @@ class MarkedText extends StatelessWidget {
               ],
             ),
             maxLines: maxLines,
+            textScaler: scaler,
             overflow: maxLines == null ? null : TextOverflow.ellipsis,
           ),
         );
@@ -387,6 +397,7 @@ class _SwipePainter extends CustomPainter {
   bool shouldRepaint(_SwipePainter o) => o.rects != rects || o.color != color;
 }
 
+/// A second line or a note: 14/20 in pencil, at most two lines of it.
 class Meta extends StatelessWidget {
   const Meta(this.text, {super.key, this.color, this.maxLines, this.align});
   final String text;
@@ -397,38 +408,79 @@ class Meta extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     text,
-    style: context.text.bodySmall?.copyWith(color: color ?? context.pal.pencil),
+    style: context.type.meta.copyWith(color: color),
     maxLines: maxLines,
     overflow: maxLines == null ? null : TextOverflow.ellipsis,
     textAlign: align,
   );
 }
 
-class Body extends StatelessWidget {
-  const Body(this.text, {super.key, this.color, this.align});
+/// Timestamps, counts and sizes: 13/18 in pencil.
+class Caption extends StatelessWidget {
+  const Caption(this.text, {super.key, this.color, this.maxLines, this.align});
   final String text;
   final Color? color;
+  final int? maxLines;
   final TextAlign? align;
 
   @override
   Widget build(BuildContext context) => Text(
     text,
-    style: context.text.bodyMedium?.copyWith(color: color),
+    style: context.type.caption.copyWith(color: color),
+    maxLines: maxLines,
+    overflow: maxLines == null ? null : TextOverflow.ellipsis,
     textAlign: align,
   );
 }
 
-/// The top of a page: its name and one plain line about what you can do here.
+/// A sentence: 16/24 in ink.
+class Body extends StatelessWidget {
+  const Body(this.text, {super.key, this.color, this.align, this.maxLines});
+  final String text;
+  final Color? color;
+  final TextAlign? align;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: context.type.body.copyWith(color: color),
+    textAlign: align,
+    maxLines: maxLines,
+    overflow: maxLines == null ? null : TextOverflow.ellipsis,
+  );
+}
+
+/// A warning: an ink sentence with a red "!" in front (red is a mark, not a paragraph).
+class Warning extends StatelessWidget {
+  const Warning(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      DoodleIcon(Doodle.exclaim, size: 20, color: context.pal.redPen, stroke: 2.6, semanticLabel: 'Warning'),
+      const SizedBox(width: 6),
+      Expanded(child: Body(text)),
+    ],
+  );
+}
+
+/// The top of a page: its name and one plain sentence, in ink, about what
+/// you can do here.
 class PageIntro extends StatelessWidget {
   const PageIntro(this.title, this.purpose, {super.key, this.mark, this.doodle});
   final String title;
   final String purpose;
+
+  /// Rarely: a fact inside the title. Never the whole title.
   final String? mark;
   final Doodle? doodle;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 18),
+    padding: const EdgeInsets.only(bottom: 24),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -436,52 +488,50 @@ class PageIntro extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Flexible(
-              child: MarkedText(title, mark: mark, style: Hand.headline),
+              child: Semantics(
+                header: true,
+                child: MarkedText(title, mark: mark, style: Hand.headline),
+              ),
             ),
             if (doodle != null)
               Padding(
                 padding: const EdgeInsets.only(left: 12, bottom: 6),
                 child: Transform.rotate(
                   angle: -0.14,
-                  child: DoodleIcon(doodle!, size: 40, color: context.pal.pencil, stroke: 1.8),
+                  child: DoodleIcon(doodle!, size: 32, color: context.pal.pencil, stroke: 1.8),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 4),
-        Body(purpose, color: context.pal.pencil),
+        const SizedBox(height: 8),
+        Body(purpose),
       ],
     ),
   );
 }
 
-/// A hand-lettered section head with an optional note on the right.
+/// A hand-lettered section head; its note, if any, sits on its own line below.
 class SectionHead extends StatelessWidget {
-  const SectionHead(
-    this.text, {
-    super.key,
-    this.note,
-    this.mark = false,
-    this.padding = const EdgeInsets.only(top: 22, bottom: 6),
-  });
+  const SectionHead(this.text, {super.key, this.note, this.mark = false, this.first = false, this.padding});
   final String text;
   final String? note;
   final bool mark;
-  final EdgeInsets padding;
+
+  /// The first head on a page sits 16 below what came before, not 40.
+  final bool first;
+  final EdgeInsets? padding;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: padding,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    padding: padding ?? EdgeInsets.only(top: first ? 16 : 40, bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          child: MarkedText(text, mark: mark ? text : null, style: Hand.title.copyWith(fontSize: 27)),
+        Semantics(
+          header: true,
+          child: MarkedText(text, mark: mark ? text : null, style: Hand.title),
         ),
-        if (note != null) ...[
-          const Spacer(),
-          Padding(padding: const EdgeInsets.only(left: 12, bottom: 4), child: Meta(note!)),
-        ],
+        if (note != null) Padding(padding: const EdgeInsets.only(top: 2), child: Meta(note!)),
       ],
     ),
   );
@@ -618,6 +668,8 @@ class _PressableState extends State<Pressable> {
 }
 
 /// The one primary action per screen: a black pill with Caveat lettering.
+/// Disabled, it is a smudge pill with a graphite outline and label (never a
+/// faded ink pill, which nobody can read).
 class InkButton extends StatelessWidget {
   const InkButton(
     this.text, {
@@ -638,17 +690,23 @@ class InkButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final enabled = onTap != null && !busy;
-    return Pressable(
-      onTap: enabled ? onTap : null,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: onTap == null ? 0.35 : 1,
-        child: Container(
+    final disabled = onTap == null;
+    final enabled = !disabled && !busy;
+    final fg = disabled ? p.graphite : p.paper;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: Pressable(
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           constraints: const BoxConstraints(minHeight: 56),
           width: expand ? double.infinity : null,
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-          decoration: ShapeDecoration(color: danger ? p.redPen : p.ink, shape: const StadiumBorder()),
+          decoration: ShapeDecoration(
+            color: disabled ? p.smudge : (danger ? p.redPen : p.ink),
+            shape: StadiumBorder(side: disabled ? BorderSide(color: p.graphite, width: 1.6) : BorderSide.none),
+          ),
           child: Row(
             mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -660,12 +718,16 @@ class InkButton extends StatelessWidget {
               Flexible(
                 child: Text(
                   text,
-                  style: Hand.label.copyWith(fontSize: 23, color: p.paper),
+                  style: Hand.label.copyWith(color: fg),
+                  textScaler: Hand.scaler(context),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (trailing != null) ...[const SizedBox(width: 10), DoodleIcon(trailing!, size: 20, color: p.paper)],
+              if (trailing != null && !disabled) ...[
+                const SizedBox(width: 10),
+                DoodleIcon(trailing!, size: 20, color: fg),
+              ],
             ],
           ),
         ),
@@ -674,7 +736,7 @@ class InkButton extends StatelessWidget {
   }
 }
 
-/// A secondary action that still reads as a button: an outlined pill.
+/// A secondary action that still reads as a button: an outlined pill, 48 high.
 class PillButton extends StatelessWidget {
   const PillButton(this.text, {super.key, this.onTap, this.leading, this.color});
   final String text;
@@ -684,25 +746,27 @@ class PillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? context.pal.ink;
-    return Pressable(
-      onTap: onTap,
-      child: Opacity(
-        opacity: onTap == null ? 0.4 : 1,
+    final c = onTap == null ? context.pal.graphite : (color ?? context.pal.ink);
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      child: Pressable(
+        onTap: onTap,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          constraints: const BoxConstraints(minHeight: minTap),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: ShapeDecoration(
             shape: StadiumBorder(side: BorderSide(color: c, width: 1.6)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (leading != null) ...[DoodleIcon(leading!, size: 18, color: c), const SizedBox(width: 8)],
+              if (leading != null) ...[DoodleIcon(leading!, size: 20, color: c), const SizedBox(width: 8)],
               Flexible(
                 child: Text(
                   text,
                   style: Hand.label.copyWith(color: c),
+                  textScaler: Hand.scaler(context),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -715,29 +779,28 @@ class PillButton extends StatelessWidget {
   }
 }
 
-/// Tertiary action: hand-lettered text with a wobbly underline.
+/// Tertiary action: hand-lettered text with a wobbly underline, 48 to touch.
 class HandLink extends StatelessWidget {
-  const HandLink(this.text, {super.key, this.onTap, this.color, this.style});
+  const HandLink(this.text, {super.key, this.onTap, this.color});
   final String text;
   final VoidCallback? onTap;
   final Color? color;
-  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? context.pal.ink;
-    return Pressable(
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Opacity(
-            opacity: onTap == null ? 0.4 : 1,
+    final c = onTap == null ? context.pal.graphite : (color ?? context.pal.ink);
+    return Semantics(
+      button: onTap != null,
+      child: Pressable(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: minTap, minWidth: minTap),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: HandUnderline(
               color: c,
               seed: text.length,
-              child: Text(text, style: (style ?? Hand.label).copyWith(color: c)),
+              child: Text(text, style: Hand.label.copyWith(color: c), textScaler: Hand.scaler(context)),
             ),
           ),
         ),
@@ -758,29 +821,34 @@ class ChoicePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final fg = selected ? p.paper : p.ink;
-    return Pressable(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        constraints: const BoxConstraints(minHeight: 48, maxWidth: 280),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: ShapeDecoration(
-          color: selected ? p.ink : Colors.transparent,
-          shape: StadiumBorder(side: BorderSide(color: p.ink, width: 1.6)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (leading != null) ...[DoodleIcon(leading!, size: 18, color: fg), const SizedBox(width: 8)],
-            Flexible(
-              child: Text(
-                text,
-                style: Hand.label.copyWith(color: fg),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Pressable(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          constraints: const BoxConstraints(minHeight: minTap, maxWidth: 280),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          decoration: ShapeDecoration(
+            color: selected ? p.ink : Colors.transparent,
+            shape: StadiumBorder(side: BorderSide(color: p.ink, width: 1.6)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (leading != null) ...[DoodleIcon(leading!, size: 20, color: fg), const SizedBox(width: 8)],
+              Flexible(
+                child: Text(
+                  text,
+                  style: Hand.label.copyWith(color: fg),
+                  textScaler: Hand.scaler(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -927,8 +995,8 @@ class SwitchRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Hand.label.copyWith(fontSize: 23, color: context.pal.ink)),
-                if (body != null) Meta(body!),
+                Text(title, style: Hand.door.copyWith(color: context.pal.ink), textScaler: Hand.scaler(context)),
+                if (body != null) Padding(padding: const EdgeInsets.only(top: 2), child: Meta(body!)),
               ],
             ),
           ),
@@ -940,8 +1008,9 @@ class SwitchRow extends StatelessWidget {
   );
 }
 
-/// One big hand-lettered line that leads somewhere, ending in a circled
-/// arrow. A door with nowhere to go is drawn in pencil.
+/// A row that leads to a place in the app ("memory", "models"): hand-lettered,
+/// ending in a circled arrow. A door with nowhere to go is drawn in pencil.
+/// For content (a model, a file, a fact) use [ItemRow].
 class Door extends StatelessWidget {
   const Door(
     this.text, {
@@ -951,7 +1020,6 @@ class Door extends StatelessWidget {
     this.meta,
     this.alert = false,
     this.leading,
-    this.style,
     this.trailing,
   });
   final String text;
@@ -960,60 +1028,67 @@ class Door extends StatelessWidget {
   final String? meta;
   final bool alert;
   final Doodle? leading;
-  final TextStyle? style;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Pressable(
-      onTap: onTap,
-      scale: 0.985,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            if (leading != null) ...[DoodleIcon(leading!, color: p.ink), const SizedBox(width: 14)],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    return Semantics(
+      button: onTap != null,
+      child: Pressable(
+        onTap: onTap,
+        scale: 0.985,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                if (leading != null) ...[DoodleIcon(leading!, color: p.ink), const SizedBox(width: 14)],
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Flexible(
-                        child: MarkedText(
-                          text,
-                          mark: mark,
-                          style: style ?? Hand.door,
-                          color: onTap != null ? p.ink : p.pencil,
-                        ),
-                      ),
-                      if (alert)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 2, top: 4),
-                          child: DoodleIcon(
-                            Doodle.exclaim,
-                            size: 22,
-                            color: p.redPen,
-                            stroke: 2.6,
-                            semanticLabel: 'needs you',
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Flexible(
+                            child: MarkedText(
+                              text,
+                              mark: mark,
+                              style: Hand.door,
+                              maxLines: 2,
+                              color: onTap != null ? p.ink : p.pencil,
+                            ),
                           ),
-                        ),
+                          if (alert)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 2, top: 2),
+                              child: DoodleIcon(
+                                Doodle.exclaim,
+                                size: 22,
+                                color: p.redPen,
+                                stroke: 2.6,
+                                semanticLabel: 'needs you',
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (meta != null) Padding(padding: const EdgeInsets.only(top: 2), child: Meta(meta!, maxLines: 2)),
                     ],
                   ),
-                  if (meta != null) Padding(padding: const EdgeInsets.only(top: 2), child: Meta(meta!)),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 12),
+                  trailing!,
+                ] else if (onTap != null) ...[
+                  const SizedBox(width: 12),
+                  const CircledArrow(),
                 ],
-              ),
+              ],
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing!,
-            ] else if (onTap != null) ...[
-              const SizedBox(width: 12),
-              const CircledArrow(),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -1036,7 +1111,110 @@ class CircledArrow extends StatelessWidget {
   );
 }
 
-/// A small pill tag: outlined in rule, or marked.
+/// One piece of content (a chat, a saved post, a model, a file, a fact) in
+/// the body face: a title of up to two lines, an optional meta line and a
+/// caption, an optional leading doodle and one trailing widget. When it opens
+/// something it ends in a plain pencil arrow.
+class ItemRow extends StatelessWidget {
+  const ItemRow({
+    super.key,
+    required this.title,
+    this.meta,
+    this.caption,
+    this.leading,
+    this.trailing,
+    this.onTap,
+    this.titleStyle,
+    this.titleLines = 2,
+    this.metaLines = 2,
+    this.below,
+    this.captionColor,
+  });
+  final String title;
+  final String? meta;
+  final String? caption;
+  final Widget? leading;
+
+  /// A switch, a link, a caption. Without one, a tappable row gets an arrow.
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  /// Defaults to `rowTitle`; facts the user wrote use `body`.
+  final TextStyle? titleStyle;
+  final int titleLines;
+  final int metaLines;
+
+  /// Full-width content under the text (a progress line, a button).
+  final Widget? below;
+  final Color? captionColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final t = context.type;
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 56),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (leading != null) ...[
+                  Padding(padding: const EdgeInsets.only(top: 1), child: leading!),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: titleStyle ?? t.rowTitle,
+                        maxLines: titleLines,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (meta != null && meta!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Meta(meta!, maxLines: metaLines),
+                        ),
+                      if (caption != null && caption!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Caption(caption!, color: captionColor, maxLines: 2),
+                        ),
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing!,
+                ] else if (onTap != null) ...[
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: DoodleIcon(Doodle.arrow, size: 20, color: p.pencil),
+                  ),
+                ],
+              ],
+            ),
+            if (below != null) Padding(padding: const EdgeInsets.only(top: 8), child: below!),
+          ],
+        ),
+      ),
+    );
+    if (onTap == null) return row;
+    return Semantics(
+      button: true,
+      child: Pressable(onTap: onTap, scale: 0.99, child: row),
+    );
+  }
+}
+
+/// A small tag in the body face: a smudge pill, or marker-filled when marked.
 class HandTag extends StatelessWidget {
   const HandTag(this.text, {super.key, this.marked = false, this.onTap, this.color});
   final String text;
@@ -1047,19 +1225,27 @@ class HandTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Pressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        decoration: ShapeDecoration(
-          color: marked ? p.marker : null,
-          shape: StadiumBorder(side: marked ? BorderSide.none : BorderSide(color: color ?? p.rule, width: 1.2)),
-        ),
-        child: Text(
-          text,
-          style: Hand.small.copyWith(color: marked ? p.markerInk : (color ?? p.ink)),
-          maxLines: 1,
-          softWrap: false,
+    final tag = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: ShapeDecoration(color: marked ? p.marker : p.smudge, shape: const StadiumBorder()),
+      child: Text(
+        text,
+        style: context.type.tag.copyWith(color: marked ? p.markerInk : (color ?? p.ink)),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+    if (onTap == null) return tag;
+    // Tappable tags get a full 48 high touch area around the drawn pill.
+    return Semantics(
+      button: true,
+      selected: marked,
+      child: Pressable(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: minTap),
+          child: Align(widthFactor: 1, child: tag),
         ),
       ),
     );
@@ -1075,9 +1261,9 @@ class OnDeviceStamp extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      DoodleIcon(Doodle.lock, size: 14, color: context.pal.pencil, stroke: 1.6),
-      const SizedBox(width: 5),
-      Meta(text),
+      DoodleIcon(Doodle.lock, size: 16, color: context.pal.pencil, stroke: 1.6),
+      const SizedBox(width: 6),
+      Caption(text),
     ],
   );
 }
@@ -1095,17 +1281,24 @@ class Steps extends StatelessWidget {
       children: [
         for (var i = 0; i < steps.length; i++)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
+            padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 28,
+                Container(
+                  width: 24,
+                  height: 24,
+                  margin: const EdgeInsets.only(top: 0, right: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: i <= current || current < 0 ? p.ink : p.pencil, width: 1.4),
+                  ),
                   child: i < current
-                      ? DoodleIcon(Doodle.tick, size: 20, color: p.pencil)
-                      : Text('${i + 1}.', style: Hand.label.copyWith(color: i == current ? p.ink : p.pencil)),
+                      ? DoodleIcon(Doodle.tick, size: 16, color: p.ink)
+                      : Text('${i + 1}', style: context.type.tag, textScaler: TextScaler.noScaling),
                 ),
-                Expanded(child: Body(steps[i], color: i <= current ? p.ink : p.pencil)),
+                Expanded(child: Body(steps[i])),
               ],
             ),
           ),
@@ -1114,21 +1307,28 @@ class Steps extends StatelessWidget {
   }
 }
 
-/// Inline confirmation after something happened, with an optional next step.
+/// Inline confirmation after something happened, with an optional next step:
+/// an ink sentence on a smudge well.
 class DoneNote extends StatelessWidget {
-  const DoneNote(this.text, {super.key, this.action, this.onAction});
+  const DoneNote(this.text, {super.key, this.action, this.onAction, this.doodle = Doodle.tick});
   final String text;
   final String? action;
   final VoidCallback? onAction;
+  final Doodle doodle;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      const DrawnDoodle(Doodle.tick, size: 22),
-      const SizedBox(width: 8),
-      Expanded(child: Body(text)),
-      if (action != null) HandLink(action!, onTap: onAction),
-    ],
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+    decoration: BoxDecoration(color: context.pal.smudge, borderRadius: BorderRadius.circular(radius)),
+    child: Row(
+      children: [
+        DrawnDoodle(doodle, size: 22),
+        const SizedBox(width: 10),
+        Expanded(child: Body(text)),
+        if (action != null) ...[const SizedBox(width: 4), HandLink(action!, onTap: onAction)],
+      ],
+    ),
   );
 }
 
@@ -1142,30 +1342,50 @@ class HandEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 28),
-    child: Column(
-      children: [
-        Transform.rotate(angle: -0.12, child: DoodleIcon(doodle, size: 44, color: context.pal.pencil, stroke: 1.8)),
-        const SizedBox(height: 10),
-        Text(
-          title,
-          style: Hand.title.copyWith(color: context.pal.ink),
-          textAlign: TextAlign.center,
-        ),
-        if (body != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Meta(body!, align: TextAlign.center),
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Transform.rotate(angle: -0.12, child: DoodleIcon(doodle, size: 44, color: context.pal.pencil, stroke: 1.8)),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: Hand.title.copyWith(color: context.pal.ink),
+            textScaler: Hand.scaler(context),
+            textAlign: TextAlign.center,
           ),
-        if (action != null) Padding(padding: const EdgeInsets.only(top: 14), child: action!),
-      ],
+          if (body != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Body(body!, color: context.pal.pencil, align: TextAlign.center),
+              ),
+            ),
+          if (action != null) Padding(padding: const EdgeInsets.only(top: 14), child: action!),
+        ],
+      ),
     ),
   );
 }
 
 // ── Page & navigation ──────────────────────────────────────────────────────
 
+/// Set by the shell when the tab words are a rail on the left (wide windows):
+/// pages then drop the wordmark and sit left-aligned next to the rail.
+class RailScope extends InheritedWidget {
+  const RailScope({super.key, required this.rail, required super.child});
+  final bool rail;
+
+  static bool of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<RailScope>()?.rail ?? false;
+
+  @override
+  bool updateShouldNotify(RailScope old) => old.rail != rail;
+}
+
 /// The quiet page every screen sits on: a top row (back doodle or the
-/// wordmark, plus actions), and a centred scrolling column with gutters.
+/// wordmark, plus actions), and a scrolling column with gutters, centred,
+/// or left-aligned beside the rail.
 class HandPage extends StatelessWidget {
   const HandPage({
     super.key,
@@ -1182,6 +1402,8 @@ class HandPage extends StatelessWidget {
   final Widget? body;
   final bool wordmark;
   final List<Widget> actions;
+
+  /// The sticky main action (an ink pill), full width up to 400.
   final Widget? bottom;
   final VoidCallback? onBack;
 
@@ -1189,34 +1411,33 @@ class HandPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final canPop = ModalRoute.of(context)?.canPop ?? false;
     final back = onBack ?? (canPop ? () => Navigator.of(context).maybePop() : null);
+    final showWordmark = wordmark && !RailScope.of(context);
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            Center(
+            ColumnBox(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: maxColumn + gutter * 2),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Row(
-                    children: [
-                      if (back != null) DoodleButton(Doodle.back, tooltip: 'Back', onTap: back),
-                      // The wordmark gives way first, so actions never overflow.
-                      Expanded(
-                        child: wordmark
-                            ? Padding(
-                                padding: EdgeInsets.only(left: back == null ? 12 : 0),
-                                child: const Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: FittedBox(fit: BoxFit.scaleDown, child: Wordmark()),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      ...actions,
-                    ],
-                  ),
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Row(
+                  children: [
+                    if (back != null) DoodleButton(Doodle.back, tooltip: 'Back', onTap: back),
+                    // The wordmark gives way first, so actions never overflow.
+                    Expanded(
+                      child: showWordmark
+                          ? Padding(
+                              padding: EdgeInsets.only(left: back == null ? 12 : 0),
+                              child: const Align(
+                                alignment: Alignment.centerLeft,
+                                child: FittedBox(fit: BoxFit.scaleDown, child: Wordmark()),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    ...actions,
+                  ],
                 ),
               ),
             ),
@@ -1225,18 +1446,16 @@ class HandPage extends StatelessWidget {
                   body ??
                   ListView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    padding: const EdgeInsets.only(bottom: 32),
+                    padding: const EdgeInsets.only(top: 8, bottom: 32),
                     children: [for (final c in children ?? const <Widget>[]) Column0(child: c)],
                   ),
             ),
             if (bottom != null)
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: maxColumn + gutter * 2),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
-                    child: bottom,
-                  ),
+              ColumnBox(
+                padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
+                child: Align(
+                  alignment: Alignment.center,
+                  child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 400), child: bottom),
                 ),
               ),
           ],
@@ -1246,24 +1465,42 @@ class HandPage extends StatelessWidget {
   }
 }
 
-/// Centres a child in the page column (560 dp max, 24 dp gutters).
+/// The page column (560 max): centred, or left-aligned 40 from the rail.
+class ColumnBox extends StatelessWidget {
+  const ColumnBox({super.key, required this.child, this.padding = EdgeInsets.zero, this.maxWidth = maxColumn});
+  final Widget child;
+  final EdgeInsets padding;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final rail = RailScope.of(context);
+    return Align(
+      alignment: rail ? AlignmentDirectional.topStart : Alignment.topCenter,
+      child: Padding(
+        padding: EdgeInsetsDirectional.only(start: rail ? 40 - gutter : 0),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth + gutter * 2),
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(padding: padding, child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A child in the page column (560 dp max, 24 dp gutters), starting at the
+/// left edge like the body copy.
 class Column0 extends StatelessWidget {
   const Column0({super.key, required this.child});
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: maxColumn + gutter * 2),
-      // Full column width, content starting at the left edge like the body copy.
-      child: SizedBox(
-        width: double.infinity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: gutter),
-          child: Align(alignment: AlignmentDirectional.centerStart, child: child),
-        ),
-      ),
-    ),
+  Widget build(BuildContext context) => ColumnBox(
+    padding: const EdgeInsets.symmetric(horizontal: gutter),
+    child: Align(alignment: AlignmentDirectional.centerStart, child: child),
   );
 }
 
@@ -1271,10 +1508,17 @@ class Wordmark extends StatelessWidget {
   const Wordmark({super.key});
 
   @override
-  Widget build(BuildContext context) => Text('phonedots.', style: Hand.title.copyWith(color: context.pal.ink));
+  Widget build(BuildContext context) =>
+      Text('phonedots.', style: Hand.title.copyWith(color: context.pal.ink), textScaler: Hand.scaler(context));
 }
 
-/// Four hand-lettered words; the current one gets a loose drawn ring.
+TextStyle _navStyle(Palette p, bool selected) => Hand.label.copyWith(
+  color: selected ? p.ink : p.pencil,
+  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+);
+
+/// The tab words along the bottom (at most four on a phone); the current one
+/// gets a loose drawn ring. Equal-width cells, at least 48 high.
 class HandNav extends StatelessWidget {
   const HandNav({super.key, required this.index, required this.onTap, required this.labels});
   final int index;
@@ -1283,11 +1527,8 @@ class HandNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    assert(labels.length <= 4, 'At most four words along the bottom');
     final p = context.pal;
-    // One size for every word, small enough to fit five on a narrow phone,
-    // so FittedBox rarely has to shrink any single word on its own.
-    final perWord = (MediaQuery.sizeOf(context).width - 24) / labels.length - 30;
-    final navSize = (perWord / MediaQuery.textScalerOf(context).scale(1) / 2.6).clamp(15.0, 23.0);
     return Container(
       color: p.paper,
       child: SafeArea(
@@ -1300,45 +1541,115 @@ class HandNav extends StatelessWidget {
               child: HandDivider(padding: EdgeInsets.zero),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  for (var i = 0; i < labels.length; i++) ...[
-                    if (i > 0)
-                      ExcludeSemantics(
-                        child: Text('·', style: Hand.label.copyWith(color: p.pencil)),
-                      ),
-                    Flexible(
-                      child: Pressable(
-                        onTap: () => onTap(i),
-                        scale: 0.92,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                  for (var i = 0; i < labels.length; i++)
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: i == index,
+                        child: Pressable(
+                          onTap: () => onTap(i),
+                          scale: 0.92,
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 30),
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween(end: i == index ? 1 : 0),
-                              duration: const Duration(milliseconds: 450),
-                              builder: (_, ring, child) =>
-                                  CustomPaint(painter: _RingPainter(p.ink, ring, i + 2), child: child),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  labels[i],
-                                  style: Hand.label.copyWith(fontSize: navSize, color: i == index ? p.ink : p.pencil),
-                                ),
+                            constraints: const BoxConstraints(minHeight: 56),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                child: _NavWord(labels[i], selected: i == index, seed: i + 2),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavWord extends StatelessWidget {
+  const _NavWord(this.label, {required this.selected, required this.seed});
+  final String label;
+  final bool selected;
+  final int seed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: selected ? 1 : 0),
+      duration: const Duration(milliseconds: 450),
+      builder: (_, ring, child) => CustomPaint(painter: _RingPainter(p.ink, ring, seed), child: child),
+      child: Text(
+        label,
+        style: _navStyle(p, selected),
+        textScaler: Hand.scaler(context),
+        maxLines: 1,
+        softWrap: false,
+      ),
+    );
+  }
+}
+
+/// The same tab words as a rail on the left, for windows from [railBreakpoint]
+/// wide: the wordmark at the top, the words 12 apart, a few doodle buttons
+/// at the bottom.
+class HandRail extends StatelessWidget {
+  const HandRail({super.key, required this.index, required this.onTap, required this.labels, this.footer = const []});
+  final int index;
+  final ValueChanged<int> onTap;
+  final List<String> labels;
+  final List<Widget> footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Container(
+      width: railWidth,
+      color: p.paper,
+      child: SafeArea(
+        right: false,
+        child: Padding(
+          // 28 down, so a Mac's window buttons sit on paper.
+          padding: const EdgeInsets.fromLTRB(28, 28, 12, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Wordmark(),
+              const SizedBox(height: 28),
+              for (var i = 0; i < labels.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+                  child: Semantics(
+                    button: true,
+                    selected: i == index,
+                    child: Pressable(
+                      onTap: () => onTap(i),
+                      scale: 0.95,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: minTap, minWidth: 120),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: _NavWord(labels[i], selected: i == index, seed: i + 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              Row(children: footer),
+            ],
+          ),
         ),
       ),
     );

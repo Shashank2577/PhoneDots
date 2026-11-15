@@ -27,16 +27,24 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('nothing saved yet'), findsOneWidget);
 
-    await tester.tap(find.text('skills').last);
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('transcribe audio'), findsOneWidget);
-
-    await tester.tap(find.text('models').last);
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('the models'), findsOneWidget);
-
     await tester.tap(find.text('you').last);
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('privacy'), findsOneWidget);
+    expect(find.text('memory'), findsOneWidget);
+
+    // Skills and models are set up under "you".
+    await tester.tap(find.text('skills'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('writing · 12'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('summarize'), findsWidgets);
+    await tester.pageBack();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.tap(find.text('models'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Gemma 4 E2B'), findsOneWidget);
   });
 }
