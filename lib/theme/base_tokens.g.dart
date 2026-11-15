@@ -3,45 +3,65 @@
 
 import 'dart:ui';
 
-const tokensVersion = '1.0.0';
+const tokensVersion = '2.0.0';
 
 abstract final class LightTokens {
   static const paper = Color(0xFFFFFFFF);
   static const ink = Color(0xFF1A1A1A);
-  static const pencil = Color(0xFF6B6B6B);
-  static const graphite = Color(0xFFA3A3A3);
-  static const rule = Color(0x261A1A1A);
+  static const pencil = Color(0xFF555555);
+  static const graphite = Color(0xFF6B6B6B);
+  static const rule = Color(0x331A1A1A);
   static const smudge = Color(0xFFF4F3EF);
   static const marker = Color(0xFFFFE45C);
   static const markerInk = Color(0xFF1A1A1A);
-  static const redPen = Color(0xFFDC2626);
+  static const redPen = Color(0xFFC81E1E);
 }
 
 abstract final class DarkTokens {
   static const paper = Color(0xFF1E1D1B);
   static const ink = Color(0xFFE8E3D8);
   static const pencil = Color(0xFFB9B3A8);
-  static const graphite = Color(0xFF948E84);
-  static const rule = Color(0x4DE8E3D8);
+  static const graphite = Color(0xFFA39D92);
+  static const rule = Color(0x59E8E3D8);
   static const smudge = Color(0xFF2D2B28);
   static const marker = Color(0xFFD9BF45);
   static const markerInk = Color(0xFF1E1D1B);
   static const redPen = Color(0xFFFF8A80);
 }
 
-/// Muted pencil-box tones for charts and legends. Same in light and dark.
+/// Muted pencil-box tones for charts, legends and people, on light paper.
 const seriesTokens = <Color>[Color(0xFF1A1A1A), Color(0xFF8A6D1F), Color(0xFF3E6B5A), Color(0xFF7A4A6B), Color(0xFF4A5E85), Color(0xFF9A4B3C), Color(0xFF5F6B2E), Color(0xFF6B6B6B)];
+
+/// The same tones lifted for dark paper (each at least 6:1 on it).
+const seriesDarkTokens = <Color>[Color(0xFFE8E3D8), Color(0xFFBD9834), Color(0xFF6EA691), Color(0xFFB890AC), Color(0xFF8E9DBC), Color(0xFFC98E82), Color(0xFF92A34D), Color(0xFF9B9B9B)];
 
 abstract final class SpaceTokens {
   static const double xs = 4.0;
   static const double s = 8.0;
+  static const double sm = 12.0;
   static const double m = 16.0;
   static const double l = 24.0;
   static const double xl = 40.0;
   static const double xxl = 64.0;
   static const double gutter = 24.0;
   static const double maxColumn = 560.0;
-  static const double twoPaneBreakpoint = 700.0;
+  static const double readingColumn = 600.0;
+  static const double listPane = 360.0;
+  static const double railWidth = 200.0;
+  static const double twoPaneBreakpoint = 840.0;
+  static const double railBreakpoint = 1000.0;
+}
+
+abstract final class SizeTokens {
+  static const double minTap = 48.0;
+  static const double minText = 13.0;
+  static const double minHand = 24.0;
+  static const double inkButton = 56.0;
+  static const double pill = 48.0;
+  static const double field = 52.0;
+  static const double icon = 24.0;
+  static const double iconSmall = 20.0;
+  static const double row = 56.0;
 }
 
 abstract final class RadiusTokens {
@@ -63,8 +83,6 @@ abstract final class StrokeTokens {
 }
 
 abstract final class AlphaTokens {
-  static const double disabledButton = 0.35;
-  static const double disabledLink = 0.4;
   static const double faded = 0.38;
 }
 
@@ -92,22 +110,27 @@ class TypeToken {
 }
 
 abstract final class HandTypeTokens {
-  static const display = TypeToken(52.0, 54.0, 700, -0.01);
-  static const headline = TypeToken(40.0, 42.0, 700);
-  static const title = TypeToken(30.0, 33.0, 700);
-  static const door = TypeToken(26.0, 30.0, 600);
-  static const label = TypeToken(21.0, 24.0, 600);
-  static const small = TypeToken(18.0, 21.0, 600);
+  static const display = TypeToken(52.0, 58.0, 700, -0.01);
+  static const headline = TypeToken(38.0, 42.0, 700);
+  static const title = TypeToken(30.0, 34.0, 700);
+  static const door = TypeToken(24.0, 28.0, 600);
+  static const label = TypeToken(24.0, 28.0, 600);
 }
 
 abstract final class BodyTypeTokens {
-  static const bodyLarge = TypeToken(16.0, 23.0, 400);
-  static const body = TypeToken(15.0, 22.0, 400);
-  static const meta = TypeToken(13.0, 18.0, 400);
-  static const mono = TypeToken(12.0, 16.0, 400);
+  static const contentTitle = TypeToken(22.0, 28.0, 600);
+  static const reading = TypeToken(17.0, 26.0, 400);
+  static const rowTitle = TypeToken(17.0, 24.0, 600);
+  static const body = TypeToken(16.0, 24.0, 400);
+  static const meta = TypeToken(14.0, 20.0, 400);
+  static const caption = TypeToken(13.0, 18.0, 400);
+  static const tag = TypeToken(13.0, 18.0, 600);
+  static const mono = TypeToken(13.0, 20.0, 400);
 }
 
 const handFontFamily = 'Caveat';
+const monoFontFamily = 'monospace';
+const monoFontFallback = <String>['Menlo', 'SF Mono', 'Roboto Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'];
 
 class VoiceToken {
   const VoiceToken(this.id, this.label, this.note, this.family, this.informality, this.scale);
@@ -122,11 +145,9 @@ class VoiceToken {
 }
 
 const voiceTokens = <VoiceToken>[
+  VoiceToken('friendly', 'friendly', 'Nunito, a rounded sans', 'Nunito', null, 1.0),
   VoiceToken('formal', 'formal', 'Inter, a crisp sans', 'Inter', null, 1.0),
-  VoiceToken('friendly', 'friendly', 'Nunito, a rounded sans', 'Nunito', null, 1.02),
-  VoiceToken('neat', 'neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', 0.0, 0.98),
-  VoiceToken('loose', 'loose hand', 'Shantell Sans, informal', 'ShantellSans', 100.0, 0.98),
-  VoiceToken('handwritten', 'all handwritten', 'Patrick Hand', 'PatrickHand', null, 1.14),
+  VoiceToken('neat', 'neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', 0.0, 1.0),
 ];
 
-const defaultVoiceId = 'neat';
+const defaultVoiceId = 'friendly';
