@@ -356,7 +356,7 @@ class IoModelStore extends ModelStore {
 
   bool get _offline => options.offline?.call() ?? false;
 
-  bool get _sdkPerApp => options.sdkWeightsPerApp ?? (Platform.isIOS && options.useNativeLocation);
+  bool get _sdkPerApp => options.sdkWeightsPerApp ?? ((Platform.isIOS || Platform.isMacOS) && options.useNativeLocation);
 
   Future<Map<String, dynamic>> _installSdk(ModelSpec spec, _Cancel cancel) async {
     final installer = options.sdkInstaller;

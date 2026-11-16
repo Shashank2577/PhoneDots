@@ -3,7 +3,7 @@
 
 import 'dart:ui';
 
-const tokensVersion = '2.0.0';
+const tokensVersion = '2.1.0';
 
 abstract final class LightTokens {
   static const paper = Color(0xFFFFFFFF);
@@ -115,6 +115,7 @@ abstract final class HandTypeTokens {
   static const title = TypeToken(30.0, 34.0, 700);
   static const door = TypeToken(24.0, 28.0, 600);
   static const label = TypeToken(24.0, 28.0, 600);
+  static const small = TypeToken(18.0, 22.0, 600);
 }
 
 abstract final class BodyTypeTokens {
@@ -133,7 +134,7 @@ const monoFontFamily = 'monospace';
 const monoFontFallback = <String>['Menlo', 'SF Mono', 'Roboto Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'];
 
 class VoiceToken {
-  const VoiceToken(this.id, this.label, this.note, this.family, this.informality, this.scale);
+  const VoiceToken(this.id, this.label, this.note, this.family, this.informality, this.scale, {this.hand = false});
   final String id;
   final String label;
   final String note;
@@ -142,12 +143,17 @@ class VoiceToken {
   /// Shantell Sans' INFM axis, or null for fonts without it.
   final double? informality;
   final double scale;
+
+  /// A handwriting face: with it, names, row titles and tags are hand-lettered too.
+  final bool hand;
 }
 
 const voiceTokens = <VoiceToken>[
+  VoiceToken('neat', 'neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', 0.0, 1.0, hand: true),
+  VoiceToken('loose', 'loose hand', 'Shantell Sans, informal', 'ShantellSans', 100.0, 1.0, hand: true),
+  VoiceToken('handwritten', 'all handwritten', 'Patrick Hand', 'PatrickHand', null, 1.14, hand: true),
   VoiceToken('friendly', 'friendly', 'Nunito, a rounded sans', 'Nunito', null, 1.0),
   VoiceToken('formal', 'formal', 'Inter, a crisp sans', 'Inter', null, 1.0),
-  VoiceToken('neat', 'neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', 0.0, 1.0),
 ];
 
-const defaultVoiceId = 'friendly';
+const defaultVoiceId = 'neat';
