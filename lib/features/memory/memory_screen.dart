@@ -48,10 +48,10 @@ class MemoryScreen extends StatelessWidget {
           for (final (i, f) in memory.facts.indexed)
             Enter(
               index: i,
-              // The user's own words: body face, in ink, with when it was added.
+              // The user's own words, in ink, with when it was added.
               child: ItemRow(
                 title: f.text,
-                titleStyle: context.type.body,
+                titleStyle: context.type.rowNote,
                 titleLines: 4,
                 caption: timeAgo(f.created),
                 trailing: DoodleButton(

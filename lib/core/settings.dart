@@ -10,15 +10,16 @@ class AppSettings extends ChangeNotifier {
 
   ThemeMode themeMode = ThemeMode.system;
 
-  /// Reading font voice (see Voice in theme.dart): friendly, formal or neat.
-  String voice = 'friendly';
+  /// The voice (see Voice in theme.dart). The hand voices neat, loose and
+  /// handwritten make the handwritten style; friendly and formal the formal
+  /// one. A fresh install starts in the neat hand.
+  String voice = defaultVoice;
+  static const defaultVoice = 'neat';
 
-  /// The type system the stored [voice] was chosen under. Version 2 (tokens
-  /// 2.0.0) moved reading text to a plain font; see [load].
-  static const typeVersion = 2;
-
-  /// Say once, on the settings page, that reading text changed font.
-  bool typeNotice = false;
+  /// Marks which release last wrote [voice]. 0.8.0 and earlier stored none,
+  /// 0.9.0 stored 2 after moving every install to Nunito, 0.9.1 stores 3;
+  /// see [load].
+  static const typeVersion = 3;
 
   /// The demo-engine note on the chat page was seen and put away.
   bool demoNoteSeen = false;
@@ -62,7 +63,6 @@ class AppSettings extends ChangeNotifier {
     if (j == null) return;
     themeMode = ThemeMode.values.asNameMap()[j['themeMode']] ?? ThemeMode.system;
     voice = j['voice'] as String? ?? voice;
-    typeNotice = j['typeNotice'] as bool? ?? false;
     demoNoteSeen = j['demoNoteSeen'] as bool? ?? false;
     hfToken = j['hfToken'] as String? ?? '';
     plannerId = j['plannerId'] as String? ?? plannerId;
@@ -83,16 +83,14 @@ class AppSettings extends ChangeNotifier {
     onboarded = j['onboarded'] as bool? ?? false;
     disabledSkills = {...(j['disabledSkills'] as List? ?? const []).cast<String>()};
     grantedSkills = {...(j['grantedSkills'] as List? ?? const []).cast<String>()};
-    // Every install from before 0.9 has the handwritten "neat" voice stored, so
-    // changing only the default would fix nothing: move them to the plain
-    // reading font once and say so. After that the person's choice stands;
-    // the two removed voices map to "neat hand".
-    if (j['typeVersion'] != typeVersion) {
-      voice = 'friendly';
-      typeNotice = true;
-      await _save();
-    } else if (voice == 'loose' || voice == 'handwritten') {
-      voice = 'neat';
+    // 0.9.0 moved every install to the plain Nunito voice once (marker 2).
+    // That was not asked for, and a 0.9.0 move cannot be told from a
+    // deliberate pick made in its few hours, so those installs go back to the
+    // handwritten default once. An install straight from 0.8.0 or earlier (no
+    // marker) keeps the voice it had. From marker 3 on the choice stands.
+    final stored = j['typeVersion'];
+    if (stored != typeVersion) {
+      if (stored == 2) voice = defaultVoice;
       await _save();
     }
   }
@@ -104,29 +102,28 @@ class AppSettings extends ChangeNotifier {
   }
 
   Future<void> _save() => _store.write(_key, {
-      'themeMode': themeMode.name,
-      'voice': voice,
-      'typeVersion': typeVersion,
-      'typeNotice': typeNotice,
-      'demoNoteSeen': demoNoteSeen,
-      'hfToken': hfToken,
-      'plannerId': plannerId,
-      'routerId': routerId,
-      'embedderId': embedderId,
-      'thinking': thinking,
-      'useRouter': useRouter,
-      'readLinks': readLinks,
-      'autoSummarise': autoSummarise,
-      'webReader': webReader,
-      'youtubeKey': youtubeKey,
-      'jinaKey': jinaKey,
-      'crashReports': crashReports,
-      'crashReportUrl': crashReportUrl,
-      'useGpu': useGpu,
-      'maxSteps': maxSteps,
-      'temperature': temperature,
-      'onboarded': onboarded,
-      'disabledSkills': disabledSkills.toList(),
-      'grantedSkills': grantedSkills.toList(),
-    });
+    'themeMode': themeMode.name,
+    'voice': voice,
+    'typeVersion': typeVersion,
+    'demoNoteSeen': demoNoteSeen,
+    'hfToken': hfToken,
+    'plannerId': plannerId,
+    'routerId': routerId,
+    'embedderId': embedderId,
+    'thinking': thinking,
+    'useRouter': useRouter,
+    'readLinks': readLinks,
+    'autoSummarise': autoSummarise,
+    'webReader': webReader,
+    'youtubeKey': youtubeKey,
+    'jinaKey': jinaKey,
+    'crashReports': crashReports,
+    'crashReportUrl': crashReportUrl,
+    'useGpu': useGpu,
+    'maxSteps': maxSteps,
+    'temperature': temperature,
+    'onboarded': onboarded,
+    'disabledSkills': disabledSkills.toList(),
+    'grantedSkills': grantedSkills.toList(),
+  });
 }

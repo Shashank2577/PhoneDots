@@ -77,6 +77,7 @@ void main() {
       'Inter': ['inter_regular', 'inter_medium', 'inter_semibold'],
       'Nunito': ['nunito_regular', 'nunito_semibold'],
       'ShantellSans': ['shantell_variable'],
+      'PatrickHand': ['patrickhand_regular'],
     };
     for (final e in fonts.entries) {
       final loader = FontLoader(e.key);

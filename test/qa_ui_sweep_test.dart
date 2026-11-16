@@ -611,7 +611,12 @@ List<Screen> _screens() => [
       await _tap(t, row);
     },
   ),
-  Screen('chat-model-picker-sheet', () => const ChatScreen(), nav: true, after: (t, e) => _tap(t, find.textContaining('Demo engine ·'))),
+  Screen(
+    'chat-model-picker-sheet',
+    () => const ChatScreen(),
+    nav: true,
+    after: (t, e) => _tap(t, find.textContaining('Demo engine ·')),
+  ),
   Screen('chat-attach-sheet', () => const ChatScreen(), nav: true, after: (t, e) => _tap(t, find.byTooltip('Attach'))),
   Screen(
     'past-chats-sheet',
@@ -721,12 +726,7 @@ List<Screen> _screens() => [
   Screen('you', () => const YouScreen(), nav: true),
   Screen('you-empty', () => const YouScreen(), nav: true, bare: true),
   Screen('settings', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const SettingsScreen())),
-  Screen(
-    'under-the-hood',
-    () => const YouScreen(),
-    nav: true,
-    after: (t, e) => _push(t, const UnderTheHoodScreen()),
-  ),
+  Screen('under-the-hood', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const UnderTheHoodScreen())),
   Screen('privacy', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const PrivacyScreen())),
   Screen(
     'privacy-empty',
@@ -782,10 +782,10 @@ const _scales = [1.0, 1.6];
 List<Cfg> _configs() => [
   // Geometry: every size in light, at both scales.
   for (final s in _sizes)
-    for (final k in _scales) Cfg(s, false, k, Voice.friendly),
+    for (final k in _scales) Cfg(s, false, k, Voice.fallback),
   // Dark: colours only, so two sizes are enough.
-  const Cfg(Size(320, 568), true, 1.6, Voice.friendly),
-  const Cfg(Size(412, 915), true, 1.0, Voice.friendly),
+  Cfg(const Size(320, 568), true, 1.6, Voice.fallback),
+  Cfg(const Size(412, 915), true, 1.0, Voice.fallback),
   // Every other body voice on the smallest and the largest screen.
   for (final v in Voice.values.where((v) => v != Voice.fallback)) ...[
     Cfg(const Size(320, 568), false, 1.0, v),
@@ -854,6 +854,7 @@ Future<void> _loadFonts() async {
     'Inter': ['inter_regular', 'inter_medium', 'inter_semibold'],
     'Nunito': ['nunito_regular', 'nunito_semibold'],
     'ShantellSans': ['shantell_variable'],
+    'PatrickHand': ['patrickhand_regular'],
   };
   for (final e in files.entries) {
     final loader = FontLoader(e.key);
@@ -1082,7 +1083,7 @@ void main() {
             for (final (size, scale) in const [(Size(412, 915), 1.0), (Size(360, 690), 1.6)]) {
               // Contrast analysis walks every pixel and is slow: a few screens, one size.
               final contrast = scale == 1.0 && a11yContrast.contains(name);
-              final c = Cfg(size, dark, scale, Voice.friendly);
+              final c = Cfg(size, dark, scale, Voice.fallback);
               final env = sc.bare ? await _bareEnv(t) : await _seededEnv(t);
               env.services.settings
                 ..themeMode = dark ? ThemeMode.dark : ThemeMode.light
@@ -1211,7 +1212,7 @@ void main() {
         await _run(
           t,
           sc,
-          Cfg(size, false, 1.0, Voice.friendly),
+          Cfg(size, false, 1.0, Voice.fallback),
           scrollSweep: false,
           probe: (t) {
             final w = size.width;

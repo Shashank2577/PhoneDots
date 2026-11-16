@@ -21,6 +21,7 @@ import 'package:phonedots/core/settings.dart';
 import 'package:phonedots/core/storage/memory_json_store.dart';
 import 'package:phonedots/core/util/downloader.dart';
 import 'package:phonedots/features/models/models_screen.dart';
+import 'package:phonedots/features/settings/settings_screen.dart';
 import 'package:phonedots/knowledge/knowledge_base.dart';
 import 'package:phonedots/knowledge/memory_store.dart';
 import 'package:phonedots/main.dart';
@@ -348,6 +349,7 @@ Future<void> _loadFonts() async {
     'Inter': ['inter_regular', 'inter_medium', 'inter_semibold'],
     'Nunito': ['nunito_regular', 'nunito_semibold'],
     'ShantellSans': ['shantell_variable'],
+    'PatrickHand': ['patrickhand_regular'],
   };
   for (final e in files.entries) {
     final loader = FontLoader(e.key);
@@ -896,7 +898,8 @@ void main() {
     test('defaults', () {
       final s = AppSettings(MemoryJsonStore());
       expect(s.themeMode, ThemeMode.system);
-      expect(s.voice, 'friendly');
+      expect(s.voice, 'neat');
+      expect(Voice.byName(s.voice).style, TypeStyle.handwritten);
       expect(s.hfToken, '');
       expect(s.thinking, isFalse);
       expect(s.useRouter, isTrue);
@@ -913,24 +916,109 @@ void main() {
       expect(s.grantedSkills, isEmpty);
     });
 
-    test('type 2 migration: old installs move to the plain voice once; removed voices map to neat', () async {
+    test('0.9.1 migration: an install 0.9.0 moved to Nunito goes back to the handwritten default once', () async {
       final store = MemoryJsonStore();
-      await store.write('settings', {'voice': 'neat', 'onboarded': true});
+      // What 0.9.0 wrote after its forced move.
+      await store.write('settings', {'voice': 'friendly', 'typeVersion': 2, 'typeNotice': true, 'onboarded': true});
       final a = AppSettings(store);
       await a.load();
-      expect(a.voice, 'friendly');
-      expect(a.typeNotice, isTrue);
-      expect(((await store.read('settings')) as Map)['typeVersion'], AppSettings.typeVersion);
-      // The choice made after the move stands.
-      await a.update((x) => x.voice = 'neat');
+      expect(a.voice, 'neat');
+      expect(a.onboarded, isTrue);
+      final saved = (await store.read('settings')) as Map;
+      expect(saved['voice'], 'neat');
+      expect(saved['typeVersion'], 3);
+      expect(saved.containsKey('typeNotice'), isFalse, reason: 'the one-time note is gone');
+      // The choice made after that stands, formal included.
+      await a.update((x) => x.voice = 'friendly');
       final b = AppSettings(store);
       await b.load();
-      expect(b.voice, 'neat');
-      await store.write('settings', {...((await store.read('settings')) as Map), 'voice': 'handwritten'});
+      expect(b.voice, 'friendly');
+      await b.update((x) => x.voice = 'formal');
       final c = AppSettings(store);
       await c.load();
-      expect(c.voice, 'neat');
-      expect(Voice.byName('loose'), Voice.neat);
+      expect(c.voice, 'formal');
+    });
+
+    test('0.9.1 migration: any voice stored by 0.9.0 (marker 2) goes back, whatever it was', () async {
+      for (final v in ['friendly', 'formal', 'neat']) {
+        final store = MemoryJsonStore();
+        await store.write('settings', {'voice': v, 'typeVersion': 2});
+        final s = AppSettings(store);
+        await s.load();
+        expect(s.voice, 'neat', reason: v);
+      }
+    });
+
+    test('0.9.1 migration: an install straight from 0.8.0 or earlier keeps its voice', () async {
+      for (final v in ['formal', 'friendly', 'neat', 'loose', 'handwritten']) {
+        final store = MemoryJsonStore();
+        // 0.8.0 stored no marker.
+        await store.write('settings', {'voice': v, 'onboarded': true});
+        final s = AppSettings(store);
+        await s.load();
+        expect(s.voice, v);
+        final saved = (await store.read('settings')) as Map;
+        expect(saved['voice'], v);
+        expect(saved['typeVersion'], 3);
+        // And it is not touched again on the next start.
+        final again = AppSettings(store);
+        await again.load();
+        expect(again.voice, v);
+      }
+      // No voice stored at all: the default.
+      final store = MemoryJsonStore();
+      await store.write('settings', {'onboarded': true});
+      final s = AppSettings(store);
+      await s.load();
+      expect(s.voice, 'neat');
+    });
+
+    test('a fresh install starts handwritten and writes nothing until a choice is made', () async {
+      final store = MemoryJsonStore();
+      final s = AppSettings(store);
+      await s.load();
+      expect(s.voice, 'neat');
+      expect(await store.read('settings'), isNull);
+    });
+
+    test('voices: three hand voices make the handwritten style, two sans voices the formal one', () {
+      expect(TypeStyle.handwritten.voices, [Voice.neat, Voice.loose, Voice.handwritten]);
+      expect(TypeStyle.formal.voices, [Voice.friendly, Voice.formal]);
+      expect(Voice.fallback, Voice.neat);
+      expect(TypeStyle.handwritten.first, Voice.neat);
+      expect(TypeStyle.formal.first, Voice.friendly);
+      expect(Voice.byName('loose'), Voice.loose);
+      expect(Voice.byName('handwritten').family, 'PatrickHand');
+      expect(Voice.byName('no such voice'), Voice.neat);
+    });
+
+    test('type roles: one place picks Caveat for a hand voice and the plain face for a sans voice', () {
+      for (final v in Voice.values) {
+        final t = buildTheme(Brightness.light, voice: v).extension<TypeRoles>()!;
+        expect(t.hand, v.hand);
+        // What you read is always the voice's own font, and never smaller than before.
+        for (final s in [t.reading, t.body, t.meta, t.caption, t.proseHead, t.dataLabel]) {
+          expect(s.fontFamily, v.family, reason: v.name);
+        }
+        expect(t.reading.fontSize, greaterThanOrEqualTo(17));
+        expect(t.body.fontSize, greaterThanOrEqualTo(16));
+        expect(t.caption.fontSize, greaterThanOrEqualTo(13));
+        // The roles 0.9.0 moved.
+        for (final s in [t.contentTitle, t.rowTitle, t.rowNote, t.tag, t.chip, t.toast]) {
+          expect(s.fontFamily, v.hand ? caveat : v.family, reason: v.name);
+        }
+        if (v.hand) {
+          expect(t.rowTitle.fontSize, 24);
+          expect(t.contentTitle.fontSize, 30);
+          expect(t.tag.fontSize, 18);
+        } else {
+          // Formal is the 0.9.0 mapping, unchanged.
+          expect((t.rowTitle.fontSize, t.rowTitle.fontWeight), (17, FontWeight.w600));
+          expect((t.contentTitle.fontSize, t.contentTitle.fontWeight), (22, FontWeight.w600));
+          expect((t.tag.fontSize, t.tag.fontWeight), (13, FontWeight.w600));
+          expect(t.rowNote.fontSize, 16);
+        }
+      }
     });
 
     test('every field round-trips through a fresh instance', () async {
@@ -1483,21 +1571,52 @@ void main() {
       _noError(tester, 'theme');
     });
 
-    testWidgets('every handwriting voice selects, persists and renders', (tester) async {
+    testWidgets('handwritten or formal: two pills, and under them the voices of the chosen style', (tester) async {
       final app = await _boot(tester);
       await _door(tester, 'settings');
-      for (final v in Voice.values) {
-        await _tap(tester, find.text(v.label));
-        expect(app.services.settings.voice, v.name);
-        final row = find.ancestor(of: find.text(v.label).first, matching: find.byType(Row)).first;
-        final sample = tester.widget<Text>(
-          find.descendant(of: row, matching: find.text('Nothing you say leaves this phone.')),
-        );
-        expect(sample.style!.fontFamily, v.family);
-        _noError(tester, 'voice ${v.name}');
+      final st = app.services.settings;
+      Finder sampleOf(Voice v) => find.byWidgetPredicate(
+        (w) => w is Text && w.data == 'Nothing you say leaves this phone.' && w.style?.fontFamily == v.family,
+      );
+      Future<bool> pillOn(String label) async {
+        final pill = find.widgetWithText(ChoicePill, label);
+        await _reveal(tester, pill);
+        return tester.widget<ChoicePill>(pill).selected;
       }
-      final store = app.services.store;
-      expect(((await store.read('settings')) as Map)['voice'], Voice.values.last.name);
+
+      // A fresh install is handwritten, in the neat hand.
+      expect(st.voice, 'neat');
+      expect(await pillOn('handwritten'), isTrue);
+      expect(await pillOn('formal'), isFalse);
+      expect(find.textContaining('plain font'), findsNothing, reason: 'no one-time note');
+      for (final v in TypeStyle.handwritten.voices) {
+        expect(find.text(v.label), findsOneWidget);
+      }
+      expect(find.text('friendly'), findsNothing);
+
+      for (final style in [TypeStyle.formal, TypeStyle.handwritten]) {
+        await _tap(tester, find.widgetWithText(ChoicePill, style.label));
+        expect(st.voice, style.first.name);
+        expect(await pillOn(style.label), isTrue);
+        final roles = Theme.of(tester.element(find.byType(SettingsScreen))).extension<TypeRoles>()!;
+        expect(roles.hand, style == TypeStyle.handwritten);
+        expect(roles.rowTitle.fontFamily, style == TypeStyle.handwritten ? caveat : 'Nunito');
+        // Only this style's voices are listed.
+        for (final v in Voice.values) {
+          expect(find.text(v.note), v.style == style ? findsOneWidget : findsNothing, reason: v.name);
+        }
+        for (final v in style.voices) {
+          await _tap(tester, find.text(v.note));
+          expect(st.voice, v.name);
+          expect(sampleOf(v), findsWidgets);
+          expect(await pillOn(style.label), isTrue, reason: 'a voice never leaves its style');
+          _noError(tester, 'voice ${v.name}');
+        }
+        // Tapping the selected style again keeps the voice picked inside it.
+        await _tap(tester, find.widgetWithText(ChoicePill, style.label));
+        expect(st.voice, style.voices.last.name);
+      }
+      expect(((await app.services.store.read('settings')) as Map)['voice'], 'handwritten');
     });
 
     testWidgets('every SwitchRow toggles its setting both ways', (tester) async {
@@ -1675,6 +1794,8 @@ void main() {
       final g3 = find.ancestor(of: find.text('Gemma 3 270M'), matching: find.byType(ModelTile)).first;
       await _tap(tester, find.descendant(of: g3, matching: find.text('use')));
       expect(app.services.settings.plannerId, 'gemma-3-270m');
+      // The hand-lettered rows are taller: e2b may have scrolled out of the built range.
+      await _reveal(tester, find.text('use'));
       expect(find.text('use'), findsOneWidget, reason: 'now e2b offers "use"');
 
       // delete asks for confirmation; "not now" keeps it
@@ -1891,7 +2012,10 @@ void main() {
         'Translate into French.',
       );
       await _tap(tester, find.text('free'));
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction (optional)')).controller!.text, '');
+      expect(
+        tester.widget<TextField>(find.widgetWithText(TextField, 'System instruction (optional)')).controller!.text,
+        '',
+      );
 
       // empty prompt: run does nothing
       await _tap(tester, find.text('run'), 200);

@@ -25,13 +25,19 @@ Flutter app for Android, iOS and macOS, with native bridges to [LiteRT-LM](https
 PhoneDots uses **Burrow's "hand-drawn minimal" design system** (from [Android-Showcase](https://github.com/Shashank2577/Android-Showcase), `design/burrow-a/theme`), in its readable form (tokens 2.0.0, baseApp `design/REVIEW.md`):
 
 - White paper and ink (a warm "night notebook" in dark mode), one marker-yellow swipe per screen on a fact, and red pen only for destructive things and the `!` in front of a warning.
-- **You read in a plain face, you tap in hand-lettering.** Answers, summaries, model names, titles, memory facts, sizes and dates are set in the reading voice: Nunito by default, or Inter or Shantell Sans ("neat hand") in settings. Caveat is for the app's own short words only (page titles, section heads, buttons, links, the tab words) and is never smaller than 24.
+- **Two styles, one choice in settings: handwritten or formal.** *Handwritten* is the default: titles, names, tags and remembered facts are hand-lettered in Caveat (24 for a row title, 30 for a content title, 18 for a tag), and the text you read is in a hand voice: Shantell Sans "neat hand" by default, "loose hand", or Patrick Hand ("all handwritten"). *Formal* sets everything you read, titles and tags included, in a plain sans (Nunito "friendly" or Inter "formal") and keeps Caveat for the app's own short words only. Page titles, section heads, buttons, links and the tab words are Caveat in both.
 - Sentences are ink; pencil grey is only for short meta lines and captions; nothing readable is under 13. Long text (answers, summaries) is 17/26 and never wider than 600.
 - No cards: content sits on the paper, separated by wobbly hairlines. Pages open with a name and one sentence; "doors" with circled arrows lead to places in the app, plain rows with a small arrow open content.
 - One ink pill per screen for the main action; outlined pills and underlined links for the rest; every target is at least 48 dp. A disabled button is a smudge pill with a graphite label, never a faded one.
 - Calm motion: a light squish and haptic tick on press, rows rising in as they scroll into view, the nav ring drawing itself, ticks drawing on.
 
-Tokens and type roles live in `lib/theme/theme.dart` (`context.type.reading`, `.rowTitle`, `.body`, `.meta`, `.caption`, …), components in `lib/widgets/hand.dart` (`ItemRow`, `Door`, `PageIntro`, `InkButton`, …) and long text in `lib/widgets/rich_text.dart` (`Prose`).
+Tokens and type roles live in `lib/theme/theme.dart` (`context.type.reading`, `.rowTitle`, `.body`, `.meta`, `.caption`, …; `TypeRoles.of` is the one place that picks Caveat or the plain face for a role, from the voice), components in `lib/widgets/hand.dart` (`ItemRow`, `Door`, `PageIntro`, `InkButton`, …) and long text in `lib/widgets/rich_text.dart` (`Prose`).
+
+## What's new
+
+**0.9.1.** The handwritten fonts are back, and they are the default: the neat, loose and all-handwritten voices, with hand-lettered titles, names and tags, as before 0.9.0. Settings has one choice, *handwritten or formal*; formal is the plain-font look 0.9.0 introduced. The layout, spacing, larger sizes and darker text of 0.9.0 stay. 0.9.0 switched every install to Nunito; an install that ran 0.9.0 goes back to the neat hand once, an install coming straight from 0.8.0 or earlier keeps the voice it had, and after that your choice stays.
+
+**0.9.0.** Three tabs (chat · saved · you), a rail on wide windows, answers first with steps folded away, 48 dp targets, larger text and darker greys.
 
 ## Screens
 
@@ -47,7 +53,7 @@ Three words along the bottom: **chat · saved · you**. Skills and models are th
 | my files | Notes and imports it can search | Search |
 | skills | Skills in folded groups ("writing · 12") with a switch each, recipes and community skills | Tap a skill to try it |
 | models | Each model with its name, size, what it does and its state on its own line; "download all" when many are missing | Download |
-| settings | Light or dark, the reading voice (three, each with a live sample), the assistant, saved posts, keys, and about with the licences | — |
+| settings | Light or dark, handwritten or formal (two pills, then that style's voices, each with a live sample), the assistant, saved posts, keys, and about with the licences | — |
 | privacy | What is kept, a "forget" link per kind of data, and every action it took | — |
 | under the hood | Diagnostics (the log, crash reports) and the lab (prompt lab, speed test) | Share the log / run |
 

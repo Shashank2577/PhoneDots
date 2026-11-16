@@ -134,7 +134,7 @@ class _Table extends StatelessWidget {
                 for (var i = 0; i < width; i++)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 0, 20, 8),
-                    child: Text(i < columns.length ? columns[i] : '', style: context.type.tag),
+                    child: Text(i < columns.length ? columns[i] : '', style: context.type.dataLabel),
                   ),
               ],
             ),
@@ -255,7 +255,7 @@ class _Transcript extends StatelessWidget {
                     if (speakers > 1) ...[
                       Dot(color: seriesColor(_speaker(s), brightness), size: 8),
                       const SizedBox(width: 6),
-                      Text('Speaker ${_speaker(s) + 1}', style: context.type.tag),
+                      Text('Speaker ${_speaker(s) + 1}', style: context.type.dataLabel),
                       const SizedBox(width: 8),
                     ],
                     Text(

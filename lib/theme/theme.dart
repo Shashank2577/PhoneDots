@@ -137,41 +137,76 @@ const railWidth = 200.0;
 /// Minimum touch target.
 const minTap = 48.0;
 
-/// How the text you read is set. Headlines and buttons are always Caveat.
-/// Tokens 2.0.0 keep three voices; "loose hand" and "all handwritten" are gone.
-enum Voice {
-  friendly('friendly', 'Nunito, a rounded sans', 'Nunito'),
-  formal('formal', 'Inter, a crisp sans', 'Inter'),
-  neat('neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', informality: 0);
+/// The two ways the app is set. Handwritten is the default: the reading
+/// text is in a hand voice and titles, tags and names are hand-lettered
+/// (Caveat). Formal sets everything you read in a plain sans and keeps
+/// hand-lettering for headings and buttons only.
+enum TypeStyle {
+  handwritten('handwritten', 'Titles, tags and names are hand-lettered, and the text you read is in a marker hand.'),
+  formal('formal', 'Everything you read is in a plain font. Only headings and buttons stay hand-lettered.');
 
-  const Voice(this.label, this.note, this.family, {this.informality});
+  const TypeStyle(this.label, this.note);
+  final String label;
+  final String note;
+
+  /// The voices that belong to this style, in the order settings lists them.
+  List<Voice> get voices => [
+    for (final v in Voice.values)
+      if (v.style == this) v,
+  ];
+
+  /// The voice a tap on this style's pill picks.
+  Voice get first => this == handwritten ? Voice.neat : Voice.friendly;
+}
+
+/// How the text you read is set. A voice belongs to one [TypeStyle]: the
+/// hand voices to handwritten, the sans voices to formal. Headlines and
+/// buttons are Caveat in both.
+enum Voice {
+  neat('neat hand', 'Shantell Sans, marker-neat', 'ShantellSans', hand: true, informality: 0),
+  loose('loose hand', 'Shantell Sans, informal', 'ShantellSans', hand: true, informality: 100),
+  handwritten('all handwritten', 'Patrick Hand', 'PatrickHand', hand: true, scale: 1.14),
+  friendly('friendly', 'Nunito, a rounded sans', 'Nunito'),
+  formal('formal', 'Inter, a crisp sans', 'Inter');
+
+  const Voice(this.label, this.note, this.family, {this.hand = false, this.scale = 1, this.informality});
 
   final String label;
   final String note;
   final String family;
+
+  /// A hand voice: the roles in [TypeRoles] that formal sets in the plain
+  /// face (row and content titles, tags, chips, notes) are Caveat.
+  final bool hand;
+
+  /// Patrick Hand draws small for its size; it is set a little larger.
+  final double scale;
 
   /// Shantell Sans' INFM axis; null for static fonts.
   final double? informality;
 
   List<FontVariation>? get variations => informality == null ? null : [FontVariation('INFM', informality!)];
 
-  static const fallback = Voice.friendly;
+  TypeStyle get style => hand ? TypeStyle.handwritten : TypeStyle.formal;
 
-  /// The stored voice, with the removed ones mapped onto "neat hand".
-  static Voice byName(String name) => switch (name) {
-    'loose' || 'handwritten' => Voice.neat,
-    _ => Voice.values.asNameMap()[name] ?? fallback,
-  };
+  /// The voice of a fresh install.
+  static const fallback = Voice.neat;
+
+  static Voice byName(String name) => Voice.values.asNameMap()[name] ?? fallback;
 }
 
-/// Hand-lettered styles (Caveat): the app's own short words only. Never
-/// smaller than 24, never for data or anything the user wrote.
+/// Hand-lettered styles (Caveat). Headings and buttons use these in both
+/// styles; in the handwritten style the title, tag and chip roles of
+/// [TypeRoles] are Caveat too.
 class Hand {
   static const display = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w700, fontSize: 52, height: 58 / 52);
   static const headline = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w700, fontSize: 38, height: 42 / 38);
   static const title = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w700, fontSize: 30, height: 34 / 30);
   static const door = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w600, fontSize: 24, height: 28 / 24);
   static const label = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w600, fontSize: 24, height: 28 / 24);
+
+  /// The small hand of tags and chips in the handwritten style.
+  static const small = TextStyle(fontFamily: caveat, fontWeight: FontWeight.w600, fontSize: 18, height: 21 / 18);
 
   /// Headings follow the system text size up to 1.3x, so they never push the
   /// content off the screen; body text follows it fully.
@@ -181,28 +216,49 @@ class Hand {
 const monoFamily = 'monospace';
 const monoFallback = ['Menlo', 'SF Mono', 'Roboto Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'];
 
-/// The body-face roles (tokens 2.0.0 `type.body`), in the chosen voice.
+/// The type roles screens use. This is the one place that decides which
+/// face each kind of text gets: with a hand voice the title, note, tag, chip
+/// and toast roles are Caveat (as they were before 0.9.0); with a sans voice
+/// they are the plain face. The other roles are always the voice's own font.
 @immutable
 class TypeRoles extends ThemeExtension<TypeRoles> {
   const TypeRoles({
+    required this.hand,
     required this.contentTitle,
     required this.reading,
     required this.rowTitle,
+    required this.rowNote,
+    required this.proseHead,
     required this.body,
     required this.meta,
     required this.caption,
+    required this.dataLabel,
     required this.tag,
+    required this.chip,
+    required this.toast,
     required this.mono,
   });
 
-  /// A talk, article or person on its own page. 22/28 600.
+  /// True in the handwritten style.
+  final bool hand;
+
+  /// A talk, article or person on its own page. Hand: Caveat 30/34 700.
+  /// Formal: 22/28 600.
   final TextStyle contentTitle;
 
   /// Summaries, answers, article text. 17/26.
   final TextStyle reading;
 
-  /// The title of a content row (a model, a file, a saved item). 17/24 600.
+  /// The title of a content row (a model, a file, a saved item).
+  /// Hand: Caveat 24/28 600. Formal: 17/24 600.
   final TextStyle rowTitle;
+
+  /// A row whose title is a sentence the user wrote (a remembered fact).
+  /// Hand: Caveat 24/28 600. Formal: 16/24.
+  final TextStyle rowNote;
+
+  /// A heading inside an answer: always the reading face. 17/24 600.
+  final TextStyle proseHead;
 
   /// Sentences, intros, field text. 16/24.
   final TextStyle body;
@@ -213,8 +269,18 @@ class TypeRoles extends ThemeExtension<TypeRoles> {
   /// Timestamps, counts, sizes. 13/18 pencil.
   final TextStyle caption;
 
-  /// Tags, step numbers, badges. 13/18 600.
+  /// Column heads and speaker names: always the reading face. 13/18 600.
+  final TextStyle dataLabel;
+
+  /// Tags, step numbers, badges. Hand: Caveat 18/21 600. Formal: 13/18 600.
   final TextStyle tag;
+
+  /// The name on an attachment chip. Hand: Caveat 18/21 600. Formal: 13/18.
+  final TextStyle chip;
+
+  /// The line in a toast, in paper on ink. Hand: Caveat 24/28 600.
+  /// Formal: 16/24.
+  final TextStyle toast;
 
   /// Logs, tool calls. 13/20 ink.
   final TextStyle mono;
@@ -224,18 +290,26 @@ class TypeRoles extends ThemeExtension<TypeRoles> {
       fontFamily: voice.family,
       fontVariations: voice.variations,
       fontWeight: weight,
-      fontSize: size,
+      fontSize: size * voice.scale,
       height: line / size,
       color: color ?? p.ink,
     );
+    // The roles 0.9.0 moved to the plain face: Caveat again with a hand voice.
+    TextStyle moved(TextStyle hand, TextStyle plain) => voice.hand ? hand.copyWith(color: p.ink) : plain;
     return TypeRoles(
-      contentTitle: s(22, 28, weight: FontWeight.w600),
+      hand: voice.hand,
+      contentTitle: moved(Hand.title, s(22, 28, weight: FontWeight.w600)),
       reading: s(17, 26),
-      rowTitle: s(17, 24, weight: FontWeight.w600),
+      rowTitle: moved(Hand.label, s(17, 24, weight: FontWeight.w600)),
+      rowNote: moved(Hand.label, s(16, 24)),
+      proseHead: s(17, 24, weight: FontWeight.w600),
       body: s(16, 24),
       meta: s(14, 20, color: p.pencil),
       caption: s(13, 18, color: p.pencil),
-      tag: s(13, 18, weight: FontWeight.w600),
+      dataLabel: s(13, 18, weight: FontWeight.w600),
+      tag: moved(Hand.small, s(13, 18, weight: FontWeight.w600)),
+      chip: moved(Hand.small, s(13, 18)),
+      toast: moved(Hand.label, s(16, 24)).copyWith(color: p.paper),
       mono: TextStyle(
         fontFamily: monoFamily,
         fontFamilyFallback: monoFallback,
@@ -275,8 +349,7 @@ ThemeData buildTheme(Brightness brightness, {Voice voice = Voice.fallback}) {
     outlineVariant: p.rule,
     onSurfaceVariant: p.pencil,
   );
-  // Material roles mapped onto the readable system: nothing under 13sp,
-  // Caveat only from 24 up.
+  // Material roles mapped onto the type roles: nothing under 13sp.
   final text = TextTheme(
     displayLarge: Hand.display.copyWith(color: p.ink),
     displayMedium: Hand.display.copyWith(color: p.ink),
@@ -413,7 +486,7 @@ ThemeData buildTheme(Brightness brightness, {Voice voice = Voice.fallback}) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: p.ink,
-      contentTextStyle: t.body.copyWith(color: p.paper),
+      contentTextStyle: t.toast,
       shape: pill,
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(

@@ -67,7 +67,7 @@ class PrivacyScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Body(e.detail),
+                          Text(e.detail, style: context.type.rowNote),
                           Caption('${e.kind} · ${timeAgo(e.time)}${e.network ? ' · used the network' : ''}'),
                         ],
                       ),

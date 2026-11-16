@@ -96,6 +96,8 @@ jobs:
           prerelease: true
           files: dist/*
           body: |
+            **What changed:** see "What's new" in the [README](https://github.com/${{ github.repository }}#whats-new).
+
             **Android** (`.apk`): arm64 phones, Android 8.0+, 8 GB RAM recommended for Gemma 4 E2B.
 
             **iPhone** (`-ios-unsigned.ipa`, iOS 18+): not signed, so install it yourself with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) and a free Apple ID: download the .ipa on your computer, open it in Sideloadly (or AltStore), sign in with your Apple ID and install to your iPhone, then on the iPhone trust your Apple ID under Settings → General → VPN & Device Management. A free Apple ID signs for 7 days: install it again after that. Without a paid Apple Developer account the iPhone app keeps its own models (the shared App Group needs one), so it doesn't share them with other apps.

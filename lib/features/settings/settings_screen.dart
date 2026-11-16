@@ -48,13 +48,13 @@ class YouScreen extends StatelessWidget {
             meta: '${s.skills.enabled.length} on · recipes · community skills',
             onTap: () => openSkills(context),
           ),
-          Door(
-            'models',
-            meta: '${formatBytes(s.models.storageUsed)} on this phone',
-            onTap: () => openModels(context),
-          ),
+          Door('models', meta: '${formatBytes(s.models.storageUsed)} on this phone', onTap: () => openModels(context)),
           const SectionHead('the app'),
-          Door('settings', meta: 'Light or dark, handwriting, about', onTap: () => push(const SettingsScreen())),
+          Door(
+            'settings',
+            meta: 'Light or dark, handwritten or formal',
+            onTap: () => push(const SettingsScreen()),
+          ),
           Door(
             'privacy',
             meta: '${count(s.ledger.networkEvents, 'network request', 'network requests')}, each one listed',
@@ -124,218 +124,228 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppScope.services(context);
-    final st = s.settings;
+    final st = AppScope.services(context).settings;
+    return ListenableBuilder(listenable: st, builder: (context, _) => _page(context, Voice.byName(st.voice)));
+  }
+
+  Widget _page(BuildContext context, Voice voice) {
+    final st = AppScope.services(context).settings;
     final p = context.pal;
-    return ListenableBuilder(
-      listenable: st,
-      builder: (context, _) => HandPage(
-        children: [
-          const PageIntro(
-            'settings',
-            'How PhoneDots looks and how the assistant works. Changes apply straight away.',
-          ),
-          if (st.typeNotice) ...[
-            DoneNote(
-              'Reading text is now a plain font. Change it under handwriting.',
-              action: 'got it',
-              onAction: () => st.update((x) => x.typeNotice = false),
-            ),
-            const SizedBox(height: 8),
+    return HandPage(
+      children: [
+        const PageIntro('settings', 'How PhoneDots looks and how the assistant works. Changes apply straight away.'),
+        const SectionHead('light or dark', first: true),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (mode, label, d) in [
+              (ThemeMode.system, 'like the phone', Doodle.phone),
+              (ThemeMode.light, 'light', Doodle.sun),
+              (ThemeMode.dark, 'dark', Doodle.moon),
+            ])
+              ChoicePill(
+                label,
+                leading: d,
+                selected: st.themeMode == mode,
+                onTap: () => st.update((x) => x.themeMode = mode),
+              ),
           ],
-          const SectionHead('light or dark', first: true),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (mode, label, d) in [
-                (ThemeMode.system, 'like the phone', Doodle.phone),
-                (ThemeMode.light, 'light', Doodle.sun),
-                (ThemeMode.dark, 'dark', Doodle.moon),
-              ])
-                ChoicePill(
-                  label,
-                  leading: d,
-                  selected: st.themeMode == mode,
-                  onTap: () => st.update((x) => x.themeMode = mode),
-                ),
-            ],
-          ),
-          const SectionHead(
-            'handwriting',
-            note: 'Headlines and buttons stay hand-lettered. Pick how the text you read looks.',
-          ),
-          for (final v in Voice.values)
-            Semantics(
-              button: true,
-              selected: Voice.byName(st.voice) == v,
-              child: Pressable(
-                onTap: () => st.update((x) => x.voice = v.name),
-                scale: 0.99,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 32,
-                        child: Voice.byName(st.voice) == v ? const DrawnDoodle(Doodle.tick, size: 22) : null,
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(v.label, style: Hand.door.copyWith(color: p.ink), textScaler: Hand.scaler(context)),
-                            Text(
-                              'Nothing you say leaves this phone.',
-                              style: context.type.body.copyWith(fontFamily: v.family, fontVariations: v.variations),
+        ),
+        // One choice first, then the voices that belong to it.
+        SectionHead('handwritten or formal', note: voice.style.note),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final style in TypeStyle.values)
+              ChoicePill(
+                style.label,
+                selected: voice.style == style,
+                onTap: () {
+                  if (voice.style != style) {
+                    st.update((x) => x.voice = style.first.name);
+                  }
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        for (final v in voice.style.voices)
+          Semantics(
+            button: true,
+            selected: voice == v,
+            child: Pressable(
+              onTap: () => st.update((x) => x.voice = v.name),
+              scale: 0.99,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 32, child: voice == v ? const DrawnDoodle(Doodle.tick, size: 22) : null),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            v.label,
+                            style: Hand.door.copyWith(color: p.ink),
+                            textScaler: Hand.scaler(context),
+                          ),
+                          Text(
+                            'Nothing you say leaves this phone.',
+                            style: context.type.body.copyWith(
+                              fontFamily: v.family,
+                              fontVariations: v.variations,
+                              fontSize: 16 * v.scale,
                             ),
-                            Caption(v.note),
-                          ],
-                        ),
+                          ),
+                          Caption(v.note),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          const SectionHead('the assistant'),
-          SwitchRow(
-            title: 'fast path',
-            body: 'Let ${modelById(st.routerId)?.name ?? 'FunctionGemma'} handle simple phone commands instantly.',
-            value: st.useRouter,
-            onChanged: (v) => st.update((x) => x.useRouter = v),
           ),
-          SwitchRow(
-            title: 'read shared links',
-            body: 'Fetch the public title and description of links you paste, straight from the site. Each one is logged under privacy.',
-            value: st.readLinks,
-            onChanged: (v) => st.update((x) => x.readLinks = v),
-          ),
-          const SectionHead('saved posts'),
-          SwitchRow(
-            title: 'summarise when shared',
-            body: 'Gemma summarises each post, reel or screenshot as soon as it arrives. Free, and on this phone.',
-            value: st.autoSummarise,
-            onChanged: (v) => st.update((x) => x.autoSummarise = v),
-          ),
-          SwitchRow(
-            title: 'free web reader',
-            body: 'When an open page only shares a line or two, ask Jina Reader for its full text. Free, but the link is sent to Jina. Never used on pages that ask you to log in. Logged under privacy.',
-            value: st.webReader,
-            onChanged: (v) => st.update((x) => x.webReader = v),
-          ),
-          const SizedBox(height: 8),
-          const Body(
-            'Optional free keys, stored on this phone only. Everything works without them.\n'
-            '• YouTube Data API key: full video details even when YouTube rate-limits the page. '
-            'Free at console.cloud.google.com (enable "YouTube Data API v3", create an API key). '
-            '10,000 videos a day.\n'
-            '• Jina key: raises the free web reader from about 20 to about 500 pages a minute. '
-            'Free at jina.ai.',
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _yt,
-            obscureText: true,
-            onChanged: (v) => st.update((x) => x.youtubeKey = v.trim()),
-            decoration: const InputDecoration(hintText: 'YouTube Data API key (optional)'),
-          ),
-          _KeyLinks(
-            links: const [
-              ('1 · turn on the API', 'https://console.cloud.google.com/apis/library/youtube.googleapis.com'),
-              ('2 · create a key', 'https://console.cloud.google.com/apis/credentials'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _jina,
-            obscureText: true,
-            onChanged: (v) => st.update((x) => x.jinaKey = v.trim()),
-            decoration: const InputDecoration(hintText: 'Jina key (optional)'),
-          ),
-          const _KeyLinks(links: [('get a free Jina key', 'https://jina.ai/api-dashboard/key-manager')]),
-          const SectionHead('more'),
-          SwitchRow(
-            title: 'think first',
-            body: 'Reason step by step before answering. Slower, better for hard questions.',
-            value: st.thinking,
-            onChanged: (v) => st.update((x) => x.thinking = v),
-          ),
-          SwitchRow(
-            title: 'use the graphics chip',
-            body: 'Faster on most phones. Turn off if a model won\'t load.',
-            value: st.useGpu,
-            onChanged: (v) => st.update((x) => x.useGpu = v),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'creativity · ${st.temperature.toStringAsFixed(1)}',
-            style: Hand.door.copyWith(color: p.ink),
-            textScaler: Hand.scaler(context),
-          ),
-          Slider(value: st.temperature, max: 1.2, divisions: 12, onChanged: (v) => st.update((x) => x.temperature = v)),
-          Text(
-            'steps per answer · ${st.maxSteps}',
-            style: Hand.door.copyWith(color: p.ink),
-            textScaler: Hand.scaler(context),
-          ),
-          const Meta('How many skills it may chain before it has to answer.'),
-          Slider(
-            value: st.maxSteps.toDouble(),
-            min: 1,
-            max: 12,
-            divisions: 11,
-            onChanged: (v) => st.update((x) => x.maxSteps = v.round()),
-          ),
-          const SectionHead('Hugging Face'),
-          const Meta('Only needed for gated models. Stored on this phone only.'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _token,
-            obscureText: !_showToken,
-            onChanged: (v) => st.update((x) => x.hfToken = v.trim()),
-            decoration: InputDecoration(
-              hintText: 'access token (optional)',
-              suffixIcon: DoodleButton(
-                _showToken ? Doodle.eyeOff : Doodle.eye,
-                tooltip: _showToken ? 'Hide' : 'Show',
-                size: 20,
-                color: p.pencil,
-                onTap: () => setState(() => _showToken = !_showToken),
-              ),
-            ),
-          ),
-          const _KeyLinks(
-            links: [
-              ('create a token (read access)', 'https://huggingface.co/settings/tokens/new?tokenType=read'),
-              (
-                'accept the FunctionGemma licence',
-                'https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          HandLink('show the welcome again', onTap: () => st.update((x) => x.onboarded = false)),
-          const SectionHead('about'),
-          Body('PhoneDots ${CrashReporter.appVersion}. An assistant that lives on your phone.'),
-          for (final (title, body) in _about) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 16, bottom: 2),
-              child: Text(title, style: context.type.rowTitle),
-            ),
-            Body(body),
+        const SectionHead('the assistant'),
+        SwitchRow(
+          title: 'fast path',
+          body: 'Let ${modelById(st.routerId)?.name ?? 'FunctionGemma'} handle simple phone commands instantly.',
+          value: st.useRouter,
+          onChanged: (v) => st.update((x) => x.useRouter = v),
+        ),
+        SwitchRow(
+          title: 'read shared links',
+          body: 'Fetch the public title and description of links you paste, straight from the site. Each one is logged under privacy.',
+          value: st.readLinks,
+          onChanged: (v) => st.update((x) => x.readLinks = v),
+        ),
+        const SectionHead('saved posts'),
+        SwitchRow(
+          title: 'summarise when shared',
+          body: 'Gemma summarises each post, reel or screenshot as soon as it arrives. Free, and on this phone.',
+          value: st.autoSummarise,
+          onChanged: (v) => st.update((x) => x.autoSummarise = v),
+        ),
+        SwitchRow(
+          title: 'free web reader',
+          body: 'When an open page only shares a line or two, ask Jina Reader for its full text. Free, but the link is sent to Jina. Never used on pages that ask you to log in. Logged under privacy.',
+          value: st.webReader,
+          onChanged: (v) => st.update((x) => x.webReader = v),
+        ),
+        const SizedBox(height: 8),
+        const Body(
+          'Optional free keys, stored on this phone only. Everything works without them.\n'
+          '• YouTube Data API key: full video details even when YouTube rate-limits the page. '
+          'Free at console.cloud.google.com (enable "YouTube Data API v3", create an API key). '
+          '10,000 videos a day.\n'
+          '• Jina key: raises the free web reader from about 20 to about 500 pages a minute. '
+          'Free at jina.ai.',
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _yt,
+          obscureText: true,
+          onChanged: (v) => st.update((x) => x.youtubeKey = v.trim()),
+          decoration: const InputDecoration(hintText: 'YouTube Data API key (optional)'),
+        ),
+        _KeyLinks(
+          links: const [
+            ('1 · turn on the API', 'https://console.cloud.google.com/apis/library/youtube.googleapis.com'),
+            ('2 · create a key', 'https://console.cloud.google.com/apis/credentials'),
           ],
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PillButton(
-              'open-source licences',
-              onTap: () => showLicensePage(context: context, applicationName: 'PhoneDots'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _jina,
+          obscureText: true,
+          onChanged: (v) => st.update((x) => x.jinaKey = v.trim()),
+          decoration: const InputDecoration(hintText: 'Jina key (optional)'),
+        ),
+        const _KeyLinks(links: [('get a free Jina key', 'https://jina.ai/api-dashboard/key-manager')]),
+        const SectionHead('more'),
+        SwitchRow(
+          title: 'think first',
+          body: 'Reason step by step before answering. Slower, better for hard questions.',
+          value: st.thinking,
+          onChanged: (v) => st.update((x) => x.thinking = v),
+        ),
+        SwitchRow(
+          title: 'use the graphics chip',
+          body: 'Faster on most phones. Turn off if a model won\'t load.',
+          value: st.useGpu,
+          onChanged: (v) => st.update((x) => x.useGpu = v),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'creativity · ${st.temperature.toStringAsFixed(1)}',
+          style: Hand.door.copyWith(color: p.ink),
+          textScaler: Hand.scaler(context),
+        ),
+        Slider(value: st.temperature, max: 1.2, divisions: 12, onChanged: (v) => st.update((x) => x.temperature = v)),
+        Text(
+          'steps per answer · ${st.maxSteps}',
+          style: Hand.door.copyWith(color: p.ink),
+          textScaler: Hand.scaler(context),
+        ),
+        const Meta('How many skills it may chain before it has to answer.'),
+        Slider(
+          value: st.maxSteps.toDouble(),
+          min: 1,
+          max: 12,
+          divisions: 11,
+          onChanged: (v) => st.update((x) => x.maxSteps = v.round()),
+        ),
+        const SectionHead('Hugging Face'),
+        const Meta('Only needed for gated models. Stored on this phone only.'),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _token,
+          obscureText: !_showToken,
+          onChanged: (v) => st.update((x) => x.hfToken = v.trim()),
+          decoration: InputDecoration(
+            hintText: 'access token (optional)',
+            suffixIcon: DoodleButton(
+              _showToken ? Doodle.eyeOff : Doodle.eye,
+              tooltip: _showToken ? 'Hide' : 'Show',
+              size: 20,
+              color: p.pencil,
+              onTap: () => setState(() => _showToken = !_showToken),
             ),
           ),
+        ),
+        const _KeyLinks(
+          links: [
+            ('create a token (read access)', 'https://huggingface.co/settings/tokens/new?tokenType=read'),
+            (
+              'accept the FunctionGemma licence',
+              'https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        HandLink('show the welcome again', onTap: () => st.update((x) => x.onboarded = false)),
+        const SectionHead('about'),
+        Body('PhoneDots ${CrashReporter.appVersion}. An assistant that lives on your phone.'),
+        for (final (title, body) in _about) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 16, bottom: 2),
+            child: Text(title, style: context.type.rowTitle),
+          ),
+          Body(body),
         ],
-      ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PillButton(
+            'open-source licences',
+            onTap: () => showLicensePage(context: context, applicationName: 'PhoneDots'),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -351,7 +361,7 @@ const _about = [
   ),
   (
     'The look',
-    'The hand-drawn minimal design system from Burrow (Android-Showcase). Caveat, Inter, Nunito and Shantell Sans under the SIL Open Font License.',
+    'The hand-drawn minimal design system from Burrow (Android-Showcase). Caveat, Shantell Sans, Patrick Hand, Nunito and Inter under the SIL Open Font License.',
   ),
   (
     'Inspiration',
@@ -370,8 +380,7 @@ class _KeyLinks extends StatelessWidget {
     return Wrap(
       spacing: 12,
       children: [
-        for (final (label, url) in links)
-          HandLink('$label ↗', onTap: () => s.device.invoke('url.open', {'url': url})),
+        for (final (label, url) in links) HandLink('$label ↗', onTap: () => s.device.invoke('url.open', {'url': url})),
       ],
     );
   }

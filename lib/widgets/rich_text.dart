@@ -6,7 +6,7 @@ import '../theme/theme.dart';
 /// most [readingColumn] wide, 12 between paragraphs, selectable.
 ///
 /// Renders a small markdown subset without a dependency: paragraphs, `#`
-/// headings (as `rowTitle`, never hand-lettering, so an answer has one level
+/// headings (as `proseHead`, always the reading face, so an answer has one level
 /// of heading), `-` and `1.` lists, `>` quotes, `**bold**`, `` `code` `` and
 /// fenced code blocks (mono).
 class Prose extends StatelessWidget {
@@ -56,7 +56,7 @@ class Prose extends StatelessWidget {
       }
       final heading = RegExp(r'^(#{1,6})\s+(.*)').firstMatch(line);
       if (heading != null) {
-        add(Text.rich(_inline(heading.group(2)!, t.rowTitle, t, p)), before: 16);
+        add(Text.rich(_inline(heading.group(2)!, t.proseHead, t, p)), before: 16);
         gap = 4;
         lastKind = 'heading';
         continue;

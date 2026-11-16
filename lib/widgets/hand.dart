@@ -1112,7 +1112,7 @@ class CircledArrow extends StatelessWidget {
 }
 
 /// One piece of content (a chat, a saved post, a model, a file, a fact) in
-/// the body face: a title of up to two lines, an optional meta line and a
+/// a title of up to two lines, an optional meta line and a
 /// caption, an optional leading doodle and one trailing widget. When it opens
 /// something it ends in a plain pencil arrow.
 class ItemRow extends StatelessWidget {
@@ -1139,7 +1139,7 @@ class ItemRow extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
 
-  /// Defaults to `rowTitle`; facts the user wrote use `body`.
+  /// Defaults to `rowTitle`; facts the user wrote use `rowNote`.
   final TextStyle? titleStyle;
   final int titleLines;
   final int metaLines;
@@ -1214,7 +1214,7 @@ class ItemRow extends StatelessWidget {
   }
 }
 
-/// A small tag in the body face: a smudge pill, or marker-filled when marked.
+/// A small tag (the `tag` role): a smudge pill, or marker-filled when marked.
 class HandTag extends StatelessWidget {
   const HandTag(this.text, {super.key, this.marked = false, this.onTap, this.color});
   final String text;

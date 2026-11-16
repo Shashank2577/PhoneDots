@@ -73,7 +73,7 @@ class AttachmentChip extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 150),
             child: Text(
               a.name,
-              style: context.type.caption.copyWith(color: p.ink),
+              style: context.type.chip,
               overflow: TextOverflow.ellipsis,
             ),
           ),
