@@ -799,12 +799,11 @@ packages:
     source: hosted
     version: "2.0.3"
   sherpa_onnx_macos:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: sherpa_onnx_macos
-      sha256: "6028041e790cffebbf1ecec72d49359cb8b63d234cd9c04d75923c67615e6211"
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/sherpa_onnx_macos_stub"
+      relative: true
+    source: path
     version: "2.0.3"
   sherpa_onnx_web:
     dependency: transitive

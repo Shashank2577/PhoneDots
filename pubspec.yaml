@@ -65,3 +65,10 @@ flutter:
     - family: PatrickHand
       fonts:
         - asset: assets/fonts/patrickhand_regular.ttf
+
+dependency_overrides:
+  # The voice engine's macOS binary clashes with LiteRT-LM's in the Mac build
+  # (both produce include/module.modulemap), so the Mac app leaves it out and
+  # uses the system voice. Android and iOS keep neural voices.
+  sherpa_onnx_macos:
+    path: packages/sherpa_onnx_macos_stub

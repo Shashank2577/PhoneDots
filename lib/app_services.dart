@@ -124,13 +124,14 @@ class AppServices {
       ledger: ledger,
       modelsDir: s.modelsDir,
       client: linkClient,
-      supported: native,
+      // Neural voices: Android and iOS (the Mac app leaves the engine out).
+      supported: p == 'android' || p == 'ios',
     );
     services.speaker = Speaker(
       voices: services.voices,
       settings: settings,
       filesDir: s.filesDir,
-      neural: native ? NeuralVoice() : null,
+      neural: p == 'android' || p == 'ios' ? NeuralVoice() : null,
     );
     services.saved = SavedStore(s);
     services.models = ModelManager(
