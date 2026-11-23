@@ -153,7 +153,7 @@ const voiceTokens = <VoiceToken>[
   VoiceToken('loose', 'loose hand', 'Shantell Sans, informal', 'ShantellSans', 100.0, 1.0, hand: true),
   VoiceToken('handwritten', 'all handwritten', 'Patrick Hand', 'PatrickHand', null, 1.14, hand: true),
   VoiceToken('friendly', 'friendly', 'Nunito, a rounded sans', 'Nunito', null, 1.0),
-  VoiceToken('formal', 'formal', 'Inter, a crisp sans', 'Inter', null, 1.0),
+  VoiceToken('formal', 'crisp', 'Inter, a crisp sans', 'Inter', null, 1.0),
 ];
 
 const defaultVoiceId = 'neat';

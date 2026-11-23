@@ -167,7 +167,7 @@ enum Voice {
   loose('loose hand', 'Shantell Sans, informal', 'ShantellSans', hand: true, informality: 100),
   handwritten('all handwritten', 'Patrick Hand', 'PatrickHand', hand: true, scale: 1.14),
   friendly('friendly', 'Nunito, a rounded sans', 'Nunito'),
-  formal('formal', 'Inter, a crisp sans', 'Inter');
+  formal('crisp', 'Inter, a crisp sans', 'Inter');
 
   const Voice(this.label, this.note, this.family, {this.hand = false, this.scale = 1, this.informality});
 
