@@ -25,10 +25,11 @@ class PrivacyScreen extends StatelessWidget {
               'PhoneDots has made ${s.ledger.networkEvents} network requests: model downloads and the links you shared, '
               'each listed below. Chats, recordings, photos, memory, saved posts and summaries are only ever processed here. '
               'No account, no analytics.',
-              color: p.pencil,
             ),
             const SectionHead('kept on this phone'),
-            Row(
+            Wrap(
+              spacing: 24,
+              runSpacing: 12,
               children: [
                 _Count('${s.conversations.summaries.length}', 'chats'),
                 _Count('${s.saved.items.length}', 'saved'),
@@ -37,30 +38,37 @@ class PrivacyScreen extends StatelessWidget {
                 _Count('${entries.length}', 'log lines'),
               ],
             ),
-            const HandDivider(padding: EdgeInsets.symmetric(vertical: 16)),
-            const SectionHead('forget', padding: EdgeInsets.zero),
-            _EraseTile(label: 'all chats', onConfirm: s.conversations.deleteAll),
-            _EraseTile(label: 'saved posts', onConfirm: s.saved.clear),
-            _EraseTile(label: 'memory', onConfirm: s.memory.clear),
-            _EraseTile(label: 'my files index', onConfirm: s.knowledge.clear),
-            _EraseTile(label: 'activity log', onConfirm: s.ledger.clear),
-            _EraseTile(label: 'skill permissions', onConfirm: () => s.settings.update((x) => x.grantedSkills.clear())),
+            const SectionHead('forget', note: 'Each asks first. None of it can be undone.'),
+            _EraseRow(label: 'all chats', onConfirm: s.conversations.deleteAll),
+            _EraseRow(label: 'saved posts', onConfirm: s.saved.clear),
+            _EraseRow(label: 'memory', onConfirm: s.memory.clear),
+            _EraseRow(label: 'my files index', onConfirm: s.knowledge.clear),
+            _EraseRow(label: 'activity log', onConfirm: s.ledger.clear),
+            _EraseRow(label: 'skill permissions', onConfirm: () => s.settings.update((x) => x.grantedSkills.clear())),
             const SectionHead('what it did'),
             if (entries.isEmpty) const HandEmpty(title: 'nothing yet', doodle: Doodle.squiggle),
             for (final e in entries.take(200))
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DoodleIcon(e.network ? Doodle.arrow : Doodle.tick, size: 18, color: e.network ? p.ink : p.pencil),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: DoodleIcon(
+                        e.network ? Doodle.arrow : Doodle.tick,
+                        size: 18,
+                        color: e.network ? p.ink : p.pencil,
+                        semanticLabel: e.network ? 'used the network' : null,
+                      ),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(e.detail, style: Hand.small.copyWith(fontSize: 20, color: p.ink)),
-                          Meta('${e.kind} · ${timeAgo(e.time)}${e.network ? ' · used the network' : ''}'),
+                          Text(e.detail, style: context.type.rowNote),
+                          Caption('${e.kind} · ${timeAgo(e.time)}${e.network ? ' · used the network' : ''}'),
                         ],
                       ),
                     ),
@@ -80,47 +88,41 @@ class _Count extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(value, style: Hand.title.copyWith(color: context.pal.ink)),
-        Meta(label),
-      ],
-    ),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(value, style: context.type.rowTitle),
+      Caption(label),
+    ],
   );
 }
 
-class _EraseTile extends StatelessWidget {
-  const _EraseTile({required this.label, required this.onConfirm});
+/// One thing that can be forgotten: its name and a red "forget" link that asks first.
+class _EraseRow extends StatelessWidget {
+  const _EraseRow({required this.label, required this.onConfirm});
   final String label;
   final Future<void> Function() onConfirm;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(label, style: Hand.label.copyWith(fontSize: 23, color: context.pal.ink)),
-        ),
-        PillButton(
-          'forget',
-          color: context.pal.redPen,
-          onTap: () async {
-            if (await confirmDialog(
-              context,
-              title: 'forget $label?',
-              body: 'This can\'t be undone.',
-              confirm: 'forget',
-              destructive: true,
-            )) {
-              await onConfirm();
-              if (context.mounted) toast(context, '$label forgotten');
-            }
-          },
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(child: Body(label)),
+      HandLink(
+        'forget',
+        color: context.pal.redPen,
+        onTap: () async {
+          if (await confirmDialog(
+            context,
+            title: 'forget $label?',
+            body: 'This can\'t be undone.',
+            confirm: 'forget',
+            destructive: true,
+          )) {
+            await onConfirm();
+            if (context.mounted) toast(context, '$label forgotten');
+          }
+        },
+      ),
+    ],
   );
 }

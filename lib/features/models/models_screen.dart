@@ -9,6 +9,10 @@ import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hand.dart';
 
+/// Opens the models page (it lives under "you").
+void openModels(BuildContext context) =>
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ModelsScreen()));
+
 class ModelsScreen extends StatelessWidget {
   const ModelsScreen({super.key});
 
@@ -16,7 +20,6 @@ class ModelsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.services(context);
     return HandPage(
-      wordmark: true,
       body: ListenableBuilder(
         listenable: Listenable.merge([s.models, s.settings]),
         builder: (context, _) {
@@ -27,81 +30,80 @@ class ModelsScreen extends StatelessWidget {
           // Only the ones this phone has the memory for, so the count matches what starts.
           final missing = visible
               .where((x) => !m.isReady(x.id) && x.recommended && m.canTryDownload(x) && m.fits(x))
+              .where((x) => m.state(x.id).status != ModelStatus.downloading)
               .toList();
+          final missingBytes = missing.fold<int>(0, (a, x) => a + x.approxBytes);
+          // Many missing: one pill at the top, and each row gets a quieter link.
+          final compact = missing.length > 3;
           final used = formatBytes(m.storageUsed);
           return ListView(
             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: const EdgeInsets.only(bottom: 32),
+            padding: const EdgeInsets.only(top: 8, bottom: 32),
             children: [
-              Column0(
+              const Column0(
                 child: PageIntro(
-                  'the models',
-                  'The AI behind PhoneDots. Each one is downloaded once, then runs on this phone\'s own chip. '
-                      'Your words, photos and voice never go to the internet.',
-                  doodle: Doodle.spark,
+                  'models',
+                  'The AI behind PhoneDots. Each one downloads once, then runs on this phone\'s own chip. '
+                      'Your words, photos and voice never go online.',
                 ),
               ),
               Column0(
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: MarkedText('$used on this phone', mark: used, style: Hand.label.copyWith(fontSize: 22)),
-                    ),
-                    if (m.device.totalRamMb > 0) Meta('${(m.device.totalRamMb / 1024).toStringAsFixed(0)} GB memory'),
+                    MarkedText('$used on this phone', mark: used, style: context.type.rowTitle),
+                    if (m.device.totalRamMb > 0)
+                      Caption('This phone has ${(m.device.totalRamMb / 1024).toStringAsFixed(0)} GB of memory'),
                   ],
                 ),
               ),
-              if (missing.isNotEmpty)
+              if (compact)
                 Column0(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: PillButton(
-                        'download the ${missing.length} recommended',
-                        leading: Doodle.arrow,
-                        onTap: () {
-                          for (final x in missing) {
-                            m.download(x.id);
-                          }
-                        },
-                      ),
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PillButton(
+                          'download all (${formatBytes(missingBytes)})',
+                          leading: Doodle.arrow,
+                          onTap: () {
+                            for (final x in missing) {
+                              m.download(x.id);
+                            }
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Meta('The ${missing.length} models PhoneDots uses that fit this phone.'),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               if (m.loadError != null)
                 Column0(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        DoodleIcon(Doodle.exclaim, size: 20, color: context.pal.redPen, stroke: 2.6),
-                        const SizedBox(width: 6),
-                        Expanded(child: Body(m.loadError!)),
-                      ],
-                    ),
-                  ),
+                  child: Padding(padding: const EdgeInsets.only(top: 12), child: Warning(m.loadError!)),
                 ),
-              const Column0(child: SectionHead('gemma · the brain', note: 'talks, plans, sees')),
+              const Column0(child: SectionHead('the brain', note: 'Gemma: talks, plans, sees and searches')),
               for (final (i, spec) in brains.indexed)
                 Column0(
                   child: Enter(
                     index: i,
-                    child: ModelTile(spec: spec, services: s),
+                    child: ModelTile(spec: spec, services: s, compact: compact),
                   ),
                 ),
-              const Column0(child: SectionHead('desert ant · the specialists', note: 'one job each')),
+              const Column0(child: SectionHead('helpers', note: 'Desert Ant specialists, one job each')),
               for (final (i, spec) in specialists.indexed)
                 Column0(
                   child: Enter(
                     index: i,
-                    child: ModelTile(spec: spec, services: s),
+                    child: ModelTile(spec: spec, services: s, compact: compact),
                   ),
                 ),
               const Column0(
                 child: Padding(
-                  padding: EdgeInsets.only(top: 16),
+                  padding: EdgeInsets.only(top: 24),
                   child: Meta(
                     'Downloads are the only time PhoneDots uses the network. Gemma files come from Hugging Face '
                     '(litert-community) and are checked against their SHA-256 before use.',
@@ -116,15 +118,20 @@ class ModelsScreen extends StatelessWidget {
   }
 }
 
-/// One model as a line on the page: "voz · 470 MB", what it does, and its state.
+/// One model: its name with real capitals and its size, what it does at full
+/// width, then its state on its own line (a button under the text, never
+/// beside it).
 class ModelTile extends StatelessWidget {
-  const ModelTile({super.key, required this.spec, required this.services});
+  const ModelTile({super.key, required this.spec, required this.services, this.compact = false});
   final ModelSpec spec;
   final AppServices services;
 
+  /// Quieter per-row actions, when one "download all" pill sits at the top.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
-    final p = context.pal;
+    final t = context.type;
     final m = services.models;
     final st = m.state(spec.id);
     final settings = services.settings;
@@ -144,14 +151,8 @@ class ModelTile extends StatelessWidget {
       if (spec.beta) 'beta',
       if (spec.gated && !m.isReady(spec.id)) 'needs a free Hugging Face OK',
     ];
-    final status = switch (st.status) {
-      ModelStatus.ready => 'on this phone',
-      ModelStatus.downloading => 'downloading ${(st.progress * 100).round()}%',
-      ModelStatus.failed => st.error ?? 'download failed',
-      ModelStatus.absent => 'not downloaded yet',
-    };
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -159,33 +160,29 @@ class ModelTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '${spec.name.toLowerCase()} · $size',
-                            style: Hand.label.copyWith(fontSize: 23, color: p.ink),
-                          ),
-                        ),
-                        if (role != null) ...[const SizedBox(width: 8), HandTag(role, marked: true)],
-                      ],
-                    ),
-                    Meta(spec.summary),
-                    if (notes.isNotEmpty) Meta(notes.join(' · '), color: p.graphite),
-                    Meta(status, color: st.status == ModelStatus.failed ? p.redPen : p.pencil),
+                    Text(spec.name, style: t.rowTitle),
+                    if (role != null) HandTag(role),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              _Action(spec: spec, services: services, state: st),
+              Padding(padding: const EdgeInsets.only(top: 3), child: Caption(size)),
             ],
           ),
+          Padding(padding: const EdgeInsets.only(top: 2), child: Meta(spec.summary)),
+          if (notes.isNotEmpty) Caption(notes.join(' · ')),
           if (st.status == ModelStatus.downloading)
             Padding(padding: const EdgeInsets.only(top: 8), child: HandProgress(st.progress == 0 ? null : st.progress)),
-          const HandDivider(padding: EdgeInsets.only(top: 12)),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _Action(spec: spec, services: services, state: st, compact: compact),
+          ),
+          HandDivider(padding: const EdgeInsets.only(top: 10), seed: spec.id.length),
         ],
       ),
     );
@@ -193,10 +190,14 @@ class ModelTile extends StatelessWidget {
 }
 
 class _Action extends StatelessWidget {
-  const _Action({required this.spec, required this.services, required this.state});
+  const _Action({required this.spec, required this.services, required this.state, required this.compact});
   final ModelSpec spec;
   final AppServices services;
   final ModelState state;
+  final bool compact;
+
+  Widget _button(String label, VoidCallback onTap, {Doodle? leading}) =>
+      compact ? HandLink(label, onTap: onTap) : PillButton(label, leading: leading, onTap: onTap);
 
   @override
   Widget build(BuildContext context) {
@@ -204,15 +205,48 @@ class _Action extends StatelessWidget {
     final p = context.pal;
     switch (state.status) {
       case ModelStatus.downloading:
-        return spec.appDownloads
-            ? DoodleButton(Doodle.close, tooltip: 'Cancel', onTap: () => m.cancel(spec.id))
-            : const Scribbling(size: 20);
+        final cancel = spec.appDownloads || m.shared != null;
+        return Row(
+          children: [
+            Expanded(
+              child: Caption(
+                state.busyElsewhere
+                    ? 'Another app on this phone is downloading it'
+                    : 'Downloading, ${(state.progress * 100).round()}%',
+              ),
+            ),
+            if (cancel)
+              DoodleButton(Doodle.close, tooltip: 'Cancel', size: 20, color: p.pencil, onTap: () => m.cancel(spec.id))
+            else
+              const Padding(padding: EdgeInsets.all(14), child: Scribbling(size: 20)),
+          ],
+        );
+      case ModelStatus.absent when state.inSibling:
+        // Another app on this phone has it: getting it is a copy, no download.
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: _button('copy, no download', () => m.download(spec.id), leading: Doodle.phone),
+        );
       case ModelStatus.failed:
       case ModelStatus.absent:
-        if (!m.canTryDownload(spec) || (spec.gated && state.status == ModelStatus.failed)) {
-          return PillButton('get access', leading: Doodle.lock, onTap: () => showGetAccess(context, services, spec));
+        final failed = state.status == ModelStatus.failed;
+        final Widget action;
+        if (!m.canTryDownload(spec) || (spec.gated && failed)) {
+          action = _button('get access', () => showGetAccess(context, services, spec), leading: Doodle.lock);
+        } else {
+          action = _button(failed ? 'retry' : 'download', () => m.download(spec.id));
         }
-        return PillButton(state.status == ModelStatus.failed ? 'retry' : 'download', onTap: () => m.download(spec.id));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (failed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Warning(state.error ?? 'The download failed.'),
+              ),
+            action,
+          ],
+        );
       case ModelStatus.ready:
         final inUse = switch (spec.role) {
           ModelRole.planner => services.settings.plannerId == spec.id,
@@ -221,10 +255,12 @@ class _Action extends StatelessWidget {
           ModelRole.specialist => true,
         };
         return Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
+            DoodleIcon(Doodle.tick, size: 18, color: p.pencil),
+            const SizedBox(width: 6),
+            const Expanded(child: Caption('On this phone')),
             if (!inUse)
-              PillButton(
+              HandLink(
                 'use',
                 onTap: () => services.settings.update((s) {
                   switch (spec.role) {
@@ -242,12 +278,14 @@ class _Action extends StatelessWidget {
               Doodle.trash,
               tooltip: 'Delete',
               size: 20,
-              color: p.redPen,
+              color: p.pencil,
               onTap: () async {
                 if (await confirmDialog(
                   context,
-                  title: 'delete ${spec.name.toLowerCase()}?',
-                  body: 'Frees ${formatBytes(spec.approxBytes)}. You can download it again later.',
+                  title: 'delete ${spec.name}?',
+                  body: m.shared == null
+                      ? 'Frees ${formatBytes(spec.approxBytes)}. You can download it again later.'
+                      : 'Frees ${formatBytes(spec.approxBytes)} unless another app on this phone still uses it. You can get it again later.',
                   confirm: 'delete',
                   destructive: true,
                 )) {
@@ -309,8 +347,7 @@ class _GetAccessState extends State<_GetAccess> {
   @override
   Widget build(BuildContext context) {
     final spec = widget.spec;
-    final p = context.pal;
-    final name = spec.name.toLowerCase();
+    final name = spec.name;
     final message = switch (_result) {
       Access.ok => 'You\'re in. $name can download now.',
       Access.needsToken => 'Paste a token first (step 2).',
@@ -361,14 +398,7 @@ class _GetAccessState extends State<_GetAccess> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _result == Access.ok
                     ? DoneNote(message)
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          DoodleIcon(Doodle.exclaim, size: 20, color: p.redPen, stroke: 2.6),
-                          const SizedBox(width: 6),
-                          Expanded(child: Body(message)),
-                        ],
-                      ),
+                    : Warning(message),
               ),
             if (_result == Access.ok)
               InkButton(

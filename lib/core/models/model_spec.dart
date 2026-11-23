@@ -65,7 +65,7 @@ class ModelSpec {
 
   bool supports(String platform) => switch (platform) {
     'android' => android == PlatformSupport.native,
-    'ios' => ios == PlatformSupport.native,
+    'ios' || 'macos' => ios == PlatformSupport.native,
     _ => true,
   };
 

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_services.dart';
 import '../../app_state.dart';
 import '../../core/app_log.dart';
+import '../../core/crash_reporter.dart';
 import '../../core/models/model_catalog.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
@@ -31,8 +33,9 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     final s = AppScope.services(context);
     final d = s.models.device;
     return {
-      'app': 'PhoneDots 0.5.1',
+      'app': 'PhoneDots ${CrashReporter.appVersion}',
       'platform': s.platform,
+      'modelStore': AppServices.sharedModelsPath ?? 'none (demo)',
       'device': d.model,
       'chip': d.socName,
       'ramMb': d.totalRamMb,
@@ -63,10 +66,12 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
               'diagnostics',
               'Every step PhoneDots takes, with timings and errors, so a problem can be traced. It never records what '
                   'you wrote, the answers, contact names or messages. It stays here unless you share it.',
-              doodle: Doodle.search,
             ),
-            if (appLog.lastCrash != null) ...[Body(appLog.lastCrash!, color: p.redPen), const SizedBox(height: 12)],
-            Row(children: [Expanded(child: Meta('${appLog.entries.length} entries · ${appLog.errorCount} errors'))]),
+            if (appLog.lastCrash != null) ...[Warning(appLog.lastCrash!), const SizedBox(height: 12)],
+            Caption(
+              '${appLog.entries.length} ${appLog.entries.length == 1 ? 'entry' : 'entries'} · '
+              '${appLog.errorCount} ${appLog.errorCount == 1 ? 'error' : 'errors'}',
+            ),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -78,17 +83,15 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                   onTap: () =>
                       s.device.invoke('share.text', {'text': appLog.export(header: _header(), maxChars: 200000)}),
                 ),
-                PillButton(
+                HandLink(
                   'copy',
-                  leading: Doodle.copy,
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: appLog.export(header: _header())));
                     toast(context, 'log copied');
                   },
                 ),
-                PillButton(
+                HandLink(
                   'clear',
-                  leading: Doodle.trash,
                   color: p.redPen,
                   onTap: () async {
                     if (await confirmDialog(context, title: 'clear the log?', confirm: 'clear', destructive: true)) {
@@ -132,6 +135,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   }
 }
 
+/// One log line: mono 13 in ink, problems with a red "!" in front.
 class _Entry extends StatelessWidget {
   const _Entry(this.e);
   final LogEntry e;
@@ -139,28 +143,45 @@ class _Entry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final color = switch (e.level) {
-      LogLevel.error => p.redPen,
-      LogLevel.warn => p.ink,
-      LogLevel.info => p.pencil,
-    };
+    final mono = context.type.mono;
     final t = e.time.toIso8601String().substring(11, 19);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$t  ${e.tag} · ${e.message}',
-            style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, color: color, height: 1.3),
+          SizedBox(
+            width: 16,
+            child: e.level == LogLevel.info
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: DoodleIcon(
+                      Doodle.exclaim,
+                      size: 14,
+                      stroke: 2.4,
+                      color: e.level == LogLevel.error ? p.redPen : p.ink,
+                      semanticLabel: e.level.name,
+                    ),
+                  ),
           ),
-          if (e.data != null && e.data!.isNotEmpty)
-            Text(
-              e.data!.entries.map((x) => '${x.key}: ${x.value}').join('  ·  '),
-              maxLines: e.level == LogLevel.error ? 12 : 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontFamily: 'monospace', fontSize: 11.5, color: p.graphite, height: 1.3),
+          Expanded(
+            child: SelectableText.rich(
+              TextSpan(
+                style: mono,
+                children: [
+                  TextSpan(text: '$t  ', style: TextStyle(color: p.pencil)),
+                  TextSpan(text: '${e.tag} · ${e.message}'),
+                  if (e.data != null && e.data!.isNotEmpty)
+                    TextSpan(
+                      text: '\n${e.data!.entries.map((x) => '${x.key}: ${x.value}').join('  ·  ')}',
+                      style: TextStyle(color: p.pencil),
+                    ),
+                ],
+              ),
+              maxLines: e.level == LogLevel.error ? 14 : 5,
             ),
+          ),
         ],
       ),
     );

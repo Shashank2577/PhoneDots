@@ -15,3 +15,7 @@ key.properties
 
 # The public test signing key is committed on purpose (see app/build.gradle.kts).
 !app/phonedots-test.jks
+
+# The vendor test key synced from baseApp; PhoneDots signs with the identical,
+# already committed app/phonedots-test.jks.
+app/showcase-test.jks

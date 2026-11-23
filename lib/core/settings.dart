@@ -10,8 +10,19 @@ class AppSettings extends ChangeNotifier {
 
   ThemeMode themeMode = ThemeMode.system;
 
-  /// Body font voice (see Voice in theme.dart): formal, friendly, neat, loose, handwritten.
-  String voice = 'neat';
+  /// The voice (see Voice in theme.dart). The hand voices neat, loose and
+  /// handwritten make the handwritten style; friendly and formal the formal
+  /// one. A fresh install starts in the neat hand.
+  String voice = defaultVoice;
+  static const defaultVoice = 'neat';
+
+  /// Marks which release last wrote [voice]. 0.8.0 and earlier stored none,
+  /// 0.9.0 stored 2 after moving every install to Nunito, 0.9.1 stores 3;
+  /// see [load].
+  static const typeVersion = 3;
+
+  /// The demo-engine note on the chat page was seen and put away.
+  bool demoNoteSeen = false;
   String hfToken = '';
   String plannerId = 'gemma-4-e2b';
   String routerId = 'functiongemma-270m-mobile-actions';
@@ -62,6 +73,7 @@ class AppSettings extends ChangeNotifier {
     if (j == null) return;
     themeMode = ThemeMode.values.asNameMap()[j['themeMode']] ?? ThemeMode.system;
     voice = j['voice'] as String? ?? voice;
+    demoNoteSeen = j['demoNoteSeen'] as bool? ?? false;
     hfToken = j['hfToken'] as String? ?? '';
     plannerId = j['plannerId'] as String? ?? plannerId;
     routerId = j['routerId'] as String? ?? routerId;
@@ -85,37 +97,51 @@ class AppSettings extends ChangeNotifier {
     onboarded = j['onboarded'] as bool? ?? false;
     disabledSkills = {...(j['disabledSkills'] as List? ?? const []).cast<String>()};
     grantedSkills = {...(j['grantedSkills'] as List? ?? const []).cast<String>()};
+    // 0.9.0 moved every install to the plain Nunito voice once (marker 2).
+    // That was not asked for, and a 0.9.0 move cannot be told from a
+    // deliberate pick made in its few hours, so those installs go back to the
+    // handwritten default once. An install straight from 0.8.0 or earlier (no
+    // marker) keeps the voice it had. From marker 3 on the choice stands.
+    final stored = j['typeVersion'];
+    if (stored != typeVersion) {
+      if (stored == 2) voice = defaultVoice;
+      await _save();
+    }
   }
 
   Future<void> update(void Function(AppSettings s) change) async {
     change(this);
     notifyListeners();
-    await _store.write(_key, {
-      'themeMode': themeMode.name,
-      'voice': voice,
-      'hfToken': hfToken,
-      'plannerId': plannerId,
-      'routerId': routerId,
-      'embedderId': embedderId,
-      'thinking': thinking,
-      'useRouter': useRouter,
-      'readLinks': readLinks,
-      'autoSummarise': autoSummarise,
-      'webReader': webReader,
-      'youtubeKey': youtubeKey,
-      'jinaKey': jinaKey,
-      'crashReports': crashReports,
-      'crashReportUrl': crashReportUrl,
-      'voiceId': voiceId,
-      'expressiveSpeech': expressiveSpeech,
-      'voiceSpeed': voiceSpeed,
-      'personalUseVoices': personalUseVoices,
-      'useGpu': useGpu,
-      'maxSteps': maxSteps,
-      'temperature': temperature,
-      'onboarded': onboarded,
-      'disabledSkills': disabledSkills.toList(),
-      'grantedSkills': grantedSkills.toList(),
-    });
+    await _save();
   }
+
+  Future<void> _save() => _store.write(_key, {
+    'themeMode': themeMode.name,
+    'voice': voice,
+    'typeVersion': typeVersion,
+    'demoNoteSeen': demoNoteSeen,
+    'hfToken': hfToken,
+    'plannerId': plannerId,
+    'routerId': routerId,
+    'embedderId': embedderId,
+    'thinking': thinking,
+    'useRouter': useRouter,
+    'readLinks': readLinks,
+    'autoSummarise': autoSummarise,
+    'webReader': webReader,
+    'youtubeKey': youtubeKey,
+    'jinaKey': jinaKey,
+    'crashReports': crashReports,
+    'crashReportUrl': crashReportUrl,
+    'voiceId': voiceId,
+    'expressiveSpeech': expressiveSpeech,
+    'voiceSpeed': voiceSpeed,
+    'personalUseVoices': personalUseVoices,
+    'useGpu': useGpu,
+    'maxSteps': maxSteps,
+    'temperature': temperature,
+    'onboarded': onboarded,
+    'disabledSkills': disabledSkills.toList(),
+    'grantedSkills': grantedSkills.toList(),
+  });
 }

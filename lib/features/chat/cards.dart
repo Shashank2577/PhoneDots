@@ -47,10 +47,7 @@ class ResultCard extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      card.title!.toLowerCase(),
-                      style: Hand.title.copyWith(fontSize: 25, color: context.pal.ink),
-                    ),
+                    child: Text(card.title!, style: context.type.rowTitle),
                   ),
                   if (card.data['demo'] == true) const HandTag('demo data'),
                 ],
@@ -73,7 +70,7 @@ class _TextBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SelectableText(text, style: context.text.bodyMedium),
+        SelectableText(text, style: context.type.body),
         if (data['copy'] == true)
           Align(
             alignment: Alignment.centerRight,
@@ -103,8 +100,8 @@ class _KeyValues extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 110, child: Text(e.key, style: context.text.bodySmall)),
-              Expanded(child: SelectableText('${e.value}', style: context.text.bodyMedium)),
+              SizedBox(width: 110, child: Text(e.key, style: context.type.meta)),
+              Expanded(child: SelectableText('${e.value}', style: context.type.body)),
             ],
           ),
         ),
@@ -137,7 +134,7 @@ class _Table extends StatelessWidget {
                 for (var i = 0; i < width; i++)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 0, 20, 8),
-                    child: Text(i < columns.length ? columns[i] : '', style: context.text.labelMedium),
+                    child: Text(i < columns.length ? columns[i] : '', style: context.type.dataLabel),
                   ),
               ],
             ),
@@ -147,7 +144,7 @@ class _Table extends StatelessWidget {
                 for (var i = 0; i < width; i++)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 8, 20, 8),
-                    child: Text(i < r.length ? r[i] : '', style: context.text.bodyMedium),
+                    child: Text(i < r.length ? r[i] : '', style: context.type.body),
                   ),
               ],
             ),
@@ -207,7 +204,7 @@ class _ChecklistState extends State<_Checklist> {
                       children: [
                         AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 250),
-                          style: context.text.bodyMedium!.copyWith(color: done[i] ? p.pencil : p.ink),
+                          style: context.type.body.copyWith(color: done[i] ? p.pencil : p.ink),
                           child: Text(items[i]),
                         ),
                         // A pen line strikes the item through when ticked.
@@ -240,46 +237,39 @@ class _Transcript extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.pal;
     final segments = (data['segments'] as List? ?? const []).cast<Map>();
     final speakers = segments.map((s) => s['speaker']).toSet().length;
-    final shades = [p.ink, p.muted, p.dot, p.warn];
+    final brightness = Theme.of(context).brightness;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Per turn: the speaker as a tag, the time as a caption, the words in body.
         for (final s in segments.take(40))
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 44,
-                  child: Text(
-                    formatDuration(((s['start'] as num?) ?? 0).toDouble()),
-                    style: context.text.bodySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (speakers > 1)
-                        Row(
-                          children: [
-                            Dot(color: shades[_speaker(s) % shades.length], size: 6),
-                            const SizedBox(width: 6),
-                            Text('Speaker ${_speaker(s) + 1}', style: context.text.labelMedium),
-                          ],
-                        ),
-                      SelectableText('${s['text']}', style: context.text.bodyMedium),
+                Row(
+                  children: [
+                    if (speakers > 1) ...[
+                      Dot(color: seriesColor(_speaker(s), brightness), size: 8),
+                      const SizedBox(width: 6),
+                      Text('Speaker ${_speaker(s) + 1}', style: context.type.dataLabel),
+                      const SizedBox(width: 8),
                     ],
-                  ),
+                    Text(
+                      formatDuration(((s['start'] as num?) ?? 0).toDouble()),
+                      style: context.type.caption.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 2),
+                SelectableText('${s['text']}', style: context.type.body),
               ],
             ),
           ),
-        if (segments.length > 40) Text('+ ${segments.length - 40} more segments', style: context.text.bodySmall),
+        if (segments.length > 40) Caption('+ ${segments.length - 40} more segments'),
       ],
     );
   }
@@ -293,7 +283,7 @@ class _Tags extends StatelessWidget {
   Widget build(BuildContext context) {
     final tags = (data['tags'] as List? ?? const []).map((e) => '$e').toList();
     if (data['large'] == true) {
-      return Wrap(spacing: 12, children: [for (final t in tags) Text(t, style: const TextStyle(fontSize: 30))]);
+      return Wrap(spacing: 12, children: [for (final t in tags) Text(t, style: Hand.title)]);
     }
     return Wrap(
       spacing: 6,
@@ -326,7 +316,7 @@ class _Bars extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 90,
-                  child: Text(labels[i], style: context.text.bodySmall, overflow: TextOverflow.ellipsis),
+                  child: Text(labels[i], style: context.type.meta, overflow: TextOverflow.ellipsis),
                 ),
                 Expanded(
                   child: LayoutBuilder(
@@ -354,7 +344,7 @@ class _Bars extends StatelessWidget {
                   child: Text(
                     _fmt(values[i]),
                     textAlign: TextAlign.right,
-                    style: context.text.bodySmall?.copyWith(color: p.ink),
+                    style: context.type.meta.copyWith(color: p.ink),
                   ),
                 ),
               ],
@@ -375,7 +365,7 @@ class _Timeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final items = (data['items'] as List? ?? const []).cast<Map>();
-    if (items.isEmpty) return Text('Nothing scheduled.', style: context.text.bodySmall);
+    if (items.isEmpty) return Text('Nothing scheduled.', style: context.type.meta);
     return Column(
       children: [
         for (var i = 0; i < items.length; i++)
@@ -400,9 +390,9 @@ class _Timeline extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${items[i]['time']}', style: context.text.labelMedium),
+                        Text('${items[i]['time']}', style: context.type.caption),
                         if ('${items[i]['text']}'.isNotEmpty)
-                          Text('${items[i]['text']}', style: context.text.bodyMedium),
+                          Text('${items[i]['text']}', style: context.type.body),
                       ],
                     ),
                   ),
@@ -434,7 +424,7 @@ class _FileCard extends StatelessWidget {
             Expanded(
               child: Text(
                 path?.split('/').last ?? 'Not saved in preview mode',
-                style: context.text.bodyMedium,
+                style: context.type.body,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -450,7 +440,7 @@ class _FileCard extends StatelessWidget {
             child: SingleChildScrollView(
               child: Text(
                 preview,
-                style: context.text.bodySmall?.copyWith(fontFamily: 'monospace', color: p.ink),
+                style: context.type.mono,
               ),
             ),
           ),
@@ -539,19 +529,14 @@ class _LinkCard extends StatelessWidget {
             DoodleIcon(_doodle('${data['platform']}'), size: 18, color: p.pencil),
             const SizedBox(width: 8),
             Expanded(
-              child: Meta(
+              child: Caption(
                 '${data['platform']} · ${data['kind']}${data['author'] != null ? ' · ${data['author']}' : ''}',
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          '${data['title']}',
-          style: Hand.label.copyWith(fontSize: 23, color: p.ink),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
+        Text('${data['title']}', style: context.type.rowTitle, maxLines: 3, overflow: TextOverflow.ellipsis),
         if (desc.isNotEmpty) Meta(desc, maxLines: 4),
         if (!rich)
           const Meta(

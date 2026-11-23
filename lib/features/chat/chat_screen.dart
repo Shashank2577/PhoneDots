@@ -14,7 +14,9 @@ import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hand.dart';
 import '../../core/app_log.dart';
+import '../models/models_screen.dart';
 import '../settings/diagnostics_screen.dart';
+import '../skills/skills_screen.dart';
 import '../voice/voice_screen.dart';
 import 'attach.dart';
 import 'message_view.dart';
@@ -148,50 +150,29 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _talk() => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceScreen()));
+
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final chat = state.chat;
     final s = state.services;
+    final typing = _keyboard(context) > 0;
     return HandPage(
       wordmark: true,
       actions: [
-        _ModelChip(services: s),
-        DoodleButton(
-          Doodle.mic,
-          tooltip: 'Talk',
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceScreen())),
-        ),
-        if (chat.messages.isNotEmpty)
-          DoodleButton(
-            Doodle.copy,
-            tooltip: 'Copy this chat',
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: ConversationStore.transcript(chat.conversation)));
-              toast(context, 'chat copied');
-            },
-          ),
         DoodleButton(Doodle.history, tooltip: 'Past chats', onTap: () => showPastChats(context)),
         DoodleButton(Doodle.newChat, tooltip: 'New chat', onTap: chat.messages.isEmpty ? null : state.newChat),
       ],
       body: Column(
         children: [
-          // While typing on a small screen, every line goes to the conversation.
-          if (s.isDemo && _keyboard(context) == 0) const DemoBanner(),
           ListenableBuilder(
             listenable: s.conversations,
             builder: (context, _) {
               final err = s.conversations.saveError;
               if (err == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 4),
-                child: Row(
-                  children: [
-                    DoodleIcon(Doodle.exclaim, size: 16, color: context.pal.redPen),
-                    const SizedBox(width: 6),
-                    Expanded(child: Meta(err, color: context.pal.redPen, maxLines: 2)),
-                  ],
-                ),
+              return Column0(
+                child: Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Warning(err)),
               );
             },
           ),
@@ -199,11 +180,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               child: chat.messages.isEmpty
-                  ? _Welcome(
-                      key: const ValueKey('welcome'),
-                      onSuggestion: _suggest,
-                      onAllChats: () => showPastChats(context),
-                    )
+                  ? _Welcome(key: const ValueKey('welcome'), onSuggestion: _suggest)
                   : ListView.builder(
                       key: const ValueKey('messages'),
                       controller: _scroll,
@@ -220,7 +197,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               message: m,
                               isLast: i == chat.messages.length - 1,
                               onRetry: chat.busy ? null : chat.retry,
-                              onOpenModels: () => state.goTo(AppState.modelsTab),
+                              onOpenModels: () => openModels(context),
                             ),
                           ),
                         );
@@ -228,6 +205,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
             ),
           ),
+          // While typing, or on a short screen with attachments waiting, every line goes to the conversation.
+          if (!typing && (_pending.isEmpty || MediaQuery.sizeOf(context).height >= 700))
+            Column0(child: _ModelLine(services: s)),
           Column0(
             child: _Composer(
               controller: _input,
@@ -236,6 +216,7 @@ class _ChatScreenState extends State<ChatScreen> {
               onSend: _send,
               onStop: chat.stop,
               onAttach: _attach,
+              onTalk: _talk,
               onRemove: (a) => setState(() => _pending.remove(a)),
             ),
           ),
@@ -266,17 +247,29 @@ void showPastChats(BuildContext context) {
                 'past chats',
                 'Pick one to carry on where you left off. All of them are stored on this phone.',
               ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: PillButton(
-                  'start a new chat',
-                  leading: Doodle.newChat,
-                  onTap: () {
-                    Navigator.pop(c);
-                    state.newChat();
-                    state.goTo(0);
-                  },
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  PillButton(
+                    'start a new chat',
+                    leading: Doodle.newChat,
+                    onTap: () {
+                      Navigator.pop(c);
+                      state.newChat();
+                      state.goTo(AppState.chatTab);
+                    },
+                  ),
+                  if (state.chat.messages.isNotEmpty)
+                    HandLink(
+                      'copy this chat',
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: ConversationStore.transcript(state.chat.conversation)));
+                        Navigator.pop(c);
+                        toast(context, 'chat copied');
+                      },
+                    ),
+                ],
               ),
               const SizedBox(height: 8),
               if (list.isEmpty)
@@ -308,54 +301,26 @@ class ChatRow extends StatelessWidget {
   final bool open;
 
   @override
-  Widget build(BuildContext context) {
-    final p = context.pal;
-    return Pressable(
-      onTap: onTap,
-      scale: 0.99,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: DoodleIcon(Doodle.bubble, size: 18, color: p.pencil),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    summary.title,
-                    style: Hand.label.copyWith(fontSize: 22, color: p.ink),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (summary.preview.isNotEmpty) Meta(summary.preview, maxLines: 2),
-                  Meta(
-                    [
-                      timeAgo(summary.updated),
-                      if (summary.count > 0) '${summary.count} ${summary.count == 1 ? 'message' : 'messages'}',
-                      if (open) 'open now',
-                    ].join(' · '),
-                    color: p.graphite,
-                  ),
-                ],
-              ),
-            ),
-            if (onDelete != null)
-              DoodleButton(Doodle.trash, tooltip: 'Delete chat', color: p.redPen, size: 20, onTap: onDelete),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ItemRow(
+    title: summary.title,
+    titleLines: 1,
+    meta: summary.preview,
+    caption: [
+      timeAgo(summary.updated),
+      if (summary.count > 0) '${summary.count} ${summary.count == 1 ? 'message' : 'messages'}',
+      if (open) 'open now',
+    ].join(' · '),
+    leading: DoodleIcon(Doodle.bubble, size: 20, color: context.pal.pencil),
+    onTap: onTap,
+    trailing: onDelete == null
+        ? null
+        : DoodleButton(Doodle.trash, tooltip: 'Delete chat', color: context.pal.pencil, size: 20, onTap: onDelete),
+  );
 }
 
-class _ModelChip extends StatelessWidget {
-  const _ModelChip({required this.services});
+/// "Gemma 4 E2B · on this phone", just above the composer; tap to pick the brain.
+class _ModelLine extends StatelessWidget {
+  const _ModelLine({required this.services});
   final AppServices services;
 
   @override
@@ -366,27 +331,34 @@ class _ModelChip extends StatelessWidget {
       builder: (context, _) {
         final m = services.models;
         final planner = modelById(services.settings.plannerId);
-        final loaded = m.loadedPlanner == services.settings.plannerId;
-        final name = services.isDemo ? 'demo' : (planner?.name.replaceFirst('Gemma ', '').toLowerCase() ?? 'no model');
-        return Pressable(
-          onTap: () => _pick(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (m.loadingModel != null)
-                  const Scribbling(size: 12)
-                else
-                  Dot(size: 6, color: loaded ? p.ink : p.graphite),
-                const SizedBox(width: 6),
-                HandUnderline(
-                  seed: 11,
-                  color: p.pencil,
-                  child: Text(name, style: Hand.small.copyWith(color: p.ink)),
-                ),
-              ],
+        final name = planner?.name ?? 'No model';
+        final line = services.isDemo
+            ? 'Demo engine · nothing leaves this device'
+            : m.loadingModel != null
+            ? '$name · loading'
+            : m.isReady(services.settings.plannerId)
+            ? '$name · on this phone'
+            : '$name · not downloaded yet';
+        return Semantics(
+          button: true,
+          label: 'Model: $line. Change',
+          excludeSemantics: true,
+          child: Pressable(
+            onTap: () => _pick(context),
+            scale: 0.99,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: minTap),
+              child: Row(
+                children: [
+                  if (m.loadingModel != null) ...[const Scribbling(size: 12), const SizedBox(width: 8)],
+                  Flexible(child: Caption(line, maxLines: 1)),
+                  const SizedBox(width: 4),
+                  Transform.rotate(
+                    angle: 1.5708,
+                    child: DoodleIcon(Doodle.arrow, size: 14, color: p.pencil, stroke: 1.8),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -395,7 +367,6 @@ class _ModelChip extends StatelessWidget {
   }
 
   void _pick(BuildContext context) {
-    final state = AppScope.of(context);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -413,13 +384,16 @@ class _ModelChip extends StatelessWidget {
                 children: [
                   const PageIntro('the brain', 'Which Gemma answers you. Bigger is smarter and slower.'),
                   for (final g in planners)
-                    Door(
-                      g.name,
-                      style: Hand.label.copyWith(fontSize: 25),
-                      mark: services.settings.plannerId == g.id ? g.name : null,
-                      meta: services.models.isReady(g.id)
-                          ? g.summary
-                          : 'not downloaded · ${formatBytes(g.approxBytes)}',
+                    ItemRow(
+                      title: g.name,
+                      meta: g.summary,
+                      caption: services.models.isReady(g.id) || services.isDemo
+                          ? formatBytes(g.approxBytes)
+                          : 'Not downloaded · ${formatBytes(g.approxBytes)}',
+                      leading: SizedBox(
+                        width: 22,
+                        child: services.settings.plannerId == g.id ? const DrawnDoodle(Doodle.tick, size: 22) : null,
+                      ),
                       onTap: services.models.state(g.id).status == ModelStatus.ready || services.isDemo
                           ? () {
                               services.settings.update((s) => s.plannerId = g.id);
@@ -433,7 +407,7 @@ class _ModelChip extends StatelessWidget {
                     leading: Doodle.chip,
                     onTap: () {
                       Navigator.pop(c);
-                      state.goTo(AppState.modelsTab);
+                      openModels(context);
                     },
                   ),
                 ],
@@ -447,10 +421,9 @@ class _ModelChip extends StatelessWidget {
 }
 
 class _Suggestion {
-  const _Suggestion(this.doodle, this.title, this.meta, this.prompt, {this.attach, this.send = true});
+  const _Suggestion(this.doodle, this.title, this.prompt, {this.attach, this.send = true});
   final Doodle doodle;
   final String title;
-  final String meta;
   final String prompt;
 
   /// record | photo
@@ -458,119 +431,79 @@ class _Suggestion {
   final bool send;
 }
 
+// Four ways in; everything else is under skills ("what else can it do?").
 const _suggestions = [
-  _Suggestion(
-    Doodle.mic,
-    'record a meeting',
-    'notes, who spoke, and follow-ups',
-    'Make minutes from this meeting',
-    attach: 'record',
-  ),
-  _Suggestion(
-    Doodle.camera,
-    'ask about a photo',
-    'Gemma looks at it right here',
-    'What is in this photo?',
-    attach: 'photo',
-  ),
+  _Suggestion(Doodle.mic, 'record a meeting', 'Make minutes from this meeting', attach: 'record'),
+  _Suggestion(Doodle.camera, 'ask about a photo', 'What is in this photo?', attach: 'photo'),
   _Suggestion(
     Doodle.mask,
     'mask before you share',
-    'names and numbers swapped out',
     'Redact my email bob@acme.com and phone +1 415 555 0100',
     send: false,
   ),
-  _Suggestion(Doodle.timer, 'set a timer', 'the quick model does it instantly', 'Set a timer for 10 minutes'),
-  _Suggestion(Doodle.calc, 'exact maths', 'no guessing, a real calculator', 'What is 18% of 2450?'),
-  _Suggestion(Doodle.search, 'search my files', 'notes, receipts, transcripts', 'Search my notes for ', send: false),
+  _Suggestion(Doodle.search, 'search my files', 'Search my notes for ', send: false),
 ];
 
 class _Welcome extends StatelessWidget {
-  const _Welcome({super.key, required this.onSuggestion, required this.onAllChats});
+  const _Welcome({super.key, required this.onSuggestion});
   final void Function(_Suggestion s) onSuggestion;
-  final VoidCallback onAllChats;
 
   static String _greeting() {
     final h = DateTime.now().hour;
     return h < 12
-        ? 'good morning.'
+        ? 'good morning'
         : h < 18
-        ? 'good afternoon.'
-        : 'good evening.';
+        ? 'good afternoon'
+        : 'good evening';
   }
 
   @override
   Widget build(BuildContext context) {
     final services = AppScope.services(context);
-    return ListView(
-      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      padding: const EdgeInsets.only(top: 8, bottom: 16),
-      children: [
-        Column0(
-          child: Enter(
-            child: PageIntro(
-              _greeting(),
-              'Ask anything, or pick a door below. Every model runs on this phone, and nothing you say leaves it.',
-              doodle: Doodle.sun,
-            ),
-          ),
-        ),
-        // Pick up where you left off, before anything new.
-        Column0(
-          child: ListenableBuilder(
-            listenable: services.conversations,
-            builder: (context, _) {
-              final recent = services.conversations.summaries.take(3).toList();
-              if (recent.isEmpty) return const SizedBox.shrink();
-              final state = AppScope.of(context);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionHead('carry on', padding: const EdgeInsets.only(bottom: 2)),
-                  for (final c in recent) ChatRow(c, onTap: () => state.open(c.id)),
-                  if (services.conversations.summaries.length > 3)
-                    HandLink('all ${services.conversations.summaries.length} chats', onTap: onAllChats)
-                  else
-                    HandLink('past chats', onTap: onAllChats),
-                  const SectionHead('or start something new'),
-                ],
-              );
-            },
-          ),
-        ),
-        for (var i = 0; i < _suggestions.length; i++)
-          Column0(
-            child: Enter(
-              index: i + 1,
-              child: Door(
-                _suggestions[i].title,
-                leading: _suggestions[i].doodle,
-                meta: _suggestions[i].meta,
-                onTap: () => onSuggestion(_suggestions[i]),
-              ),
-            ),
-          ),
-        const SizedBox(height: 12),
-        Column0(
-          child: ListenableBuilder(
-            listenable: services.skills,
-            builder: (_, _) => Row(
-              children: [
-                const OnDeviceStamp(),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Meta(
-                    '${services.skills.enabled.length} skills · ${services.models.visibleModels.length} models',
-                    align: TextAlign.end,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+    return ListenableBuilder(listenable: services.settings, builder: (context, _) => _list(context, services));
   }
+
+  Widget _list(BuildContext context, AppServices services) => ListView(
+    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+    padding: const EdgeInsets.only(top: 16, bottom: 16),
+    children: [
+      Column0(
+        child: Enter(child: PageIntro(_greeting(), 'Ask anything. It runs on this phone.')),
+      ),
+      // Said once in the preview; after that the model line says "Demo engine".
+      if (services.isDemo && !services.settings.demoNoteSeen)
+        Column0(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: DemoNote(onDone: () => services.settings.update((x) => x.demoNoteSeen = true)),
+          ),
+        ),
+      Column0(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 10,
+          children: [
+            for (var i = 0; i < _suggestions.length; i++)
+              Enter(
+                index: i + 1,
+                child: PillButton(
+                  _suggestions[i].title,
+                  leading: _suggestions[i].doodle,
+                  onTap: () => onSuggestion(_suggestions[i]),
+                ),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      Column0(
+        child: Enter(
+          index: 6,
+          child: HandLink('what else can it do?', onTap: () => openSkills(context)),
+        ),
+      ),
+    ],
+  );
 }
 
 class _Composer extends StatelessWidget {
@@ -581,6 +514,7 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onStop,
     required this.onAttach,
+    required this.onTalk,
     required this.onRemove,
   });
 
@@ -590,6 +524,7 @@ class _Composer extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onStop;
   final VoidCallback onAttach;
+  final VoidCallback onTalk;
   final void Function(Attachment a) onRemove;
 
   @override
@@ -662,29 +597,38 @@ class _Composer extends StatelessWidget {
                       listenable: controller,
                       builder: (_, _) {
                         final canSend = controller.text.trim().isNotEmpty || pending.isNotEmpty;
-                        final active = busy || canSend;
-                        return Pressable(
-                          onTap: busy ? onStop : (canSend ? onSend : null),
-                          scale: 0.86,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: active ? p.ink : Colors.transparent,
-                              border: Border.all(color: active ? p.ink : p.graphite, width: 1.6),
-                            ),
-                            child: Center(
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 180),
-                                transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-                                child: DoodleIcon(
-                                  busy ? Doodle.stop : Doodle.arrow,
-                                  key: ValueKey(busy),
-                                  size: 22,
-                                  color: active ? p.paper : p.graphite,
-                                  semanticLabel: busy ? 'Stop' : 'Send',
+                        // Mic while empty (talk to it), send once there is something, stop while it works.
+                        final (doodle, label, onTap) = busy
+                            ? (Doodle.stop, 'Stop', onStop)
+                            : canSend
+                            ? (Doodle.send, 'Send', onSend)
+                            : (Doodle.mic, 'Talk', onTalk);
+                        final filled = busy || canSend;
+                        return Semantics(
+                          button: true,
+                          label: label,
+                          excludeSemantics: true,
+                          child: Pressable(
+                            onTap: onTap,
+                            scale: 0.86,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: filled ? p.ink : Colors.transparent,
+                              ),
+                              child: Center(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                                  child: DoodleIcon(
+                                    doodle,
+                                    key: ValueKey(doodle),
+                                    size: 22,
+                                    color: filled ? p.paper : p.ink,
+                                  ),
                                 ),
                               ),
                             ),

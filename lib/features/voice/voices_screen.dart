@@ -291,7 +291,18 @@ class _VoiceRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    MarkedText(name, mark: selected ? name : null, style: Hand.label.copyWith(fontSize: 22)),
+                    Row(
+                      children: [
+                        if (selected) ...[DoodleIcon(Doodle.tick, size: 18, color: p.ink), const SizedBox(width: 6)],
+                        Flexible(
+                          child: MarkedText(
+                            selected ? '$name · in use' : name,
+                            mark: selected ? 'in use' : null,
+                            style: Hand.label.copyWith(fontSize: 22),
+                          ),
+                        ),
+                      ],
+                    ),
                     Meta(meta, maxLines: 2),
                   ],
                 ),

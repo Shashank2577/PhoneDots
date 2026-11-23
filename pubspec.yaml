@@ -1,7 +1,7 @@
 name: phonedots
 description: "PhoneDots: an AI assistant that runs entirely on your phone."
 publish_to: 'none'
-version: 0.6.0+11
+version: 0.10.0+16
 
 environment:
   sdk: ^3.13.7
@@ -9,6 +9,14 @@ environment:
 dependencies:
   archive: ^4.7.1
   audioplayers: ^6.8.1
+  # The base platform's shared model store and catalog (one download per device
+  # for every app of the vendor), synced from baseApp by `./base sync`
+  # (packages/base_models); never edit it here.
+  base_models:
+    path: packages/base_models
+  # PhoneDots' iOS and macOS bridges, with the AI SDKs as Swift packages.
+  phonedots_native:
+    path: packages/phonedots_native
   crypto: ^3.0.8
   file_picker: ^13.3.0
   flutter:

@@ -1,0 +1,71 @@
+name: Apple build
+
+# Unsigned iOS (.ipa, for sideloading with AltStore/Sideloadly and a free
+# Apple ID) and macOS (.app in a zip) builds. The release workflow calls this
+# and attaches both; it also runs on its own when Apple-side code changes.
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: File name stem, e.g. v0.8.0
+        type: string
+        required: true
+  workflow_dispatch:
+  push:
+    branches: [ccr-81ba2f7d-qkqv1h]
+    paths:
+      - 'ios/**'
+      - 'macos/**'
+      - 'packages/phonedots_native/**'
+      - '.github/workflows/apple-build.yml'
+
+jobs:
+  apple:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      # Swift packages are fetched by git; skip any LFS payloads (none needed to build).
+      GIT_LFS_SKIP_SMUDGE: '1'
+      NAME: ${{ inputs.name || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # desert-ant-core needs Swift tools 6.2 (Xcode 26).
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - run: |
+          xcodebuild -version
+          flutter config --enable-swift-package-manager
+          flutter pub get
+
+      - name: iOS (unsigned .ipa)
+        run: |
+          flutter build ios --release --no-codesign
+          rm -rf Payload && mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          echo "Frameworks in the app:" && ls Payload/Runner.app/Frameworks || true
+          zip -qry "PhoneDots-$NAME-ios-unsigned.ipa" Payload
+          shasum -a 256 "PhoneDots-$NAME-ios-unsigned.ipa" > "PhoneDots-$NAME-ios-unsigned.ipa.sha256"
+
+      - name: macOS (.app)
+        run: |
+          flutter build macos --release
+          APP=$(ls -d build/macos/Build/Products/Release/*.app | head -1)
+          echo "Frameworks in the app:" && ls "$APP/Contents/Frameworks" || true
+          ditto -c -k --keepParent "$APP" "PhoneDots-$NAME-macos.zip"
+          shasum -a 256 "PhoneDots-$NAME-macos.zip" > "PhoneDots-$NAME-macos.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phonedots-apple
+          path: |
+            PhoneDots-*-ios-unsigned.ipa*
+            PhoneDots-*-macos.zip*

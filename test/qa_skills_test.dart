@@ -459,7 +459,7 @@ void main() {
         for (final m in k.requiresModels) {
           expect(modelById(m), isNotNull, reason: '${k.id} requires unknown model $m');
         }
-        expect(const {'android', 'ios'}.containsAll(k.platforms), isTrue, reason: k.id);
+        expect(const {'android', 'ios', 'macos'}.containsAll(k.platforms), isTrue, reason: k.id);
       }
     });
 
@@ -2870,6 +2870,10 @@ void main() {
     testWidgets('lists skills by category, toggles, searches', (tester) async {
       final (_, s) = await boot(tester);
       expect(tester.takeException(), isNull);
+      // Groups are folded until tapped.
+      expect(find.text('transcribe audio'), findsNothing);
+      await tester.tap(find.textContaining('voice & audio'));
+      await _settle(tester);
       expect(find.text('transcribe audio'), findsOneWidget);
       expect(find.byType(HandSwitch), findsWidgets);
 
@@ -2930,7 +2934,7 @@ void main() {
       await tester.tap(find.text('recipes'));
       await _settle(tester);
       for (final r in builtInRecipes) {
-        expect(find.text(r.name.toLowerCase()), findsOneWidget, reason: r.name);
+        expect(find.text(r.name), findsOneWidget, reason: r.name);
       }
       expect(find.byTooltip('Delete'), findsNothing, reason: 'built-ins cannot be deleted from the UI');
       expect(tester.takeException(), isNull);
@@ -2947,8 +2951,8 @@ void main() {
       await _reveal(tester, find.text('add a step'));
       await tester.tap(find.text('add a step'));
       await _settle(tester);
-      await _reveal(tester, find.text('transcribe audio'));
-      await tester.tap(find.text('transcribe audio').last);
+      await _reveal(tester, find.text('Transcribe audio'));
+      await tester.tap(find.text('Transcribe audio').last);
       await _settle(tester);
       await _reveal(tester, find.text('save the recipe'));
       await tester.tap(find.text('save the recipe'));
@@ -2986,12 +2990,12 @@ void main() {
       );
       await tester.runAsync(() => s.skills.saveRecipe(r));
       await _settle(tester);
-      expect(find.text('fresh one'), findsOneWidget, reason: 'saved recipe is missing from the list');
+      expect(find.text('Fresh one'), findsOneWidget, reason: 'saved recipe is missing from the list');
       await _refreshSegment(tester, 'recipes');
-      expect(find.text('fresh one'), findsOneWidget);
+      expect(find.text('Fresh one'), findsOneWidget);
       await tester.runAsync(() => s.skills.deleteRecipe(r));
       await _settle(tester);
-      expect(find.text('fresh one'), findsNothing, reason: 'deleted recipe still listed');
+      expect(find.text('Fresh one'), findsNothing, reason: 'deleted recipe still listed');
     });
 
     testWidgets('community list refreshes immediately after install / remove', (tester) async {
@@ -3046,11 +3050,11 @@ void main() {
       final (_, s) = await boot(tester, tall: true);
       await tester.tap(find.text('community'));
       await _settle(tester);
-      expect(find.text('fridge chef'), findsOneWidget);
+      expect(find.text('Fridge chef'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.runAsync(() => s.skills.install(CommunitySkill.parse(sampleCommunitySkills[0])));
       await _refreshSegment(tester, 'community');
-      expect(find.text('fridge chef'), findsOneWidget);
+      expect(find.text('Fridge chef'), findsOneWidget);
       await _reveal(tester, find.byTooltip('Remove'));
       await tester.tap(find.byTooltip('Remove'));
       await _settle(tester);

@@ -9,8 +9,11 @@ class AppState extends ChangeNotifier {
     services.savedArrived.addListener(_showSaved);
   }
 
+  /// The tabs: chat · saved · you. Skills and models are set up under "you".
+  static const chatTab = 0;
   static const savedTab = 1;
-  static const modelsTab = 3;
+  static const youTab = 2;
+  static const tabs = ['chat', 'saved', 'you'];
 
   void _showSaved() {
     if (services.savedArrived.value == null) return;

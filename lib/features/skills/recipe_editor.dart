@@ -74,12 +74,7 @@ class _RecipeEditorState extends State<RecipeEditor> {
           children: [
             const PageIntro('add a step', 'Pick the skill this step runs.'),
             for (final k in choices)
-              Door(
-                k.name.toLowerCase(),
-                style: Hand.label.copyWith(fontSize: 23),
-                meta: k.description,
-                onTap: () => Navigator.pop(c, k),
-              ),
+              ItemRow(title: k.name, meta: k.description, onTap: () => Navigator.pop(c, k)),
           ],
         ),
       ),
@@ -145,11 +140,10 @@ class _RecipeEditorState extends State<RecipeEditor> {
         if (_missing.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: Meta(
+            child: Warning(
               '${_missing.length} step${_missing.length == 1 ? ' uses a skill' : 's use skills'} that '
               'isn\'t installed (${_missing.map((m) => m.$2.skillId).join(', ')}). '
               '${_missing.length == 1 ? 'It is' : 'They are'} kept as they are.',
-              color: p.redPen,
             ),
           ),
         TextField(
@@ -185,19 +179,20 @@ class _RecipeEditorState extends State<RecipeEditor> {
                 children: [
                   Row(
                     children: [
-                      Text('${i + 1}.', style: Hand.title.copyWith(fontSize: 26, color: p.ink)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _steps[i].skill.name.toLowerCase(),
-                          style: Hand.label.copyWith(fontSize: 24, color: p.ink),
-                        ),
+                      Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.ink, width: 1.4)),
+                        child: Text('${i + 1}', style: context.type.tag, textScaler: TextScaler.noScaling),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_steps[i].skill.name, style: context.type.rowTitle)),
                       DoodleButton(
                         Doodle.close,
                         tooltip: 'Remove step',
                         size: 20,
-                        color: p.redPen,
+                        color: p.pencil,
                         onTap: () => setState(() => _steps.removeAt(i)),
                       ),
                     ],

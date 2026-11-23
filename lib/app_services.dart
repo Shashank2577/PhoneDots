@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:base_models/base_models.dart' as bm;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
@@ -82,6 +83,8 @@ class AppServices {
     return switch (defaultTargetPlatform) {
       TargetPlatform.android => 'android',
       TargetPlatform.iOS => 'ios',
+      // The Mac app uses the same Swift bridges as iOS (packages/phonedots_native).
+      TargetPlatform.macOS => 'macos',
       _ => 'demo',
     };
   }
@@ -137,6 +140,7 @@ class AppServices {
       specialists: services.specialists,
       settings: settings,
       ledger: ledger,
+      shared: native ? await _tryOpenSharedModels(settings, services.specialists) : null,
     );
     services.skills = SkillRegistry(store: s, settings: settings, platform: p);
     services.knowledge = KnowledgeBase(store: s, embedder: services.bestEmbedder);
@@ -172,6 +176,56 @@ class AppServices {
     }
     return services;
   }
+
+  /// The base platform's shared model store: models PhoneDots downloads are
+  /// usable by the vendor's other apps on this device, and theirs by PhoneDots.
+  /// Each of its steps goes to the diagnostics log (tag "store").
+  static Future<bm.ModelStore> _openSharedModels(AppSettings settings, SpecialistEngine specialists) async {
+    final shared = await bm.ModelStore.open(
+      bm.StoreOptions(
+        appId: sharedModelsAppId,
+        catalog: bm.ModelCatalog(),
+        // The Hugging Face token goes to huggingface.co only (exact host, https).
+        headersFor: (f) {
+          final u = Uri.tryParse(f.url);
+          return settings.hfToken.isNotEmpty && u != null && u.scheme == 'https' && u.host == 'huggingface.co'
+              ? {'Authorization': 'Bearer ${settings.hfToken}'}
+              : const {};
+        },
+        // Model ids, file names, hosts and HTTP codes only: nothing the user wrote.
+        onLog: (line) => line.contains('FAILED') ? appLog.error('store', line) : appLog.info('store', line),
+        sdkInstaller: (id, key, dir, progress) async {
+          await for (final p in specialists.download(id)) {
+            progress(p);
+          }
+        },
+      ),
+    );
+    sharedModelsPath = shared.location.path;
+    appLog.info('store', 'shared model store opened', {'path': shared.location.path, 'scope': shared.location.scope.name});
+    if (specialists is PlatformSpecialistEngine) await specialists.attachStore(shared.location.path);
+    // Tell sibling apps PhoneDots is still installed; forget apps unseen for half a year.
+    await shared.touchClaims();
+    await shared.pruneStaleClaims(const Duration(days: 180));
+    return shared;
+  }
+
+  /// A store that can't open (no plugin, unreadable folder) must not stop the
+  /// app: PhoneDots then keeps models in its own folder, as before, and says so.
+  static Future<bm.ModelStore?> _tryOpenSharedModels(AppSettings settings, SpecialistEngine specialists) async {
+    try {
+      return await _openSharedModels(settings, specialists);
+    } catch (e, st) {
+      appLog.error('store', 'shared model store unavailable; using this app\'s own folder', null, e, st);
+      return null;
+    }
+  }
+
+  /// PhoneDots' id in the shared store's registry (its Android application id).
+  static const sharedModelsAppId = 'ai.phonedots.phonedots';
+
+  /// Where the shared model store lives on this device (for the diagnostics header).
+  static String? sharedModelsPath;
 
   static const _uuid = Uuid();
 

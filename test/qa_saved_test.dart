@@ -2431,7 +2431,7 @@ void main() {
       await t.tap(find.text('Done pasta'));
       await settleUi(t);
       expect(find.byType(SavedDetailScreen), findsOneWidget);
-      expect(find.text('summary'), findsOneWidget);
+      expect(find.text('A tasty summary of pasta.'), findsOneWidget);
       await t.pageBack();
       await settleUi(t);
       expect(find.byType(SavedDetailScreen), findsNothing);
@@ -2465,28 +2465,33 @@ void main() {
       }
 
       await open('Done pasta');
-      // "what we read" comes before the summary
+      // The summary comes first; what we read is behind a link at the bottom.
+      final summary = t.getTopLeft(find.text('A tasty summary of pasta.')).dy;
+      await reveal(t, find.text('what we read'));
       final read = t.getTopLeft(find.text('what we read')).dy;
-      final summary = t.getTopLeft(find.text('summary')).dy;
-      expect(read, lessThan(summary));
-      expect(find.text('Boil the pasta then toss it in butter.'), findsOneWidget);
-      expect(find.text('A tasty summary of pasta.'), findsOneWidget);
+      expect(summary, lessThan(read));
+      expect(find.text('Boil the pasta then toss it in butter.'), findsNothing);
       expect(find.text('key points'), findsOneWidget);
       expect(find.text('summarise again'), findsOneWidget);
-      expect(find.textContaining('read from: caption, page preview'), findsOneWidget);
+      expect(find.textContaining('Read from caption, page preview'), findsOneWidget);
+      await t.tap(find.text('what we read'));
+      await settleUi(t);
+      expect(find.text('Boil the pasta then toss it in butter.'), findsOneWidget);
+      Navigator.of(t.element(find.text('Boil the pasta then toss it in butter.'))).pop();
+      await settleUi(t);
       await t.pageBack();
       await settleUi(t);
 
       await open('Reading now');
       expect(find.text('summarise again'), findsNothing);
       expect(find.text('summarise'), findsNothing);
-      expect(find.textContaining('reading…'), findsOneWidget);
+      expect(find.textContaining('Reading…'), findsOneWidget);
       await t.pageBack();
       await settleUi(t);
 
       await open('Summarising now');
-      expect(find.textContaining('summarising on this phone…'), findsOneWidget);
-      expect(find.text('caption'), findsOneWidget);
+      expect(find.textContaining('Summarising on this phone…'), findsOneWidget);
+      expect(find.text('a caption'), findsOneWidget);
       await t.pageBack();
       await settleUi(t);
 
@@ -2525,8 +2530,11 @@ void main() {
       );
       await t.tap(find.text('Long read'));
       await settleUi(t);
-      expect(find.textContaining('THE-VERY-END', findRichText: true), findsNothing);
       expect(find.textContaining('characters'), findsWidgets);
+      await reveal(t, find.text('what we read'));
+      await t.tap(find.text('what we read'));
+      await settleUi(t);
+      expect(find.textContaining('THE-VERY-END', findRichText: true), findsNothing);
       final unfold = find.textContaining('read all');
       expect(unfold, findsOneWidget);
       await reveal(t, unfold);
@@ -2568,13 +2576,19 @@ void main() {
       await boot(t, items: everyStatus());
       await t.tap(find.text('Done pasta'));
       await settleUi(t);
+      final copySummary0 = find.text('copy the summary');
+      await reveal(t, copySummary0);
+      await t.tap(find.text('what we read'));
+      await settleUi(t);
       final copyText = find.text('copy the text');
-      await reveal(t, copyText);
+      await t.scrollUntilVisible(copyText, 200, scrollable: find.byType(Scrollable).last);
       await t.tap(copyText);
       await t.pump();
       expect(clipboard.last, 'Boil the pasta then toss it in butter.');
       expect(find.text('copied'), findsOneWidget);
       await t.pump(const Duration(seconds: 3));
+      Navigator.of(t.element(copyText)).pop();
+      await settleUi(t);
 
       final copySummary = find.text('copy the summary');
       await reveal(t, copySummary);
@@ -2656,7 +2670,7 @@ void main() {
       await settleUi(t);
       expect(s.saved.byId('a')!.status, SavedStatus.done);
       expect(find.text('old summary'), findsNothing);
-      expect(find.text('summary'), findsOneWidget);
+      expect(find.text(s.saved.byId('a')!.summary!), findsOneWidget);
     });
 
     testWidgets('"chat about it" goes to the chat tab and drops the detail', (t) async {

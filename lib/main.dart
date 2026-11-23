@@ -36,7 +36,7 @@ class PhoneDotsApp extends StatelessWidget {
   const PhoneDotsApp({super.key, required this.state});
   final AppState state;
 
-  Voice get _voice => Voice.values.firstWhere((v) => v.name == state.services.settings.voice, orElse: () => Voice.neat);
+  Voice get _voice => Voice.byName(state.services.settings.voice);
 
   @override
   Widget build(BuildContext context) => AppScope(

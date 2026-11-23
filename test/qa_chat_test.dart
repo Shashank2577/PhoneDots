@@ -20,7 +20,6 @@ import 'package:phonedots/features/chat/chat_screen.dart';
 import 'package:phonedots/features/chat/message_view.dart';
 import 'package:phonedots/skills/skill.dart';
 import 'package:phonedots/theme/theme.dart';
-import 'package:phonedots/widgets/hand.dart';
 
 Future<AppServices> _demo({MemoryJsonStore? store, http.Client? client}) =>
     AppServices.create(store: store ?? MemoryJsonStore(), platform: 'demo', linkClient: client);
@@ -1211,25 +1210,18 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('welcome: three recent chats under "carry on", link to all, tapping one opens it', (tester) async {
+    testWidgets('welcome keeps to four suggestions; past chats are behind the clock', (tester) async {
       final (s, state) = await pumpChat(tester, seed: 5);
-      expect(find.text('carry on'), findsOneWidget);
-      expect(find.text('all 5 chats'), findsOneWidget);
-      expect(find.textContaining('old chat number'), findsNWidgets(3 * 2)); // title + preview
+      expect(find.text('carry on'), findsNothing);
+      expect(find.text('what else can it do?'), findsOneWidget);
+      await tester.tap(find.byTooltip('Past chats'));
+      await settle(tester, 600);
       await tester.tap(find.text('old chat number 4').first);
       await settle(tester, 600);
       expect(state.chat.messages, hasLength(2));
       expect(state.chat.conversation.title, 'old chat number 4');
-      expect(find.text('carry on'), findsNothing);
-      expect(find.byTooltip('Copy this chat'), findsOneWidget);
       expect(tester.takeException(), isNull);
       expect(s.conversations.summaries, hasLength(5));
-    });
-
-    testWidgets('welcome with 1-3 chats says "past chats" instead of a count', (tester) async {
-      await pumpChat(tester, seed: 2);
-      expect(find.text('past chats'), findsOneWidget);
-      expect(find.textContaining('all 2'), findsNothing);
     });
 
     testWidgets('past chats sheet: empty state, then list with count/preview, "open now", delete', (tester) async {
@@ -1271,12 +1263,12 @@ void main() {
 
     testWidgets('past chats: tapping a row opens it and closes the sheet', (tester) async {
       final (_, state) = await pumpChat(tester, seed: 4);
-      await tester.tap(find.text('all 4 chats'));
+      await tester.tap(find.byTooltip('Past chats'));
       await settle(tester, 600);
       expect(find.text('past chats'), findsWidgets);
-      await tester.tap(find.text('old chat number 0').last);
+      await tester.tap(find.text('old chat number 3').last, warnIfMissed: false);
       await settle(tester, 800);
-      expect(state.chat.conversation.title, 'old chat number 0');
+      expect(state.chat.conversation.title, 'old chat number 3');
       expect(find.text('start a new chat'), findsNothing);
     });
 
@@ -1297,7 +1289,9 @@ void main() {
       final (_, state) = await pumpChat(tester);
       await tester.runAsync(() => state.chat.send('What is 18% of 2450?'));
       await tester.pump();
-      await tester.tap(find.byTooltip('Copy this chat'));
+      await tester.tap(find.byTooltip('Past chats'));
+      await settle(tester, 600);
+      await tester.tap(find.text('copy this chat'));
       await tester.pump();
       expect(clipboardWrites, hasLength(1));
       expect(clipboardWrites.single, ConversationStore.transcript(state.chat.conversation));
@@ -1343,7 +1337,8 @@ void main() {
       await settle(tester, 2000);
       expect(state.chat.messages, hasLength(2));
       expect(find.text('What is 18% of 2450?'), findsWidgets);
-      expect(find.text('calculate'), findsOneWidget);
+      // The step folds into one line under the answer.
+      expect(find.textContaining('1 step'), findsOneWidget);
       expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
       expect(tester.takeException(), isNull);
     });
@@ -1352,7 +1347,10 @@ void main() {
       final (_, state) = await pumpChat(tester);
       await tester.enterText(find.byType(TextField), '   \n  ');
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Send'));
+      // Nothing to send: the button stays the mic.
+      expect(find.bySemanticsLabel('Send'), findsNothing);
+      expect(find.bySemanticsLabel('Talk'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump(const Duration(milliseconds: 300));
       expect(state.chat.messages, isEmpty);
       expect(find.text('record a meeting'), findsOneWidget);
@@ -1369,12 +1367,12 @@ void main() {
       final (_, state) = await pumpChat(tester);
       unawaited(state.chat.send('Tell me a story'));
       await tester.pump(const Duration(milliseconds: 100));
-      final stop = find.byWidgetPredicate((w) => w is DoodleIcon && w.semanticLabel == 'Stop');
+      final stop = find.bySemanticsLabel('Stop');
       expect(stop, findsOneWidget);
       await tester.tap(stop);
       await settle(tester, 1500);
       expect(state.chat.busy, isFalse);
-      expect(find.byWidgetPredicate((w) => w is DoodleIcon && w.semanticLabel == 'Send'), findsOneWidget);
+      expect(find.bySemanticsLabel('Talk'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1385,13 +1383,14 @@ void main() {
       await tester.tap(find.byTooltip('New chat'));
       await settle(tester, 600);
       expect(find.text('record a meeting'), findsOneWidget);
-      expect(find.text('carry on'), findsOneWidget);
       expect(s.conversations.summaries, hasLength(1));
     });
 
-    testWidgets('a suggestion that sends (set a timer) runs through the fast tool path', (tester) async {
+    testWidgets('a simple command (set a timer) runs through the fast tool path', (tester) async {
       final (_, state) = await pumpChat(tester);
-      await tester.tap(find.text('set a timer'));
+      await tester.enterText(find.byType(TextField), 'Set a timer for 10 minutes');
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Send'));
       await settle(tester, 2500);
       expect(state.chat.messages.first.text, 'Set a timer for 10 minutes');
       expect(state.chat.messages.last.steps.single.skillId, 'set_timer');
@@ -1473,7 +1472,6 @@ void main() {
       await tester.tapAt(const Offset(180, 20));
       await settle(tester, 1000);
       expect(state.chat.messages.last.steps.single.status, StepStatus.declined);
-      expect(find.text('you said no'), findsOneWidget);
     });
   });
 
@@ -1530,8 +1528,9 @@ void main() {
 
     testWidgets('thinking section expands; user message with attachments and long file name lays out', (tester) async {
       await pumpMessage(tester, ChatMessage(id: 'r', isUser: false, text: 'ok', thinking: 'hmm ' * 100));
-      await tester.tap(find.text('thinking'));
-      await tester.pump(const Duration(milliseconds: 400));
+      // Thinking folds into the line under the answer; it opens the trace.
+      await tester.tap(find.textContaining('thought first'));
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.textContaining('hmm hmm'), findsOneWidget);
       await pumpMessage(
         tester,
@@ -1568,10 +1567,16 @@ void main() {
           )..progress = st == StepStatus.running ? 'halfway' : null,
       ];
       await pumpMessage(tester, ChatMessage(id: 'r', isUser: false, text: 'done', steps: steps));
+      // The answer first, then one line for the steps; it opens the trace.
+      expect(find.textContaining('4 steps · 2 not done'), findsOneWidget);
+      await tester.tap(find.textContaining('4 steps'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('halfway'), findsOneWidget);
       expect(find.text('you said no'), findsOneWidget);
       expect(find.text('fast path'), findsOneWidget);
-      await tester.tap(find.text('calculate').first);
+      await tester.tap(find.text('Calculate').first);
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('what went in'), findsOneWidget);
       expect(find.text('what came out'), findsOneWidget);

@@ -323,13 +323,16 @@ void main() {
     }
     expect(find.text('the voice engine'), findsOneWidget);
     expect(find.text('download the engine'), findsOneWidget);
+    await t.scrollUntilVisible(find.text('voice 0a67'), 300, scrollable: find.byType(Scrollable).last);
     expect(find.text('voice 0a67'), findsOneWidget);
     expect(find.byTooltip('Listen to voice 0a67'), findsOneWidget);
     expect(find.text('with feelings'), findsNothing);
+    await t.scrollUntilVisible(find.text('personal-use voices'), -300, scrollable: find.byType(Scrollable).last);
     await t.tap(find.text('personal-use voices'));
     for (var i = 0; i < 5; i++) {
       await t.pump(const Duration(milliseconds: 100));
     }
+    await t.scrollUntilVisible(find.text('with feelings'), 300, scrollable: find.byType(Scrollable).last);
     expect(find.text('with feelings'), findsOneWidget);
     expect(t.takeException(), isNull);
   });

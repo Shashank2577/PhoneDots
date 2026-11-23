@@ -1,0 +1,37 @@
+name: base_models
+description: One model catalog and one on-device model store shared by every app on the device.
+version: 1.0.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.7
+  flutter: ">=3.47.0"
+
+dependencies:
+  crypto: ^3.0.6
+  flutter:
+    sdk: flutter
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  stream_channel: any
+
+flutter:
+  plugin:
+    platforms:
+      # Android: the sibling-copy provider. iOS/macOS: the App Group container.
+      # Windows, Linux and web need no native code (see lib/src/locations.dart).
+      android:
+        package: dev.baseplatform.base_models
+        pluginClass: BaseModelsPlugin
+      ios:
+        pluginClass: BaseModelsPlugin
+        sharedDarwinSource: false
+      macos:
+        pluginClass: BaseModelsPlugin

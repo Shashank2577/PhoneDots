@@ -555,7 +555,7 @@ List<Screen> _screens() => [
   Screen('onboarding-welcome', () => const Shell(), onboarding: true),
   Screen('onboarding-setup', () => const Shell(), onboarding: true, after: (t, e) => _tap(t, find.text("let's start"))),
   Screen('shell-chat', () => const Shell()),
-  Screen('shell-you', () => const Shell(), prep: (s, e) => s.tab = 4),
+  Screen('shell-you', () => const Shell(), prep: (s, e) => s.tab = AppState.youTab),
   Screen('chat-welcome-empty', () => const ChatScreen(), nav: true, bare: true),
   Screen('chat-welcome-recent', () => const ChatScreen(), nav: true),
   Screen(
@@ -601,9 +601,22 @@ List<Screen> _screens() => [
     () => const ChatScreen(),
     nav: true,
     prep: (s, e) => s.chat.messages.addAll(_stepsChat()),
-    after: (t, e) => _tap(t, find.text('long args')),
+    after: (t, e) async {
+      // Steps fold into one line under the answer; it opens the trace, and a step there opens its details.
+      final line = find.textContaining(RegExp(r'^\d+ steps?'));
+      await t.scrollUntilVisible(line, -200, scrollable: find.byType(Scrollable).first, maxScrolls: 100);
+      await _tap(t, line);
+      final row = find.text('Long args');
+      await t.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).last, maxScrolls: 100);
+      await _tap(t, row);
+    },
   ),
-  Screen('chat-model-picker-sheet', () => const ChatScreen(), nav: true, after: (t, e) => _tap(t, find.text('demo'))),
+  Screen(
+    'chat-model-picker-sheet',
+    () => const ChatScreen(),
+    nav: true,
+    after: (t, e) => _tap(t, find.textContaining('Demo engine ·')),
+  ),
   Screen('chat-attach-sheet', () => const ChatScreen(), nav: true, after: (t, e) => _tap(t, find.byTooltip('Attach'))),
   Screen(
     'past-chats-sheet',
@@ -713,7 +726,7 @@ List<Screen> _screens() => [
   Screen('you', () => const YouScreen(), nav: true),
   Screen('you-empty', () => const YouScreen(), nav: true, bare: true),
   Screen('settings', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const SettingsScreen())),
-  Screen('about', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const AboutScreen())),
+  Screen('under-the-hood', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const UnderTheHoodScreen())),
   Screen('privacy', () => const YouScreen(), nav: true, after: (t, e) => _push(t, const PrivacyScreen())),
   Screen(
     'privacy-empty',
@@ -737,7 +750,7 @@ List<Screen> _screens() => [
     nav: true,
     after: (t, e) async {
       await _push(t, const KnowledgeScreen());
-      await _tap(t, find.byType(Door), optional: true);
+      await _tap(t, find.byType(ItemRow), optional: true);
     },
   ),
   Screen(
@@ -769,12 +782,12 @@ const _scales = [1.0, 1.6];
 List<Cfg> _configs() => [
   // Geometry: every size in light, at both scales.
   for (final s in _sizes)
-    for (final k in _scales) Cfg(s, false, k, Voice.neat),
+    for (final k in _scales) Cfg(s, false, k, Voice.fallback),
   // Dark: colours only, so two sizes are enough.
-  const Cfg(Size(320, 568), true, 1.6, Voice.neat),
-  const Cfg(Size(412, 915), true, 1.0, Voice.neat),
+  Cfg(const Size(320, 568), true, 1.6, Voice.fallback),
+  Cfg(const Size(412, 915), true, 1.0, Voice.fallback),
   // Every other body voice on the smallest and the largest screen.
-  for (final v in Voice.values.where((v) => v != Voice.neat)) ...[
+  for (final v in Voice.values.where((v) => v != Voice.fallback)) ...[
     Cfg(const Size(320, 568), false, 1.0, v),
     Cfg(const Size(320, 568), false, 1.6, v),
   ],
@@ -857,7 +870,7 @@ Widget _app(AppState st, Screen sc, Cfg c, GlobalKey boundary) {
   if (sc.nav) {
     home = Scaffold(
       body: home,
-      bottomNavigationBar: HandNav(index: 0, onTap: (_) {}, labels: const ['chat', 'saved', 'skills', 'models', 'you']),
+      bottomNavigationBar: HandNav(index: 0, onTap: (_) {}, labels: AppState.tabs),
     );
   }
   return RepaintBoundary(
@@ -1070,7 +1083,7 @@ void main() {
             for (final (size, scale) in const [(Size(412, 915), 1.0), (Size(360, 690), 1.6)]) {
               // Contrast analysis walks every pixel and is slow: a few screens, one size.
               final contrast = scale == 1.0 && a11yContrast.contains(name);
-              final c = Cfg(size, dark, scale, Voice.neat);
+              final c = Cfg(size, dark, scale, Voice.fallback);
               final env = sc.bare ? await _bareEnv(t) : await _seededEnv(t);
               env.services.settings
                 ..themeMode = dark ? ThemeMode.dark : ThemeMode.light
@@ -1105,7 +1118,7 @@ void main() {
                 }
                 // HandNav entries.
                 if (sc.nav) {
-                  for (final l in ['chat', 'saved', 'skills', 'models', 'you']) {
+                  for (final l in AppState.tabs) {
                     final label = find.descendant(of: find.byType(HandNav), matching: find.text(l));
                     final p = find.ancestor(of: label, matching: find.byType(Pressable));
                     if (label.evaluate().isNotEmpty && p.evaluate().isNotEmpty) {
@@ -1199,7 +1212,7 @@ void main() {
         await _run(
           t,
           sc,
-          Cfg(size, false, 1.0, Voice.neat),
+          Cfg(size, false, 1.0, Voice.fallback),
           scrollSweep: false,
           probe: (t) {
             final w = size.width;
@@ -1207,15 +1220,20 @@ void main() {
             for (final e in find.byType(Column0).evaluate()) {
               final box = e.renderObject;
               if (box is! RenderBox || !box.attached) continue;
-              // The child of Column0 sits inside Center > ConstrainedBox > Padding.
+              // The child of Column0, wherever the column's boxes put it.
+              final child = (e.widget as Column0).child;
               RenderBox? inner;
-              e.visitChildElements(
-                (c) => c.visitChildElements(
-                  (c2) => c2.visitChildElements(
-                    (c3) => c3.visitChildElements((c4) => inner = c4.renderObject as RenderBox?),
-                  ),
-                ),
-              );
+              void visit(Element x) {
+                if (inner != null) return;
+                if (identical(x.widget, child)) {
+                  final r = x.renderObject;
+                  if (r is RenderBox) inner = r;
+                  return;
+                }
+                x.visitChildElements(visit);
+              }
+
+              e.visitChildElements(visit);
               if (inner == null || !inner!.hasSize || inner!.size.width < 1) continue;
               final dx = inner!.localToGlobal(Offset.zero).dx;
               if ((dx - expected).abs() > 1.5 && dx > 0 && dx < w) {
@@ -1261,10 +1279,10 @@ void main() {
           'settings',
           'past-chats-sheet',
         ])
-          (n, Cfg(const Size(360, 690), dark, 1.0, Voice.neat)),
-      ('chat-cards-a', const Cfg(Size(320, 568), false, 1.6, Voice.neat)),
-      ('saved-list', const Cfg(Size(320, 568), false, 1.6, Voice.handwritten)),
-      ('models', const Cfg(Size(320, 568), true, 1.6, Voice.loose)),
+          (n, Cfg(const Size(360, 690), dark, 1.0, Voice.friendly)),
+      ('chat-cards-a', const Cfg(Size(320, 568), false, 1.6, Voice.friendly)),
+      ('saved-list', const Cfg(Size(320, 568), false, 1.6, Voice.neat)),
+      ('models', const Cfg(Size(320, 568), true, 1.6, Voice.formal)),
       ('chat-welcome-recent', const Cfg(Size(800, 1280), false, 1.0, Voice.formal)),
     ];
     for (final (name, c) in shots) {

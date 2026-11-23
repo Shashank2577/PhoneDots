@@ -10,29 +10,21 @@ import '../../core/util/format.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hand.dart';
+import '../../widgets/rich_text.dart';
 
 /// Everything the assistant was asked to remember, fully editable.
 class MemoryScreen extends StatelessWidget {
   const MemoryScreen({super.key});
 
   Future<void> _add(BuildContext context) async {
-    final c = TextEditingController();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('Remember'),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'e.g. Prefers metric units'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(d, c.text), child: const Text('Save')),
-        ],
-      ),
+    final r = await askSheet(
+      context,
+      title: 'remember',
+      fields: const [(hint: 'e.g. Prefers metric units', lines: 1)],
+      confirm: 'remember it',
     );
-    if (text != null && context.mounted) await AppScope.services(context).memory.add(text);
+    final text = r?.first.trim() ?? '';
+    if (text.isNotEmpty && context.mounted) await AppScope.services(context).memory.add(text);
   }
 
   @override
@@ -45,8 +37,7 @@ class MemoryScreen extends StatelessWidget {
         children: [
           const PageIntro(
             'memory',
-            'Things you asked PhoneDots to remember. They\'re shared with the model at the start of every chat, and nothing else is kept.',
-            doodle: Doodle.heart,
+            'Things you asked PhoneDots to remember. The model reads them at the start of every chat; nothing else is kept.',
           ),
           if (memory.facts.isEmpty)
             const HandEmpty(
@@ -57,15 +48,17 @@ class MemoryScreen extends StatelessWidget {
           for (final (i, f) in memory.facts.indexed)
             Enter(
               index: i,
-              child: Door(
-                f.text,
-                style: Hand.label.copyWith(fontSize: 24),
-                meta: timeAgo(f.created),
+              // The user's own words, in ink, with when it was added.
+              child: ItemRow(
+                title: f.text,
+                titleStyle: context.type.rowNote,
+                titleLines: 4,
+                caption: timeAgo(f.created),
                 trailing: DoodleButton(
-                  Doodle.close,
+                  Doodle.trash,
                   tooltip: 'Forget',
                   size: 20,
-                  color: context.pal.redPen,
+                  color: context.pal.pencil,
                   onTap: () => memory.remove(f),
                 ),
               ),
@@ -100,38 +93,13 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
   }
 
   Future<void> _addNote() async {
-    final title = TextEditingController();
-    final body = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('New note'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(labelText: 'Title'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: body,
-              minLines: 4,
-              maxLines: 8,
-              decoration: const InputDecoration(labelText: 'Text'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Save')),
-        ],
-      ),
+    final r = await askSheet(
+      context,
+      title: 'new note',
+      fields: const [(hint: 'Title', lines: 1), (hint: 'Text', lines: 4)],
     );
-    if (ok == true && body.text.trim().isNotEmpty && mounted) {
-      await AppScope.services(context).knowledge
-          .add(title.text.trim().isEmpty ? 'Note' : title.text.trim(), body.text, source: 'notes');
-    }
+    if (r == null || r[1].trim().isEmpty || !mounted) return;
+    await AppScope.services(context).knowledge.add(r[0].trim().isEmpty ? 'Note' : r[0].trim(), r[1], source: 'notes');
   }
 
   Future<void> _import() async {
@@ -167,7 +135,6 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
             const PageIntro(
               'my files',
               'Notes, imports, receipts and transcripts the assistant can search for you.',
-              doodle: Doodle.folder,
             ),
             TextField(
               controller: _query,
@@ -184,8 +151,8 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
             const SizedBox(height: 6),
             Meta(
               semantic
-                  ? 'searching by meaning, with EmbeddingGemma'
-                  : 'searching by keyword · download EmbeddingGemma under models to search by meaning',
+                  ? 'Searching by meaning, with EmbeddingGemma.'
+                  : 'Searching by keyword. Download EmbeddingGemma under models to search by meaning.',
             ),
             if (_hits.isNotEmpty) ...[
               const SectionHead('found'),
@@ -195,22 +162,22 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              '${h['title']}'.toLowerCase(),
-                              style: Hand.label.copyWith(fontSize: 23, color: p.ink),
-                            ),
-                          ),
-                          Meta('${((h['score'] as num) * 100).round()}% match'),
+                          Expanded(child: Text('${h['title']}', style: context.type.rowTitle)),
+                          const SizedBox(width: 8),
+                          Caption('${((h['score'] as num) * 100).round()}% match'),
                         ],
                       ),
-                      Meta('${h['text']}', maxLines: 4, color: p.ink),
+                      Body('${h['text']}', maxLines: 4),
                     ],
                   ),
                 ),
             ],
-            SectionHead('documents', note: '${kb.docs.length}'),
+            SectionHead(
+              'documents',
+              note: kb.docs.isEmpty ? null : '${kb.docs.length} ${kb.docs.length == 1 ? 'document' : 'documents'}',
+            ),
             if (kb.docs.isEmpty)
               const HandEmpty(
                 title: 'no files yet',
@@ -218,15 +185,14 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
                 doodle: Doodle.folder,
               ),
             for (final d in kb.docs)
-              Door(
-                d.title.toLowerCase(),
-                style: Hand.label.copyWith(fontSize: 24),
-                leading: switch (d.source) {
+              ItemRow(
+                title: d.title,
+                leading: DoodleIcon(switch (d.source) {
                   'expenses' => Doodle.calc,
                   'notes' => Doodle.pen,
                   _ => Doodle.doc,
-                },
-                meta: '${d.source} · ${d.chunks} passages · ${timeAgo(d.created)}',
+                }, color: p.pencil),
+                caption: '${d.source} · ${d.chunks} passages · ${timeAgo(d.created)}',
                 onTap: () => showModalBottomSheet<void>(
                   context: context,
                   isScrollControlled: true,
@@ -236,8 +202,10 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
                       controller: c,
                       padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 32),
                       children: [
-                        PageIntro(d.title.toLowerCase(), '${d.source} · ${timeAgo(d.created)}'),
-                        Body(kb.textOf(d)),
+                        Text(d.title, style: context.type.contentTitle),
+                        Caption('${d.source} · ${timeAgo(d.created)}'),
+                        const SizedBox(height: 16),
+                        Prose(kb.textOf(d)),
                       ],
                     ),
                   ),
@@ -246,7 +214,7 @@ class _KnowledgeScreenState extends State<KnowledgeScreen> {
                   Doodle.trash,
                   tooltip: 'Remove',
                   size: 20,
-                  color: p.redPen,
+                  color: p.pencil,
                   onTap: () => kb.remove(d),
                 ),
               ),

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- Model downloads and link reading. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Files the user picks to attach. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<!-- Voice input (record). -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- Calendar and contacts skills. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
+	<!-- The shared model store's App Group (group.com.showcase.shared) needs a
+	     provisioned Apple team on macOS; unsigned builds keep models in the
+	     app's own folder (base_models falls back by itself). -->
+</dict>
+</plist>

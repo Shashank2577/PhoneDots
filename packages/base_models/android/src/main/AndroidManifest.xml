@@ -1,0 +1,50 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Shared model store, sibling copy. The two placeholders come from the app's
+      build.gradle.kts (manifestPlaceholders), and must be the same in every app
+      of the vendor (platform.yaml → sharedModels). The permission is
+      signature-level: only apps signed with the same key can read the models.
+    -->
+    <permission
+        android:name="${baseModelsPermission}"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="${baseModelsPermission}" />
+    <!-- Model downloads. Flutter only declares INTERNET in debug/profile manifests. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- KeepAwake: an ongoing notification while a model downloads or the AI
+         writes an answer, so Android doesn't pause the app or sleep mid-way. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <intent>
+            <action android:name="${baseModelsDiscoveryAction}" />
+        </intent>
+    </queries>
+
+    <application>
+        <service
+            android:name="dev.baseplatform.base_models.KeepAwakeService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="On-device AI writing an answer the user asked for; it stops when the answer is done." />
+        </service>
+        <provider
+            android:name="dev.baseplatform.base_models.BaseModelsProvider"
+            android:authorities="${applicationId}.basemodels"
+            android:exported="true"
+            android:readPermission="${baseModelsPermission}">
+            <meta-data
+                android:name="dev.baseplatform.base_models.ACTION"
+                android:value="${baseModelsDiscoveryAction}" />
+            <intent-filter>
+                <action android:name="${baseModelsDiscoveryAction}" />
+            </intent-filter>
+        </provider>
+    </application>
+</manifest>
