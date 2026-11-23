@@ -8,6 +8,7 @@ import '../../core/app_log.dart';
 import '../lab/lab_screen.dart';
 import '../memory/memory_screen.dart';
 import '../privacy/privacy_screen.dart';
+import '../voice/voices_screen.dart';
 import 'diagnostics_screen.dart';
 
 /// The "you" tab: everything that is not chat, skills or models.
@@ -19,7 +20,7 @@ class YouScreen extends StatelessWidget {
     final s = AppScope.services(context);
     void push(Widget w) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => w));
     return ListenableBuilder(
-      listenable: Listenable.merge([s.memory, s.knowledge, s.ledger, appLog]),
+      listenable: Listenable.merge([s.memory, s.knowledge, s.ledger, appLog, s.voices]),
       builder: (context, _) => HandPage(
         wordmark: true,
         children: [
@@ -46,6 +47,12 @@ class YouScreen extends StatelessWidget {
               'privacy',
               '${s.ledger.networkEvents} network events, each one listed',
               () => push(const PrivacyScreen()),
+            ),
+            (
+              Doodle.wave,
+              'voices',
+              s.voices.selected == null ? 'natural voices with feelings' : 'speaking as ${s.voices.selected!.name}',
+              () => push(const VoicesScreen()),
             ),
             (Doodle.flask, 'lab', 'try prompts, measure speed', () => push(const LabScreen())),
             (
@@ -299,6 +306,12 @@ class AboutScreen extends StatelessWidget {
         (
           'desert ant',
           'Specialist models by Desert Ant Labs, free up to 100k monthly active devices. Voz uses NVIDIA Parakeet TDT 0.6B v3 weights under CC BY 4.0.',
+        ),
+        (
+          'voices',
+          'Pocket TTS by Kyutai (CC BY 4.0), run with sherpa-onnx (Apache 2.0). Donated voices from Kyutai\'s voice '
+              'project (CC0). VCTK voices: CSTR, University of Edinburgh (CC BY 4.0). Voices with feelings: Meta\'s '
+              'Expresso dataset (CC BY-NC 4.0, personal use only).',
         ),
         (
           'the look',

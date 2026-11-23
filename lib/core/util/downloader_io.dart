@@ -13,6 +13,7 @@ Stream<DownloadProgress> downloadFile({
   required CancelToken token,
 }) async* {
   final part = File('$destPath.part');
+  part.parent.createSync(recursive: true);
   var existing = part.existsSync() ? part.lengthSync() : 0;
   final client = HttpClient()..autoUncompress = false;
   try {

@@ -38,6 +38,16 @@ class AppSettings extends ChangeNotifier {
   /// after the app crashed. Off by default; nothing is sent without a URL.
   bool crashReports = false;
   String crashReportUrl = '';
+
+  /// Spoken replies: 'system' (the phone's own voice) or a neural voice id.
+  String voiceId = 'system';
+
+  /// Let the model pick a mood per sentence, for voices that have moods.
+  bool expressiveSpeech = true;
+  double voiceSpeed = 1.0;
+
+  /// Show voices whose licence allows personal, non-commercial use only.
+  bool personalUseVoices = false;
   bool useGpu = true;
   int maxSteps = 6;
   double temperature = 0.7;
@@ -65,6 +75,10 @@ class AppSettings extends ChangeNotifier {
     jinaKey = j['jinaKey'] as String? ?? '';
     crashReports = j['crashReports'] as bool? ?? false;
     crashReportUrl = j['crashReportUrl'] as String? ?? '';
+    voiceId = j['voiceId'] as String? ?? 'system';
+    expressiveSpeech = j['expressiveSpeech'] as bool? ?? true;
+    voiceSpeed = ((j['voiceSpeed'] as num?)?.toDouble() ?? 1.0).clamp(0.7, 1.4);
+    personalUseVoices = j['personalUseVoices'] as bool? ?? false;
     useGpu = j['useGpu'] as bool? ?? useGpu;
     maxSteps = (j['maxSteps'] as int? ?? maxSteps).clamp(1, 12);
     temperature = ((j['temperature'] as num?)?.toDouble() ?? temperature).clamp(0.0, 1.2);
@@ -92,6 +106,10 @@ class AppSettings extends ChangeNotifier {
       'jinaKey': jinaKey,
       'crashReports': crashReports,
       'crashReportUrl': crashReportUrl,
+      'voiceId': voiceId,
+      'expressiveSpeech': expressiveSpeech,
+      'voiceSpeed': voiceSpeed,
+      'personalUseVoices': personalUseVoices,
       'useGpu': useGpu,
       'maxSteps': maxSteps,
       'temperature': temperature,

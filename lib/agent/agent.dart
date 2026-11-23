@@ -39,6 +39,7 @@ class ChatController extends ChangeNotifier {
   final Conversation conversation;
   ConfirmCallback? onConfirm;
   bool busy = false;
+  bool _spoken = false;
   bool _stopRequested = false;
 
   List<ChatMessage> get messages => conversation.messages;
@@ -71,7 +72,10 @@ class ChatController extends ChangeNotifier {
     await services.llm.cancel();
   }
 
-  Future<void> send(String text, {List<Attachment> attachments = const []}) async {
+  /// [spoken]: a voice conversation, so the reply is short, plain and may
+  /// carry mood tags for an expressive voice.
+  Future<void> send(String text, {List<Attachment> attachments = const [], bool spoken = false}) async {
+    _spoken = spoken;
     if (busy || (text.trim().isEmpty && attachments.isEmpty)) return;
     appLog.info('agent', 'message sent', {
       'chars': text.trim().length,
@@ -385,6 +389,8 @@ class ChatController extends ChangeNotifier {
       memory: services.memory.promptBlock,
       tools: tools,
       nativeTools: services.llm.supportsNativeTools,
+      spoken: _spoken,
+      moods: _spoken && services.settings.expressiveSpeech && (services.voices.selected?.expressive ?? false),
     );
 
     for (var round = 0; round <= s.maxSteps; round++) {

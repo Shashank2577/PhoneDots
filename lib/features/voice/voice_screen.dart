@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:record/record.dart';
 
 import '../../app_state.dart';
-import '../../skills/skill.dart';
 import '../../theme/theme.dart';
+import '../../voice/conversation_loop.dart';
+import '../../voice/speech_text.dart';
 import '../../widgets/hand.dart';
+import 'voices_screen.dart';
 
-enum _Phase { idle, listening, transcribing, thinking, speaking }
-
-/// Hands-free loop: record → Voz (or Gemma audio) → agent → spoken reply.
-/// Shares the active conversation, so everything also appears in Chat.
+/// Hands-free, turn-by-turn conversation. It listens until you pause,
+/// answers out loud sentence by sentence (in the mood the reply calls for,
+/// with an expressive voice), then listens again. Talk over it to interrupt.
+/// Shares the active chat, so everything also appears in Chat.
 class VoiceScreen extends StatefulWidget {
   const VoiceScreen({super.key});
 
@@ -22,197 +22,287 @@ class VoiceScreen extends StatefulWidget {
 }
 
 class _VoiceScreenState extends State<VoiceScreen> with SingleTickerProviderStateMixin {
-  final _rec = AudioRecorder();
-  final _tts = FlutterTts();
-  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
-  StreamSubscription<Amplitude>? _amp;
-  double _level = 0;
-  _Phase _phase = _Phase.idle;
-  String _heard = '';
-  String _reply = '';
-  String? _error;
+  late final _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+  ConversationLoop? _loop;
 
   @override
-  void initState() {
-    super.initState();
-    _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _phase = _Phase.idle);
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loop == null) {
+      final state = AppScope.of(context);
+      _loop = ConversationLoop(services: state.services, chat: state.chat, speaker: state.services.speaker);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loop?.start());
+    }
   }
 
   @override
   void dispose() {
-    _amp?.cancel();
-    _rec.dispose();
-    _tts.stop();
-    _pulse.dispose();
+    unawaited(_loop?.stop());
+    _loop?.dispose();
+    _anim.dispose();
     super.dispose();
-  }
-
-  Future<void> _tap() async {
-    switch (_phase) {
-      case _Phase.idle:
-        await _listen();
-      case _Phase.listening:
-        await _finish();
-      case _Phase.speaking:
-        await _tts.stop();
-        setState(() => _phase = _Phase.idle);
-      default:
-    }
-  }
-
-  Future<void> _listen() async {
-    final s = AppScope.services(context);
-    try {
-      if (!await _rec.hasPermission()) {
-        setState(() => _error = 'Microphone permission is needed.');
-        return;
-      }
-      final path = '${s.store.filesDir ?? ''}/voice-${DateTime.now().millisecondsSinceEpoch}.wav';
-      await _rec.start(const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1), path: path);
-      _amp = _rec.onAmplitudeChanged(const Duration(milliseconds: 120)).listen((a) {
-        if (mounted) setState(() => _level = ((a.current + 50) / 50).clamp(0, 1).toDouble());
-      });
-      setState(() {
-        _phase = _Phase.listening;
-        _error = null;
-        _heard = '';
-        _reply = '';
-      });
-    } catch (e) {
-      setState(() => _error = 'Recording is not available here.');
-    }
-  }
-
-  Future<void> _finish() async {
-    await _amp?.cancel();
-    final path = await _rec.stop();
-    if (path == null || !mounted) return;
-    final state = AppScope.of(context);
-    final s = state.services;
-    final chat = state.chat;
-    final audio = Attachment(id: chat.nextAttachmentId(0), kind: 'audio', path: path, name: 'Voice message');
-    setState(() => _phase = _Phase.transcribing);
-    try {
-      String text = '';
-      if (s.models.isReady('desertant.voz') || s.isDemo) {
-        final r = await s.specialists.run('desertant.voz', 'transcribe', {'audioPath': path});
-        text = '${r['text'] ?? ''}'.trim();
-      }
-      setState(() {
-        _heard = text.isEmpty ? '(voice message)' : text;
-        _phase = _Phase.thinking;
-      });
-      if (text.isNotEmpty) {
-        await chat.send(text);
-      } else {
-        // No Voz: Gemma 4 listens to the clip itself.
-        await chat.send('Reply to what I said in this recording.', attachments: [audio]);
-      }
-      final last = chat.messages.last;
-      _reply = last.error ?? last.text;
-      if (!mounted) return;
-      setState(() => _phase = _Phase.speaking);
-      await _tts.speak(_reply.replaceAll(RegExp(r'[*`#]'), ''));
-    } catch (e) {
-      setState(() {
-        _error = '$e';
-        _phase = _Phase.idle;
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final label = switch (_phase) {
-      _Phase.idle => 'tap to talk',
-      _Phase.listening => 'listening… tap when you\'re done',
-      _Phase.transcribing => 'writing down what you said',
-      _Phase.thinking => 'thinking',
-      _Phase.speaking => 'speaking · tap to stop',
-    };
-    final active = _phase == _Phase.listening;
-    return HandPage(
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: gutter),
-              children: [
-                const PageIntro(
-                  'talk',
-                  'Say it out loud. Voz writes it down on this phone, and the reply is read back to you.',
-                  doodle: Doodle.mic,
-                ),
-                if (_heard.isNotEmpty) ...[
-                  const SectionHead('you said', padding: EdgeInsets.only(bottom: 4)),
-                  Text(_heard, style: Hand.title.copyWith(fontSize: 28, color: p.ink)),
-                ],
-                if (_reply.isNotEmpty) ...[const SectionHead('phonedots'), Body(_reply)],
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Row(
-                      children: [
-                        DoodleIcon(Doodle.exclaim, size: 20, color: p.redPen, stroke: 2.6),
-                        const SizedBox(width: 6),
-                        Expanded(child: Body(_error!)),
-                      ],
-                    ),
-                  ),
-              ],
+    final s = AppScope.services(context);
+    final loop = _loop!;
+    return ListenableBuilder(
+      listenable: Listenable.merge([loop, s.voices]),
+      builder: (context, _) {
+        final voice = s.voices.selected;
+        final label = switch (loop.state) {
+          TalkState.off => 'paused · tap to talk',
+          TalkState.listening => 'listening…',
+          TalkState.hearing => 'hearing you',
+          TalkState.transcribing => 'writing down what you said',
+          TalkState.thinking => 'thinking',
+          TalkState.speaking => 'speaking · talk to interrupt',
+        };
+        return HandPage(
+          actions: [
+            DoodleButton(
+              Doodle.wave,
+              tooltip: 'Voices',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoicesScreen())),
             ),
-          ),
-          // The big button: an ink circle that breathes with your voice.
-          Pressable(
-            onTap: _tap,
-            scale: 0.92,
-            child: AnimatedBuilder(
-              animation: _pulse,
-              builder: (_, _) {
-                final busy = _phase == _Phase.transcribing || _phase == _Phase.thinking;
-                final scale = active ? 1 + _level * 0.3 : (busy ? 1 + 0.05 * sin(_pulse.value * 2 * pi) : 1.0);
-                return SizedBox(
-                  width: 160,
-                  height: 160,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (active || busy)
-                        Container(
-                          width: 110 * scale + 30,
-                          height: 110 * scale + 30,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: p.rule, width: 1.6),
-                          ),
-                        ),
-                      Container(
-                        width: 104,
-                        height: 104,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: active ? p.redPen : p.ink),
-                        child: Center(
-                          child: DoodleIcon(
-                            active ? Doodle.stop : (_phase == _Phase.speaking ? Doodle.wave : Doodle.mic),
-                            size: 40,
-                            color: p.paper,
-                            stroke: 2.4,
-                          ),
+          ],
+          body: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: gutter),
+                  children: [
+                    PageIntro(
+                      'talk',
+                      voice == null
+                          ? 'Just talk; it answers out loud, then listens again. Pick a natural voice under voices.'
+                          : 'Just talk; ${voice.name} answers out loud${voice.expressive && s.settings.expressiveSpeech ? ', with feeling,' : ''} then listens again.',
+                      doodle: Doodle.mic,
+                    ),
+                    if (loop.problem != null) Body(loop.problem!, color: p.redPen),
+                    if (loop.heard.isNotEmpty) ...[
+                      const SectionHead('you said', padding: EdgeInsets.only(bottom: 4)),
+                      Text(loop.heard, style: Hand.title.copyWith(fontSize: 26, color: p.ink)),
+                    ],
+                    if (loop.reply.isNotEmpty) ...[const SectionHead('phonedots'), Body(loop.reply)],
+                    if (voice == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: HandLink(
+                          'choose a natural voice ↗',
+                          onTap: () =>
+                              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoicesScreen())),
                         ),
                       ),
-                    ],
+                  ],
+                ),
+              ),
+              Pressable(
+                onTap: () => loop.state == TalkState.off ? loop.start() : loop.stop(),
+                scale: 0.94,
+                child: AnimatedBuilder(
+                  animation: _anim,
+                  builder: (_, _) => MoodFace(
+                    mood: loop.state == TalkState.speaking ? loop.mood : Mood.neutral,
+                    talking: loop.state == TalkState.speaking,
+                    listening: loop.state == TalkState.listening || loop.state == TalkState.hearing,
+                    busy: loop.state == TalkState.transcribing || loop.state == TalkState.thinking,
+                    level: loop.level,
+                    t: _anim.value,
+                    size: 170,
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(label, style: Hand.label.copyWith(fontSize: 23, color: p.ink)),
+              if (loop.state == TalkState.speaking && loop.mood != Mood.neutral)
+                Meta('sounding ${loop.mood.name}', color: p.pencil),
+              const SizedBox(height: 20),
+            ],
           ),
-          const SizedBox(height: 8),
-          MarkedText(label, mark: active ? 'listening' : null, style: Hand.label.copyWith(fontSize: 23)),
-          const SizedBox(height: 20),
-        ],
-      ),
+        );
+      },
     );
   }
+}
+
+/// A hand-drawn face whose eyes and mouth follow the mood, that moves its
+/// mouth while talking and leans in while listening.
+class MoodFace extends StatelessWidget {
+  const MoodFace({
+    super.key,
+    required this.mood,
+    this.talking = false,
+    this.listening = false,
+    this.busy = false,
+    this.level = -100,
+    this.t = 0,
+    this.size = 160,
+  });
+
+  final Mood mood;
+  final bool talking;
+  final bool listening;
+  final bool busy;
+  final double level;
+  final double t;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'PhoneDots, ${talking ? 'speaking' : (listening ? 'listening' : 'waiting')}',
+    child: CustomPaint(
+      size: Size.square(size),
+      painter: _FacePainter(
+        ink: context.pal.ink,
+        marker: context.pal.marker,
+        mood: mood,
+        talking: talking,
+        listening: listening,
+        busy: busy,
+        level: level,
+        t: t,
+      ),
+    ),
+  );
+}
+
+class _FacePainter extends CustomPainter {
+  _FacePainter({
+    required this.ink,
+    required this.marker,
+    required this.mood,
+    required this.talking,
+    required this.listening,
+    required this.busy,
+    required this.level,
+    required this.t,
+  });
+
+  final Color ink;
+  final Color marker;
+  final Mood mood;
+  final bool talking;
+  final bool listening;
+  final bool busy;
+  final double level;
+  final double t;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width * 0.42;
+    final pen = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.028
+      ..strokeCap = StrokeCap.round;
+    // Listening: the head swells with your voice. Busy: a slow breath.
+    final loud = ((level + 60) / 40).clamp(0.0, 1.0);
+    final scale = listening ? 1 + loud * 0.08 : (busy ? 1 + 0.03 * sin(t * 2 * pi) : 1.0);
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.scale(scale);
+    if (listening) {
+      canvas.drawCircle(Offset.zero, r * 1.02, Paint()..color = marker.withValues(alpha: 0.35 + loud * 0.4));
+    }
+    // A slightly wobbly hand-drawn head.
+    final head = Path();
+    for (var i = 0; i <= 64; i++) {
+      final a = i / 64 * 2 * pi;
+      final w = r * (1 + 0.025 * sin(a * 3 + 1) + 0.015 * sin(a * 5));
+      final pt = Offset(cos(a) * w, sin(a) * w);
+      i == 0 ? head.moveTo(pt.dx, pt.dy) : head.lineTo(pt.dx, pt.dy);
+    }
+    canvas.drawPath(head, pen);
+
+    final eyeY = -r * 0.18;
+    final eyeX = r * 0.36;
+    final fill = Paint()..color = ink;
+    void eye(double x) {
+      switch (mood) {
+        case Mood.happy || Mood.laughing || Mood.excited:
+          // Smiling eyes: little arches.
+          canvas.drawArc(
+            Rect.fromCenter(center: Offset(x, eyeY + r * 0.04), width: r * 0.24, height: r * 0.2),
+            pi,
+            pi,
+            false,
+            pen,
+          );
+        case Mood.calm || Mood.sympathetic || Mood.whisper:
+          // Soft, half-closed.
+          canvas.drawArc(
+            Rect.fromCenter(center: Offset(x, eyeY), width: r * 0.24, height: r * 0.14),
+            0,
+            pi,
+            false,
+            pen,
+          );
+        case Mood.awe || Mood.confused:
+          canvas.drawCircle(Offset(x, eyeY), r * 0.1, pen);
+          canvas.drawCircle(Offset(x, eyeY), r * 0.04, fill);
+        default:
+          final blink = (t * 7 % 1) > 0.94; // an occasional blink
+          blink
+              ? canvas.drawLine(Offset(x - r * 0.07, eyeY), Offset(x + r * 0.07, eyeY), pen)
+              : canvas.drawCircle(Offset(x, eyeY), r * 0.07, fill);
+      }
+    }
+
+    eye(-eyeX);
+    eye(eyeX);
+    if (mood == Mood.sad || mood == Mood.sympathetic || mood == Mood.angry) {
+      final tilt = mood == Mood.angry ? 1 : -1;
+      for (final s in [-1.0, 1.0]) {
+        canvas.drawLine(
+          Offset(s * eyeX - r * 0.12, eyeY - r * 0.2 + tilt * s * r * 0.05),
+          Offset(s * eyeX + r * 0.12, eyeY - r * 0.2 - tilt * s * r * 0.05),
+          pen,
+        );
+      }
+    }
+
+    // Mouth: shape by mood, opening and closing while talking.
+    final open = talking ? (0.25 + 0.75 * (0.5 + 0.5 * sin(t * 2 * pi * 3))) : 0.0;
+    final my = r * 0.36;
+    final mw = r * (mood == Mood.whisper ? 0.22 : 0.5);
+    switch (mood) {
+      case Mood.happy || Mood.laughing || Mood.excited:
+        final rect = Rect.fromCenter(center: Offset(0, my - r * 0.08), width: mw, height: r * (0.3 + 0.2 * open));
+        canvas.drawArc(rect, 0.1, pi - 0.2, false, pen);
+        if (talking) canvas.drawArc(rect.deflate(r * 0.06), 0.3, pi - 0.6, false, fill..style = PaintingStyle.fill);
+      case Mood.sad || Mood.angry:
+        canvas.drawArc(
+          Rect.fromCenter(center: Offset(0, my + r * 0.1), width: mw, height: r * 0.24),
+          pi + 0.2,
+          pi - 0.4,
+          false,
+          pen,
+        );
+      case Mood.awe || Mood.confused:
+        canvas.drawOval(Rect.fromCenter(center: Offset(0, my), width: r * 0.18, height: r * (0.16 + 0.12 * open)), pen);
+      default:
+        if (open > 0.05) {
+          canvas.drawOval(Rect.fromCenter(center: Offset(0, my), width: mw * 0.7, height: r * 0.22 * open), pen);
+        } else {
+          final m = Path()
+            ..moveTo(-mw / 2, my)
+            ..quadraticBezierTo(0, my + r * (mood == Mood.calm ? 0.1 : 0.06), mw / 2, my);
+          canvas.drawPath(m, pen);
+        }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_FacePainter o) =>
+      o.t != t ||
+      o.mood != mood ||
+      o.talking != talking ||
+      o.listening != listening ||
+      o.level != level ||
+      o.busy != busy;
 }

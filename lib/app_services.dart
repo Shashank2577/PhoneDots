@@ -26,6 +26,9 @@ import 'saved/summarizer.dart';
 import 'saved/web_reader.dart';
 import 'skills/skill.dart';
 import 'skills/skill_registry.dart';
+import 'voice/neural_voice.dart';
+import 'voice/speaker.dart';
+import 'voice/voice_manager.dart';
 
 /// Content shared into the app from another app's share sheet.
 class SharedIntake {
@@ -65,6 +68,8 @@ class AppServices {
   late final LinkPreviewer links;
   late final SavedStore saved;
   late final CrashReporter crashes;
+  late final VoiceManager voices;
+  late final Speaker speaker;
   late final Summarizer summarizer;
 
   /// Set to a saved item's id when a share lands in "saved", so the UI can show it.
@@ -110,6 +115,20 @@ class AppServices {
     );
     services.links = LinkPreviewer(client: linkClient);
     services.crashes = CrashReporter(settings: settings, ledger: ledger);
+    services.voices = VoiceManager(
+      store: s,
+      settings: settings,
+      ledger: ledger,
+      modelsDir: s.modelsDir,
+      client: linkClient,
+      supported: native,
+    );
+    services.speaker = Speaker(
+      voices: services.voices,
+      settings: settings,
+      filesDir: s.filesDir,
+      neural: native ? NeuralVoice() : null,
+    );
     services.saved = SavedStore(s);
     services.models = ModelManager(
       store: s,
@@ -138,6 +157,7 @@ class AppServices {
       client: linkClient,
     );
     await Future.wait([
+      services.voices.load(),
       services.saved.load(),
       services.models.init(),
       services.skills.load(),

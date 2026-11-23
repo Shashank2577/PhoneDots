@@ -1901,15 +1901,20 @@ void main() {
 
   // ===================================================================
   group('voice screen', () {
-    testWidgets('opens from chat, shows idle state, tap without mic is handled', (tester) async {
+    testWidgets('opens from chat, starts listening by itself; without a mic it says so instead of crashing', (
+      tester,
+    ) async {
       await _boot(tester);
       await _tap(tester, find.byTooltip('Talk'));
       await _settle(tester, 500);
-      expect(find.text('tap to talk'), findsOneWidget);
-      expect(find.textContaining('Say it out loud'), findsOneWidget);
-      await tester.tap(find.text('tap to talk'), warnIfMissed: false);
+      expect(find.textContaining('Just talk'), findsOneWidget);
+      // No recorder plugin in tests: the microphone never answers, so after its time limit the
+      // conversation pauses and explains.
+      await _settle(tester, 11000);
+      expect(find.text('paused · tap to talk'), findsOneWidget);
+      expect(find.textContaining('microphone'), findsWidgets);
+      await tester.tap(find.text('paused · tap to talk'), warnIfMissed: false);
       await _settle(tester, 500);
-      // no recorder plugin in tests: must show a message rather than crash
       _noError(tester, 'voice tap');
       await _back(tester);
     });

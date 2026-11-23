@@ -12,6 +12,8 @@ class Prompts {
     required String memory,
     required List<ToolSpec> tools,
     required bool nativeTools,
+    bool spoken = false,
+    bool moods = false,
   }) {
     final b = StringBuffer()
       ..writeln(
@@ -31,6 +33,19 @@ class Prompts {
         'Never invent tool results. If a tool fails, say so plainly. '
         'Keep answers short and direct; use bullet points for lists.',
       );
+    if (spoken) {
+      b.writeln(
+        '\nYou are talking out loud in a voice conversation. Answer like a person speaking: usually one to three '
+        'short sentences, no lists, no markdown, no emoji, no links. Say numbers and times the way people say them.',
+      );
+      if (moods) {
+        b.writeln(
+          'Your voice can change tone. Start a sentence with one tag when the feeling changes: '
+          '[happy] [calm] [excited] [sympathetic] [sad] [laughing] [whisper] [awe] [confused] [serious]. '
+          'Use them naturally and sparingly; most sentences need none.',
+        );
+      }
+    }
     if (attachments.isNotEmpty) {
       b.writeln('\nAttachments in this conversation (pass the id to tools):');
       for (final a in attachments) {

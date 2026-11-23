@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../core/runtime/engine_types.dart';
 import '../core/storage/json_store.dart';
 import '../skills/skill.dart';
+import '../voice/speech_text.dart';
 
 enum StepStatus { running, done, failed, declined }
 
@@ -182,7 +183,7 @@ class ConversationSummary {
 
   factory ConversationSummary.of(Conversation c) {
     final last = c.messages.lastWhere((m) => m.text.trim().isNotEmpty, orElse: () => c.messages.last);
-    final text = last.text.replaceAll(RegExp(r'[*`#]+'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = stripMoodTags(last.text).replaceAll(RegExp(r'[*`#]+'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
     return ConversationSummary(
       c.id,
       c.title,
@@ -262,7 +263,7 @@ class ConversationStore extends ChangeNotifier {
   static String transcript(Conversation c) {
     final b = StringBuffer('${c.title}\n\n');
     for (final m in c.messages) {
-      final text = m.text.trim();
+      final text = stripMoodTags(m.text).trim();
       final files = m.attachments.map((a) => '[${a.kind}: ${a.name}]').join(' ');
       if (text.isEmpty && files.isEmpty) continue;
       b.writeln(

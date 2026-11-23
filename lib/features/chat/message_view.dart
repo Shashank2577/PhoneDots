@@ -9,6 +9,7 @@ import '../../core/models/model_catalog.dart';
 import '../../core/util/format.dart';
 import '../../skills/skill.dart';
 import '../../theme/theme.dart';
+import '../../voice/speech_text.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hand.dart';
 import '../../widgets/local_image.dart';
@@ -146,7 +147,7 @@ class _AssistantMessage extends StatelessWidget {
           if (m.text.isNotEmpty)
             Padding(
               padding: EdgeInsets.only(top: m.steps.isEmpty ? 0 : 8),
-              child: LiteMarkdown(m.text),
+              child: LiteMarkdown(stripMoodTags(m.text)),
             ),
           for (final c in m.cards) ResultCard(c),
           if (m.error != null)

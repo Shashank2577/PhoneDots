@@ -40,7 +40,7 @@ Tokens, fonts and components live in `lib/theme/theme.dart` and `lib/widgets/han
 | **58 skills** | Audio (transcribe, speakers, minutes, subtitles, clean-up), vision (ask, OCR, tags, best shot, safety, receipts), writing (summarize, rewrite, translate, redact, emoji, topics, titles), phone actions (timer, alarm, calendar, contacts, call/text/email drafts, maps, flashlight, settings), knowledge (search my files, memory, exact maths, units, dates), presentation (tables, checklists, charts, timelines, notes) |
 | **Recipes** | Chain skills into one tap. Five built in, plus an editor. The agent can run them too. |
 | **Community skills** | Install declarative JSON skills from a URL. They can't run code (see [docs/COMMUNITY_SKILLS.md](docs/COMMUNITY_SKILLS.md)). |
-| **Voice mode** | Talk, Voz transcribes on device, the agent answers, and the reply is read aloud |
+| **Voice mode** | Hands-free, turn by turn: it listens until you pause, answers out loud sentence by sentence, then listens again; talk over it to interrupt (echo-cancelled mic). Voz writes down what you say. Natural on-device voices with Kyutai's Pocket TTS (sherpa-onnx): listen to a voice, then download it (~1 MB). Expressive voices speak each sentence in the mood Gemma tags it with (happy, calm, whisper, laughing, sympathetic…), and a hand-drawn face shows it. Donated voices are CC0; mood voices (Expresso) are personal-use only. |
 | **My files** | On-device search index (EmbeddingGemma, or keyword fallback) over notes, imports, receipts and transcripts |
 | **Memory** | Facts you explicitly ask it to remember, fully visible and editable |
 | **Model hub** | Downloads with resume and SHA-256 verification, RAM-fit warnings, choice of brain/router/embedder |
